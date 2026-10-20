@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check
+.PHONY: help up down test lint infra contracts contracts-check shapes demo
 
 help:
 	@echo "Targets:"
@@ -9,6 +9,8 @@ help:
 	@echo "  infra  Bicep deploy (stub)"
 	@echo "  contracts        regenerate docs/schemas and web/src/types from core/contracts"
 	@echo "  contracts-check  fail if the generated files are out of date"
+	@echo "  shapes  draw Riverside's shapes into docs/shapes/"
+	@echo "  demo    demo match: Riverside v Ironvale, dry, 15:00 Nairobi -> demo.jsonl"
 
 up:
 	docker compose up -d
@@ -33,3 +35,9 @@ contracts-check: contracts
 	@git diff --exit-code -- docs/schemas web/src/types && \
 		test -z "$$(git ls-files --others --exclude-standard -- docs/schemas web/src/types)" || \
 		{ echo "Contracts drifted: run 'make contracts' and commit."; exit 1; }
+
+shapes:
+	uv run python -m scripts.render_shapes riverside_athletic
+
+demo:
+	uv run python -m engine.generate --demo > demo.jsonl
