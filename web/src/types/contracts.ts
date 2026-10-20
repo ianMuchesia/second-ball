@@ -27,6 +27,7 @@ export interface Match {
   schema_version: 1;
   seed: number;
   venue: string;
+  weather: "dry" | "rain" | "wind" | "heat";
 }
 /**
  * SPADL convention: coordinates are from the acting team's view, so it attacks

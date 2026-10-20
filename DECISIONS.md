@@ -20,3 +20,10 @@ required; SPADL coordinates, acting team attacks x=105 (own goal at x=0).
 
 Idea for later (engine knob, Ian to decide): weather (rain, wind) affecting play,
 e.g. rain slows passes and raises the error rate.
+
+Exception (2026-10-20): Ian allowed the agent to edit core/contracts/match.py once,
+to add weather (dry | rain | wind | heat), required, schema_version stays 1.
+
+Phase 1a (2026-10-20): the engine sets under_pressure with Ian's rule only:
+at least one opponent within 2 m. The full pressure formula waits for Phase 2.
+League: 7 placeholder clubs + engine/league/clubs/_template.yaml for Ian's club.

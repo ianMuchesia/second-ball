@@ -32,6 +32,7 @@ def match():
         "kickoff": "2026-10-24T15:00:00+03:00",
         "competition": "Synthetic League",
         "seed": 42,
+        "weather": "rain",
     }
 
 
@@ -173,6 +174,11 @@ def test_freeze_frame_rejects_duplicate_player():
 def test_overlay_requires_english_text():
     with pytest.raises(ValidationError):
         Overlay.model_validate(with_(overlay, text={"sw": "Umiliki wa mpira: 62%"}))
+
+
+def test_match_rejects_unknown_weather():
+    with pytest.raises(ValidationError):
+        Match.model_validate(with_(match, weather="snow"))
 
 
 def test_unknown_field_is_rejected():
