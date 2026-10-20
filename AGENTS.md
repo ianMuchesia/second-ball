@@ -1,12 +1,17 @@
 # Rules for coding agents in this repository
 
+Core principle: code computes every number. Agents only interpret and narrate.
+An agent never invents, estimates or recalculates a metric, score, probability
+or cost; it reads numbers produced by code and explains them.
+
 You may:
 - edit anything outside core/ and tests/spec/
 - add tests under tests/unit/
 - write Dockerfiles, compose files, CI, Bicep, UI code and docs
 
 You may not:
-- edit core/ (the decision logic) or tests/spec/ (the specification)
+- edit core/ (the decision logic) or tests/spec/ (the specification);
+  if a change there looks necessary, stop and ask Ian first
 - disable, skip, loosen or delete any test
 - read .env, any secret, or anything under ~/.azure
 - add a dependency without one line in the PR saying why
