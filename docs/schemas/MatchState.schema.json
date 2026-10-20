@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "Clock": {
+      "additionalProperties": false,
+      "properties": {
+        "minute": {
+          "minimum": 0,
+          "title": "Minute",
+          "type": "integer"
+        },
+        "period": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Period",
+          "type": "integer"
+        },
+        "second": {
+          "maximum": 59,
+          "minimum": 0,
+          "title": "Second",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "period",
+        "minute",
+        "second"
+      ],
+      "title": "Clock",
+      "type": "object"
+    },
+    "MetricValue": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_event_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Event Ids",
+          "type": "array"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "evidence_event_ids"
+      ],
+      "title": "MetricValue",
+      "type": "object"
+    },
+    "Score": {
+      "additionalProperties": false,
+      "properties": {
+        "away": {
+          "minimum": 0,
+          "title": "Away",
+          "type": "integer"
+        },
+        "home": {
+          "minimum": 0,
+          "title": "Home",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "home",
+        "away"
+      ],
+      "title": "Score",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "clock": {
+      "$ref": "#/$defs/Clock"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "$ref": "#/$defs/MetricValue"
+        },
+        "type": "object"
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "score": {
+      "$ref": "#/$defs/Score"
+    }
+  },
+  "required": [
+    "schema_version",
+    "score",
+    "clock",
+    "metrics"
+  ],
+  "title": "MatchState",
+  "type": "object"
+}

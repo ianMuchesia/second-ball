@@ -34,6 +34,22 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv sync --frozen
+      - run: npm ci
+        working-directory: web
+      # Fails if Python contracts and the TypeScript types have drifted apart.
+      - run: make contracts-check
+
   scan:
     runs-on: ubuntu-latest
     permissions:

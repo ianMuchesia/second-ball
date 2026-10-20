@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "MetricValue": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_event_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Event Ids",
+          "type": "array"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "evidence_event_ids"
+      ],
+      "title": "MetricValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "evidence_event_ids": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "importance": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Importance",
+      "type": "number"
+    },
+    "kind": {
+      "minLength": 1,
+      "title": "Kind",
+      "type": "string"
+    },
+    "metrics_after": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricValue"
+      },
+      "title": "Metrics After",
+      "type": "object"
+    },
+    "metrics_before": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricValue"
+      },
+      "title": "Metrics Before",
+      "type": "object"
+    },
+    "moment_id": {
+      "minLength": 1,
+      "title": "Moment Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "moment_id",
+    "kind",
+    "importance",
+    "metrics_before",
+    "metrics_after",
+    "evidence_event_ids"
+  ],
+  "title": "Moment",
+  "type": "object"
+}
