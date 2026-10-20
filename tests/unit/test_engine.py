@@ -38,8 +38,9 @@ def red_card_match():
 # ---- league and weather -----------------------------------------------------
 
 
-def test_league_has_seven_clubs_and_skips_template():
-    assert len(LEAGUE) == 7
+def test_league_has_eight_clubs_and_skips_template():
+    assert len(LEAGUE) == 8
+    assert "riverside_athletic" in LEAGUE
     assert (CLUBS_DIR / "_template.yaml").exists()
 
 

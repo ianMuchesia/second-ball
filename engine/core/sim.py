@@ -81,6 +81,8 @@ class _Sim:
         self.assist = "none"
         self.passes = 0
         self.counterpress = None  # (side, until_t)
+        self.transition_until = -1.0  # both teams in transition shape until then
+        self.previous = None  # last frame's shape positions, for smooth movement
 
     # ---- clock and game state -------------------------------------------------
 
@@ -163,6 +165,7 @@ class _Sim:
     def turnover(self, side, player, ball):
         lost = 1 - side
         self.new_possession(side, player, ball)
+        self.transition_until = self.t + self.cfg["shapes"]["transition_s"]
         cp = self.teams[lost].profile.counterpress
         if self.rng.random() < cp.probability * self.legs():
             self.counterpress = (lost, self.t + cp.duration_s)
@@ -188,6 +191,11 @@ class _Sim:
             else fb["otherwise"]
         )
         blocks = {s: self.block_height(s) for s in (0, 1)}
+        transition = self.t < self.transition_until
+        phases = {
+            self.attack: "transition" if transition else "in_possession",
+            defence: "transition" if transition else "out_of_possession",
+        }
         frame = build_frame(
             self.rng,
             self.cfg,
@@ -198,7 +206,10 @@ class _Sim:
             presser_dist,
             self.rng.random() < back_p,
             blocks,
+            phases,
+            self.previous,
         )
+        self.previous = frame.shape_positions
         return frame, presser_dist
 
     def step(self):
@@ -312,21 +323,27 @@ class _Sim:
 
     # ---- restarts -------------------------------------------------------------
 
-    def kickoff(self, side):
+    def restart(self, snap=False):
+        """Play stops: no counterpress or transition; `snap` resets players to shape."""
         self.counterpress = None
-        team = self.teams[side]
-        self.new_possession(side, team.on_pitch[-1], centre_spot())
+        self.transition_until = -1.0
+        if snap:
+            self.previous = None
+
+    def kickoff(self, side):
+        self.restart(snap=True)
+        self.new_possession(side, self.teams[side].front_player, centre_spot())
         frame, _ = self.frame(pressed=False)
         self.pass_(frame, 10.0, kind="pass", restart=True, backwards=True)
 
     def goalkick(self, side):
-        self.counterpress = None
+        self.restart(snap=True)
         self.new_possession(side, self.teams[side].keeper, keeper_spot(side))
         frame, _ = self.frame(pressed=False)
         self.pass_(frame, 10.0, kind="goalkick", restart=True)
 
     def throw_in(self, side, at):
-        self.counterpress = None
+        self.restart()
         x, _ = at
         y = 0.0 if at[1] < GOAL_Y else WIDTH
         frame, _ = self.frame(pressed=False)
@@ -338,10 +355,10 @@ class _Sim:
         self.pass_(frame, 10.0, kind="throw_in", restart=True)
 
     def free_kick(self, side, at):
-        self.counterpress = None
+        self.restart()
         self.new_possession(
             side,
-            self.carrier if self.attack == side else self.teams[side].on_pitch[-1],
+            self.carrier if self.attack == side else self.teams[side].front_player,
             at,
         )
         bx, by = own(side, *at)
@@ -353,7 +370,7 @@ class _Sim:
             self.pass_(frame, 10.0, kind="freekick_short", restart=True)
 
     def corner(self, side):
-        self.counterpress = None
+        self.restart()
         y_own = 0.0 if self.rng.random() < 0.5 else WIDTH
         spot = own(side, LENGTH, y_own)
         frame, _ = self.frame(pressed=False)
@@ -482,11 +499,24 @@ class _Sim:
                 )
                 if d < 3:
                     w *= 0.2
+                w *= self.build_up_weight(team, bx, pos, gain)
             names.append(pl)
             weights.append(max(w, 1e-6))
             spots.append(pos)
         i = self.rng.choices(range(len(names)), weights=weights)[0]
         return names[i], spots[i]
+
+    def build_up_weight(self, team, bx, pos, gain):
+        """Short through the back early on, then towards the ball-side flank."""
+        bu = team.profile.build_up
+        if bu is None:
+            return 1.0
+        if bx < bu.short_until_x:
+            return 1.5 if gain < 10 and dist(self.ball, pos) < 25 else 0.5
+        _, by = own(team.side, *self.ball)
+        _, ry = own(team.side, *pos)
+        same_flank = abs(ry - GOAL_Y) > 18 and (ry - GOAL_Y) * (by - GOAL_Y) > 0
+        return 1.0 + 2.0 * bu.flank_bias if same_flank and gain > 0 else 1.0
 
     def failed_pass(self, frame, side, receiver, start, target):
         defence = 1 - side

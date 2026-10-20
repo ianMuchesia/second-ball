@@ -1,85 +1,88 @@
 """Team shapes and freeze frames.
 
-Players stand on formation anchors (lines back to front, spread across the
-width), shifted towards the ball and by phase (with or without the ball), plus
+Each team has a shape table per (phase, ball_side) (see shapes.py). Anchors
+are turned into metres around the ball, and each freeze frame moves players
+part of the way from where they were towards their current anchor, plus
 noise. All positions here are absolute (home attacks +x).
 """
 
 import math
 from dataclasses import dataclass, field
 
-from engine.core.pitch import GOAL_Y, LENGTH, WIDTH, bearing, clamp, dist, on_pitch, own
-from engine.league import parse_shape
+from engine.core.pitch import GOAL_Y, LENGTH, bearing, clamp, dist, on_pitch, own
+from engine.core.shapes import SIDE_Y, ball_side, generic_roles, table_for
 
 
 @dataclass
 class TeamState:
     side: int  # 0 home, 1 away
     profile: object  # ClubProfile
-    on_pitch: list = field(default_factory=list)  # player indices, goalkeeper first
-    shape_out: list = field(default_factory=list)
-    shape_in: list = field(default_factory=list)
+    table: dict = field(
+        default_factory=dict
+    )  # (phase, ball_side) -> {role: (depth, y)}
+    roles: dict = field(
+        default_factory=dict
+    )  # player index -> role, outfield on the pitch
+    keeper: int = 0
     goals: int = 0
     reds: int = 0
 
     @classmethod
     def start(cls, side, profile):
-        return cls(
-            side=side,
-            profile=profile,
-            on_pitch=list(range(11)),
-            shape_out=parse_shape(profile.formation),
-            shape_in=parse_shape(profile.in_possession_shape),
-        )
+        if profile.shapes:
+            roles = {i: p.role for i, p in enumerate(profile.players) if i > 0}
+        else:
+            roles = dict(zip(range(1, 11), generic_roles(), strict=True))
+        return cls(side=side, profile=profile, table=table_for(profile), roles=roles)
 
     @property
-    def keeper(self):
-        return self.on_pitch[0]
+    def on_pitch(self):
+        return [self.keeper, *self.roles]
+
+    @property
+    def front_player(self):
+        """Most advanced outfield player (kick-offs)."""
+        depth = self.table[("out_of_possession", "centre")]
+        return max(self.roles, key=lambda p: (depth[self.roles[p]][0], -p))
 
     def send_off(self, player):
-        """Remove a player; the shape loses one from its most advanced line."""
-        self.on_pitch.remove(player)
+        """Remove a player. The most advanced player drops into the gap they leave."""
+        vacated = self.roles.pop(player)
         self.reds += 1
-        for shape in (self.shape_out, self.shape_in):
-            shape[-1] -= 1
-            if shape[-1] == 0:
-                shape.pop()
+        depth = self.table[("out_of_possession", "centre")]
+        donor = max(
+            self.roles, key=lambda p: (depth[self.roles[p]][0], -p), default=None
+        )
+        if donor is not None and depth[self.roles[donor]][0] > depth[vacated][0]:
+            self.roles[donor] = vacated
 
 
-def _line_ys(n, span, centre):
-    if n == 1:
-        return [centre]
-    return [centre - span / 2 + span * i / (n - 1) for i in range(n)]
+def lines(phase, bx, block_height):
+    """(keeper_x, back_x, front_x) in the team's frame for ball at bx."""
+    if phase == "in_possession":
+        return clamp(bx - 45, 5, 22), clamp(bx - 28, 10, 62), clamp(bx + 14, 28, 99)
+    back = clamp(block_height + 0.3 * (bx - 52.5), 8, 60)
+    back = min(back, max(6.0, bx - 3))
+    keeper_x = clamp(2 + 0.12 * bx, 2, 14)
+    if phase == "out_of_possession":
+        return keeper_x, back, min(back + 24, 100)
+    # transition: between the two
+    ib, ifr = clamp(bx - 28, 10, 62), clamp(bx + 14, 28, 99)
+    return keeper_x, (back + ib) / 2, (min(back + 24, 100) + ifr) / 2
 
 
-def anchors(team, ball, in_possession, block_height):
-    """{player: (x, y)} absolute anchors for one team."""
-    p = team.profile
+def anchors(team, ball, phase, block_height, cfg):
+    """{player: (x, y)} absolute anchors for one team in one phase."""
     bx, by = own(team.side, *ball)
-    shape = team.shape_in if in_possession else team.shape_out
+    side = ball_side(by, cfg)
+    shape = team.table[(phase, side)]
+    keeper_x, back, front = lines(phase, bx, block_height)
+    pull = cfg["shapes"]["ball_pull"] * (by - SIDE_Y[side])
 
-    if in_possession:
-        keeper_x = clamp(bx - 45, 5, 22)
-        back = clamp(bx - 28, 10, 62)
-        front = clamp(bx + 14, 28, 99)
-        span = 26 + 40 * p.width
-        pull = 0.3
-    else:
-        keeper_x = clamp(2 + 0.12 * bx, 2, 14)
-        back = clamp(block_height + 0.3 * (bx - 52.5), 8, 60)
-        back = min(back, max(6.0, bx - 3))
-        front = min(back + 24, 100)
-        span = 22 + 18 * p.width
-        pull = 0.45
-
-    centre = GOAL_Y + pull * (by - GOAL_Y)
     spots = {team.keeper: (keeper_x, GOAL_Y + 0.15 * (by - GOAL_Y))}
-    outfield = iter(team.on_pitch[1:])
-    for i, n in enumerate(shape):
-        x = back if len(shape) == 1 else back + (front - back) * i / (len(shape) - 1)
-        for y in _line_ys(n, min(span, WIDTH - 4), centre):
-            spots[next(outfield)] = (x, y)
-
+    for player, role in team.roles.items():
+        depth, y = shape[role]
+        spots[player] = (back + depth * (front - back), y + pull)
     return {pl: on_pitch(*own(team.side, x, y)) for pl, (x, y) in spots.items()}
 
 
@@ -89,6 +92,7 @@ class Frame:
 
     positions: dict  # (side, player) -> (x, y)
     facing: dict  # (side, player) -> degrees, absolute frame
+    shape_positions: dict = field(default_factory=dict)  # before carrier/presser moved
 
     def nearest(self, side, point, exclude=(), outfield_only=False, keeper=None):
         best, best_d = None, math.inf
@@ -102,17 +106,37 @@ class Frame:
 
 
 def build_frame(
-    rng, cfg, teams, attack, carrier, ball, presser_dist, facing_back, blocks
+    rng,
+    cfg,
+    teams,
+    attack,
+    carrier,
+    ball,
+    presser_dist,
+    facing_back,
+    blocks,
+    phases,
+    previous=None,
 ):
-    """Freeze frame with the carrier on the ball and the closest defender at presser_dist."""
+    """Freeze frame with the carrier on the ball and the closest defender at presser_dist.
+
+    Players move `shapes.follow` of the way from `previous` towards their anchor.
+    """
     noise = cfg["frame_noise_m"]
+    follow = cfg["shapes"]["follow"]
     positions = {}
     for team in teams:
-        spots = anchors(team, ball, team.side == attack, blocks[team.side])
+        spots = anchors(team, ball, phases[team.side], blocks[team.side], cfg)
         for pl, (x, y) in spots.items():
-            positions[(team.side, pl)] = on_pitch(
-                x + rng.gauss(0, noise), y + rng.gauss(0, noise)
-            )
+            tx, ty = x + rng.gauss(0, noise), y + rng.gauss(0, noise)
+            prev = previous.get((team.side, pl)) if previous else None
+            if prev is not None:
+                tx, ty = (
+                    prev[0] + follow * (tx - prev[0]),
+                    prev[1] + follow * (ty - prev[1]),
+                )
+            positions[(team.side, pl)] = on_pitch(tx, ty)
+    shape_positions = dict(positions)
     positions[(attack, carrier)] = ball
 
     defence = 1 - attack
@@ -140,7 +164,7 @@ def build_frame(
             facing[key] = (own_deg if attack == 0 else own_deg + 180) % 360
         else:
             facing[key] = (bearing(pos, ball) + rng.gauss(0, 20)) % 360
-    return Frame(positions, facing)
+    return Frame(positions, facing, shape_positions)
 
 
 def keeper_spot(side):

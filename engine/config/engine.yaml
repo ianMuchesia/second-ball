@@ -57,7 +57,7 @@ challenges:
   min_players: 7             # no more red cards below this many players
 
 shots:
-  bias: 1.0                  # how readily players shoot, scaled by xG
+  bias: 1.5                  # how readily players shoot, scaled by xG (re-tuned 1b)
   min_x: 75.0                # no shots from further out
   save_share: 0.45           # share of missed shots the keeper saves
   corner_after_save: 0.3
@@ -76,3 +76,10 @@ game_state:
 
 stoppage_minutes: [1, 5]
 frame_noise_m: 2.0
+
+shapes:
+  left_from_y: 45.33         # ball at y >= this (team's own frame) = ball on the left
+  right_until_y: 22.67       # ball at y <= this = ball on the right
+  ball_pull: 0.15            # shape slides this share of the ball's offset within a side
+  follow: 0.5                # each frame, players move this share towards their anchor
+  transition_s: 5            # seconds both teams use the transition shape after a turnover
