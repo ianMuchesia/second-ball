@@ -1,33 +1,46 @@
-name: bank-in-a-box
+name: second-ball
 
 services:
+  kafka:
+    image: apache/kafka:3.9.0
+    restart: "no"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 1
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
   postgres:
     image: postgres:17-alpine
     restart: "no"
     environment:
-      POSTGRES_USER: bank
-      POSTGRES_DB: core
+      POSTGRES_USER: second_ball
+      POSTGRES_DB: second_ball
       POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in .env}
-    command: ["postgres", "-c", "wal_level=logical"]
     ports:
       - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bank -d core"]
+      test: ["CMD-SHELL", "pg_isready -U second_ball -d second_ball"]
       interval: 5s
       timeout: 5s
       retries: 10
-
-  adminer:
-    image: adminer
-    restart: "no"
-    ports:
-      - "8081:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   pgdata:
