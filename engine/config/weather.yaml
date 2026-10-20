@@ -1,0 +1,36 @@
+# Weather multipliers for the synthetic engine. 1.0 = no effect.
+# Every value is TUNABLE (owner: Ian). Placeholder values.
+#   ball_speed         pass/shot speed
+#   pass_success       chance a pass arrives
+#   loose_ball         chance a failed pass becomes a loose ball
+#   long_pass_accuracy passes longer than 30 m
+#   cross_accuracy     crosses
+#   fatigue_rate       how fast legs go (steeper curve late in the game)
+dry:
+  ball_speed: 1.0
+  pass_success: 1.0
+  loose_ball: 1.0
+  long_pass_accuracy: 1.0
+  cross_accuracy: 1.0
+  fatigue_rate: 1.0
+rain:
+  ball_speed: 1.08
+  pass_success: 0.96
+  loose_ball: 1.4
+  long_pass_accuracy: 1.0
+  cross_accuracy: 1.0
+  fatigue_rate: 1.0
+wind:
+  ball_speed: 1.0
+  pass_success: 1.0
+  loose_ball: 1.0
+  long_pass_accuracy: 0.85
+  cross_accuracy: 0.85
+  fatigue_rate: 1.0
+heat:
+  ball_speed: 1.0
+  pass_success: 1.0
+  loose_ball: 1.0
+  long_pass_accuracy: 1.0
+  cross_accuracy: 1.0
+  fatigue_rate: 1.5

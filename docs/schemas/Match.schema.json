@@ -41,6 +41,16 @@
       "minLength": 1,
       "title": "Venue",
       "type": "string"
+    },
+    "weather": {
+      "enum": [
+        "dry",
+        "rain",
+        "wind",
+        "heat"
+      ],
+      "title": "Weather",
+      "type": "string"
     }
   },
   "required": [
@@ -51,7 +61,8 @@
     "venue",
     "kickoff",
     "competition",
-    "seed"
+    "seed",
+    "weather"
   ],
   "title": "Match",
   "type": "object"

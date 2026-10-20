@@ -1,0 +1,78 @@
+# Engine mechanics for the synthetic match generator.
+# Every value is TUNABLE (owner: Ian). Placeholders, roughly tuned on 40 matches
+# (2026-10-20) to ~2.7 goals, ~18 shots and ~81% pass completion per match.
+
+# Pass success = logistic(intercept - distance - pressure - angle - lines broken).
+pass_model:
+  intercept: 3.9
+  per_metre: 0.045           # longer passes fail more
+  passer_pressure: 0.9       # pressure load on the passer (0-1)
+  receiver_pressure: 1.2     # pressure load on the receiver (0-1)
+  forward_angle: 0.5         # straight forward passes are harder than square ones
+  per_line_broken: 0.3       # each opponent bypassed by the pass
+  cross: 1.4                 # crosses are hard
+  restart_bonus: 2.0         # free kicks, throw-ins, kick-offs
+
+# Shot xG = logistic(intercept + distance + angle + body part + assist type).
+xg_model:
+  intercept: -1.4
+  per_metre: -0.11
+  per_radian_of_goal: 1.0    # angle the goal mouth makes from the shot spot
+  header: -0.8
+  assist:
+    none: 0.0
+    pass: 0.1
+    through_ball: 0.4
+    cross: 0.0
+    set_piece: -0.2
+
+pressing:
+  base_probability: 0.30     # chance a defender is close to the carrier
+  ppda_reference: 10.0       # press intensity = reference / club target_ppda
+  high_press_zone_x: 63.0    # PPDA counts in the carrier's own 60% (x < 63)
+  close_distance_m: [0.5, 2.0]
+  open_distance_m: [2.5, 12.0]
+  goal_side_share: 0.6       # how often the closest defender is goal-side
+  counterpress_probability: 0.8   # chance of a close defender inside a counterpress window
+  counterpress_regain: 0.25       # chance the counterpress wins the ball straight back
+
+# Ian's rule (2026-10-20): at least one opponent within 2 m = under pressure.
+under_pressure_m: 2.0
+
+facing_back:
+  pressed_in_own_half: 0.35
+  otherwise: 0.10
+
+failed_pass:                 # what happens after a pass fails (relative weights)
+  interception: 0.5
+  tackle: 0.25
+  loose_ball: 0.25           # multiplied by the weather's loose_ball
+loose_ball_out_of_play: 0.2
+loose_ball_kept: 0.5
+
+challenges:
+  foul: 0.12                 # per tackle attempt
+  yellow_per_foul: 0.12
+  red_per_foul: 0.006
+  min_players: 7             # no more red cards below this many players
+
+shots:
+  bias: 1.0                  # how readily players shoot, scaled by xG
+  min_x: 75.0                # no shots from further out
+  save_share: 0.45           # share of missed shots the keeper saves
+  corner_after_save: 0.3
+  corner_success: 0.32
+
+clearance_kept: 0.45
+cross_share: 0.55            # chance a wide final-third pass is a cross
+
+fatigue_k: 0.3               # press at 90' = 1 - fatigue_k * weather fatigue_rate
+
+game_state:
+  late_minute: 70
+  leading_press: 0.8         # leading team presses less late on
+  trailing_tempo: 0.8        # trailing team: seconds per action x this
+  trailing_directness: 0.15  # trailing team: directness + this
+
+stoppage_minutes: [1, 5]
+frame_noise_m: 2.0
