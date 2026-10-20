@@ -1,5 +1,5 @@
 {
-  "name": "workbench",
+  "name": "second-ball",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {},
@@ -14,11 +14,11 @@
     }
   },
   "containerEnv": {
-    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv-workbench",
+    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv-second-ball",
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
     "WAKATIME_HOME": "/home/vscode/.wakatime-home"
   },
-  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.wakatime-home && pipx install uv pre-commit && uv sync && pre-commit install",
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.wakatime-home && pipx install uv pre-commit && uv sync && pre-commit install && (cd web && npm ci)",
   "customizations": {
     "vscode": {
       "extensions": [
