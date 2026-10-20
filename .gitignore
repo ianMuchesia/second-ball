@@ -14,3 +14,4 @@ data/
 *.parquet
 *.csv
 *.tsbuildinfo
+*.jsonl
