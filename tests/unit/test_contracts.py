@@ -11,7 +11,13 @@ CLOCK = {"period": 2, "minute": 67, "second": 12}
 
 def freeze_frame(home=11, away=11):
     return [
-        {"player_id": f"{team}-{n}", "team_id": team, "x": 10.0 + n, "y": 30.0}
+        {
+            "player_id": f"{team}-{n}",
+            "team_id": team,
+            "x": 10.0 + n,
+            "y": 30.0,
+            "facing_deg": 0.0,
+        }
         for team, count in (("home", home), ("away", away))
         for n in range(count)
     ]
@@ -172,3 +178,17 @@ def test_overlay_requires_english_text():
 def test_unknown_field_is_rejected():
     with pytest.raises(ValidationError):
         Match.model_validate(with_(match, xg=0.3))
+
+
+def test_facing_deg_must_be_below_360():
+    frame = freeze_frame()
+    frame[0]["facing_deg"] = 360.0
+    with pytest.raises(ValidationError):
+        MatchEvent.model_validate(with_(event, freeze_frame=frame))
+
+
+def test_facing_deg_is_required():
+    frame = freeze_frame()
+    del frame[0]["facing_deg"]
+    with pytest.raises(ValidationError):
+        MatchEvent.model_validate(with_(event, freeze_frame=frame))

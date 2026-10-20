@@ -13,3 +13,7 @@ step 2. One time, new files only; core/budget.py and tests/spec/ untouched.
 Contract defaults approved: evidence_event_ids always non-empty; freeze frame up
 to 22 players (max 11 per team, sent-off players absent); importance and
 confidence 0..1; risk_tier low|medium|high; overlay text needs 'en'.
+
+Exception (2026-10-20): Ian allowed the agent to edit core/contracts/event.py once,
+to add facing_deg. Conventions: facing_deg 0 = +x, anticlockwise, [0, 360),
+required; SPADL coordinates, acting team attacks x=105 (own goal at x=0).

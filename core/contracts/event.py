@@ -38,13 +38,19 @@ MAX_PLAYERS_PER_TEAM = 11
 
 
 class PlayerPosition(Part):
+    """Facing angle in degrees: 0 points along +x, 90 along +y (anticlockwise)."""
+
     player_id: NonEmptyStr
     team_id: NonEmptyStr
     x: X
     y: Y
+    facing_deg: Annotated[float, Field(ge=0, lt=360)]
 
 
 class MatchEvent(Contract):
+    """SPADL convention: coordinates are from the acting team's view, so it attacks
+    towards x=105 and its own goal is at x=0."""
+
     event_id: NonEmptyStr
     match_id: NonEmptyStr
     possession_id: NonEmptyStr

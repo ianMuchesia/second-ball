@@ -28,6 +28,10 @@ export interface Match {
   seed: number;
   venue: string;
 }
+/**
+ * SPADL convention: coordinates are from the acting team's view, so it attacks
+ * towards x=105 and its own goal is at x=0.
+ */
 export interface MatchEvent {
   ball_speed_kmh: number | null;
   body_part: "foot" | "foot_left" | "foot_right" | "head" | "other";
@@ -79,7 +83,11 @@ export interface MatchEvent {
     | "goalkick";
   under_pressure: boolean;
 }
+/**
+ * Facing angle in degrees: 0 points along +x, 90 along +y (anticlockwise).
+ */
 export interface PlayerPosition {
+  facing_deg: number;
   player_id: string;
   team_id: string;
   x: number;
