@@ -1,0 +1,34 @@
+# Fictional club. Invented names; any resemblance to real clubs or players is accidental.
+# All knobs are placeholders: TUNABLE (owner: Ian).
+id: lantern_hill
+name: Lantern Hill
+stadium: Wickside Ground
+style: Mid block, fast counter-attacks.
+
+formation: "4-4-1-1"            # out of possession, back to front
+in_possession_shape: "4-2-4"  # with the ball, back to front
+target_ppda: 13.0            # opponent passes allowed per defensive action (lower = more pressing)
+block_height: 36            # defensive line, metres from own goal
+late_lead_block_drop: 9      # metres the block drops when leading late
+directness: 0.6           # 0 = short and patient, 1 = long and forward
+width: 0.55                # 0 = narrow, 1 = touchline to touchline
+tempo:
+  passes_per_possession: 4.5
+  seconds_per_action: 2.6
+counterpress:
+  probability: 0.35           # chance of pressing straight after losing the ball
+  duration_s: 4
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Yaro Melard}
+  - {number: 2, name: Seru Joresh}
+  - {number: 3, name: Siro Raskard}
+  - {number: 4, name: Kesh Quenesh}
+  - {number: 5, name: Omen Norridge}
+  - {number: 6, name: Obi Raskvic}
+  - {number: 7, name: Rook Tansen}
+  - {number: 8, name: Teo Ulvito}
+  - {number: 9, name: Obi Jorito}
+  - {number: 10, name: Bexo Wendesh}
+  - {number: 11, name: Kesh Fenwyn}

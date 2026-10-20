@@ -1,0 +1,34 @@
+# Fictional club. Invented names; any resemblance to real clubs or players is accidental.
+# All knobs are placeholders: TUNABLE (owner: Ian).
+id: ashgrove
+name: Ashgrove Kestrels
+stadium: The Perch
+style: High press, quick short passing.
+
+formation: "4-3-3"            # out of possession, back to front
+in_possession_shape: "2-3-5"  # with the ball, back to front
+target_ppda: 7.0            # opponent passes allowed per defensive action (lower = more pressing)
+block_height: 48            # defensive line, metres from own goal
+late_lead_block_drop: 8      # metres the block drops when leading late
+directness: 0.3           # 0 = short and patient, 1 = long and forward
+width: 0.7                # 0 = narrow, 1 = touchline to touchline
+tempo:
+  passes_per_possession: 7.0
+  seconds_per_action: 2.8
+counterpress:
+  probability: 0.75           # chance of pressing straight after losing the ball
+  duration_s: 6
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Siro Ostume}
+  - {number: 2, name: Seru Pellani}
+  - {number: 3, name: Yaro Pellek}
+  - {number: 4, name: Dren Melume}
+  - {number: 5, name: Vian Fenek}
+  - {number: 6, name: Lanz Norek}
+  - {number: 7, name: Paz Galaru}
+  - {number: 8, name: Seru Brisani}
+  - {number: 9, name: Kesh Oldridge}
+  - {number: 10, name: Ludo Zanley}
+  - {number: 11, name: Nilo Norley}

@@ -1,0 +1,34 @@
+# Fictional club. Invented names; any resemblance to real clubs or players is accidental.
+# All knobs are placeholders: TUNABLE (owner: Ian).
+id: ironvale
+name: Ironvale Athletic
+stadium: Foundry Lane
+style: Low block, long balls into the channels.
+
+formation: "5-3-2"            # out of possession, back to front
+in_possession_shape: "3-5-2"  # with the ball, back to front
+target_ppda: 15.0            # opponent passes allowed per defensive action (lower = more pressing)
+block_height: 30            # defensive line, metres from own goal
+late_lead_block_drop: 4      # metres the block drops when leading late
+directness: 0.75           # 0 = short and patient, 1 = long and forward
+width: 0.5                # 0 = narrow, 1 = touchline to touchline
+tempo:
+  passes_per_possession: 3.5
+  seconds_per_action: 4.0
+counterpress:
+  probability: 0.25           # chance of pressing straight after losing the ball
+  duration_s: 3
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Siro Fenito}
+  - {number: 2, name: Rook Yorek}
+  - {number: 3, name: Ilan Fenek}
+  - {number: 4, name: Omen Sulonde}
+  - {number: 5, name: Kesh Quenard}
+  - {number: 6, name: Nilo Fenito}
+  - {number: 7, name: Ilan Oldvic}
+  - {number: 8, name: Coro Thornsen}
+  - {number: 9, name: Arlen Melesh}
+  - {number: 10, name: Mio Fenek}
+  - {number: 11, name: Kato Yorard}

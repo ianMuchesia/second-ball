@@ -1,0 +1,34 @@
+# Fictional club. Invented names; any resemblance to real clubs or players is accidental.
+# All knobs are placeholders: TUNABLE (owner: Ian).
+id: tidewick
+name: Tidewick Harriers
+stadium: Marsh Meadow
+style: Balanced, moderate press.
+
+formation: "4-1-4-1"            # out of possession, back to front
+in_possession_shape: "3-3-4"  # with the ball, back to front
+target_ppda: 11.0            # opponent passes allowed per defensive action (lower = more pressing)
+block_height: 40            # defensive line, metres from own goal
+late_lead_block_drop: 6      # metres the block drops when leading late
+directness: 0.45           # 0 = short and patient, 1 = long and forward
+width: 0.65                # 0 = narrow, 1 = touchline to touchline
+tempo:
+  passes_per_possession: 5.5
+  seconds_per_action: 3.3
+counterpress:
+  probability: 0.5           # chance of pressing straight after losing the ball
+  duration_s: 5
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Bram Zanard}
+  - {number: 2, name: Arlen Ostley}
+  - {number: 3, name: Amar Mabesh}
+  - {number: 4, name: Ludo Ostani}
+  - {number: 5, name: Bram Joraru}
+  - {number: 6, name: Obi Norola}
+  - {number: 7, name: Obi Brisridge}
+  - {number: 8, name: Arlen Quenski}
+  - {number: 9, name: Arlen Varow}
+  - {number: 10, name: Amar Quenino}
+  - {number: 11, name: Tamsin Brisonde}

@@ -1,0 +1,34 @@
+# Fictional club. Invented names; any resemblance to real clubs or players is accidental.
+# All knobs are placeholders: TUNABLE (owner: Ian).
+id: quarry_end
+name: Quarry End United
+stadium: The Pit
+style: Wing-backs, very wide.
+
+formation: "3-4-3"            # out of possession, back to front
+in_possession_shape: "3-2-5"  # with the ball, back to front
+target_ppda: 9.0            # opponent passes allowed per defensive action (lower = more pressing)
+block_height: 44            # defensive line, metres from own goal
+late_lead_block_drop: 7      # metres the block drops when leading late
+directness: 0.45           # 0 = short and patient, 1 = long and forward
+width: 0.9                # 0 = narrow, 1 = touchline to touchline
+tempo:
+  passes_per_possession: 6.0
+  seconds_per_action: 3.0
+counterpress:
+  probability: 0.6           # chance of pressing straight after losing the ball
+  duration_s: 5
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Mio Wendek}
+  - {number: 2, name: Kato Raskola}
+  - {number: 3, name: Coro Mabow}
+  - {number: 4, name: Lanz Ostsen}
+  - {number: 5, name: Femi Varberg}
+  - {number: 6, name: Teo Pellwyn}
+  - {number: 7, name: Kato Melberg}
+  - {number: 8, name: Ilan Melaru}
+  - {number: 9, name: Teo Noraru}
+  - {number: 10, name: Coro Pellski}
+  - {number: 11, name: Dren Korard}
