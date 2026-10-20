@@ -118,6 +118,7 @@
     },
     "MatchEvent": {
       "additionalProperties": false,
+      "description": "SPADL convention: coordinates are from the acting team's view, so it attacks\ntowards x=105 and its own goal is at x=0.",
       "properties": {
         "ball_speed_kmh": {
           "anyOf": [
@@ -516,7 +517,13 @@
     },
     "PlayerPosition": {
       "additionalProperties": false,
+      "description": "Facing angle in degrees: 0 points along +x, 90 along +y (anticlockwise).",
       "properties": {
+        "facing_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "type": "number"
+        },
         "player_id": {
           "minLength": 1,
           "type": "string"
@@ -540,7 +547,8 @@
         "player_id",
         "team_id",
         "x",
-        "y"
+        "y",
+        "facing_deg"
       ],
       "title": "PlayerPosition",
       "type": "object"
