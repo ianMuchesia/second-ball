@@ -1,0 +1,236 @@
+{
+  "$defs": {
+    "PlayerPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "player_id": {
+          "minLength": 1,
+          "title": "Player Id",
+          "type": "string"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 105.0,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 68.0,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "player_id",
+        "team_id",
+        "x",
+        "y"
+      ],
+      "title": "PlayerPosition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ball_speed_kmh": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ball Speed Kmh"
+    },
+    "body_part": {
+      "enum": [
+        "foot",
+        "foot_left",
+        "foot_right",
+        "head",
+        "other"
+      ],
+      "title": "Body Part",
+      "type": "string"
+    },
+    "end_x": {
+      "maximum": 105.0,
+      "minimum": 0,
+      "title": "End X",
+      "type": "number"
+    },
+    "end_y": {
+      "maximum": 68.0,
+      "minimum": 0,
+      "title": "End Y",
+      "type": "number"
+    },
+    "event_id": {
+      "minLength": 1,
+      "title": "Event Id",
+      "type": "string"
+    },
+    "freeze_frame": {
+      "items": {
+        "$ref": "#/$defs/PlayerPosition"
+      },
+      "maxItems": 22,
+      "minItems": 1,
+      "title": "Freeze Frame",
+      "type": "array"
+    },
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "minute": {
+      "minimum": 0,
+      "title": "Minute",
+      "type": "integer"
+    },
+    "outcome": {
+      "enum": [
+        "success",
+        "fail",
+        "offside",
+        "owngoal",
+        "yellow_card",
+        "red_card"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "period": {
+      "maximum": 5,
+      "minimum": 1,
+      "title": "Period",
+      "type": "integer"
+    },
+    "player_id": {
+      "minLength": 1,
+      "title": "Player Id",
+      "type": "string"
+    },
+    "possession_id": {
+      "minLength": 1,
+      "title": "Possession Id",
+      "type": "string"
+    },
+    "qualifiers": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "title": "Qualifiers",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "second": {
+      "maximum": 59,
+      "minimum": 0,
+      "title": "Second",
+      "type": "integer"
+    },
+    "start_x": {
+      "maximum": 105.0,
+      "minimum": 0,
+      "title": "Start X",
+      "type": "number"
+    },
+    "start_y": {
+      "maximum": 68.0,
+      "minimum": 0,
+      "title": "Start Y",
+      "type": "number"
+    },
+    "team_id": {
+      "minLength": 1,
+      "title": "Team Id",
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "pass",
+        "cross",
+        "throw_in",
+        "freekick_crossed",
+        "freekick_short",
+        "corner_crossed",
+        "corner_short",
+        "take_on",
+        "foul",
+        "tackle",
+        "interception",
+        "shot",
+        "shot_penalty",
+        "shot_freekick",
+        "keeper_save",
+        "keeper_claim",
+        "keeper_punch",
+        "keeper_pick_up",
+        "clearance",
+        "bad_touch",
+        "non_action",
+        "dribble",
+        "goalkick"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "under_pressure": {
+      "title": "Under Pressure",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "match_id",
+    "possession_id",
+    "period",
+    "minute",
+    "second",
+    "team_id",
+    "player_id",
+    "type",
+    "outcome",
+    "body_part",
+    "start_x",
+    "start_y",
+    "end_x",
+    "end_y",
+    "under_pressure",
+    "ball_speed_kmh",
+    "qualifiers",
+    "freeze_frame"
+  ],
+  "title": "MatchEvent",
+  "type": "object"
+}

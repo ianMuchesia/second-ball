@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "claim": {
+      "minLength": 1,
+      "title": "Claim",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "mechanism": {
+      "minLength": 1,
+      "title": "Mechanism",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "claim",
+    "mechanism",
+    "evidence_event_ids",
+    "confidence"
+  ],
+  "title": "Insight",
+  "type": "object"
+}

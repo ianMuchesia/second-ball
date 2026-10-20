@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "Clock": {
+      "additionalProperties": false,
+      "properties": {
+        "minute": {
+          "minimum": 0,
+          "title": "Minute",
+          "type": "integer"
+        },
+        "period": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Period",
+          "type": "integer"
+        },
+        "second": {
+          "maximum": 59,
+          "minimum": 0,
+          "title": "Second",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "period",
+        "minute",
+        "second"
+      ],
+      "title": "Clock",
+      "type": "object"
+    },
+    "OverlayTime": {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "$ref": "#/$defs/Clock"
+        },
+        "wall": {
+          "format": "date-time",
+          "title": "Wall",
+          "type": "string"
+        }
+      },
+      "required": [
+        "match",
+        "wall"
+      ],
+      "title": "OverlayTime",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "duration_ms": {
+      "exclusiveMinimum": 0,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "kind": {
+      "minLength": 1,
+      "title": "Kind",
+      "type": "string"
+    },
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "overlay_id": {
+      "minLength": 1,
+      "title": "Overlay Id",
+      "type": "string"
+    },
+    "priority": {
+      "minimum": 0,
+      "title": "Priority",
+      "type": "integer"
+    },
+    "risk_tier": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Risk Tier",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "slot": {
+      "minLength": 1,
+      "title": "Slot",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "approved",
+        "aired",
+        "expired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "t_in": {
+      "$ref": "#/$defs/OverlayTime"
+    },
+    "text": {
+      "additionalProperties": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Text",
+      "type": "object"
+    },
+    "values": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Values",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "overlay_id",
+    "match_id",
+    "kind",
+    "slot",
+    "t_in",
+    "duration_ms",
+    "priority",
+    "risk_tier",
+    "text",
+    "values",
+    "evidence_event_ids",
+    "status"
+  ],
+  "title": "Overlay",
+  "type": "object"
+}
