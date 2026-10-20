@@ -45,14 +45,23 @@ How many safe passes the carrier has.
 
 ## Moment: `bad_situation`
 
-Fires when all four are true:
+Rule:
+
+```
+bad_situation = risk >= 0.6
+                AND facing own goal
+                AND (pressure >= 0.5 OR options == 0)
+```
 
 | Condition | Threshold |
 |---|---|
-| pressure | ≥ **0.5** (TUNABLE, owner: Ian) |
 | risk | ≥ **0.6** (TUNABLE, owner: Ian) |
-| options | ≤ **1** (TUNABLE, owner: Ian) |
 | facing own goal | carrier's `facing_deg` points towards (0, 34), tolerance TUNABLE (owner: Ian) |
+| pressure | ≥ **0.5** (TUNABLE, owner: Ian), **or** |
+| options | == **0** (TUNABLE, owner: Ian) |
+
+Note: options == 0 with no nearby opponent = lane pressure (cover shadows);
+pressure measures proximity only.
 
 Evidence: the moment's `evidence_event_ids` must include the event that
 triggered it.
