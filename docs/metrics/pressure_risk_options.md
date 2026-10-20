@@ -50,6 +50,7 @@ How costly losing the ball here would be.
   outnumber defenders with clear passing lanes and triangles.
   (Ian, 2026-10-20)
 - Ian notes it also depends on the situation, e.g. a team playing a high press.
+- **Version 1 includes the situation, not distance only.** (Ian, 2026-10-20)
 - Exact curve and values: **TUNABLE** (owner: Ian)
 
 ## options (int)
@@ -109,9 +110,7 @@ Attackers vs defenders around the ball, e.g. 3v2 or 3v1. (Ian, 2026-10-20)
 1. **Pressure between 2 m and 5 m:** how fast does the weight fall off?
 2. **In front and goal-side at once:** does that opponent count ×2 or ×4?
 3. **Risk with context:** how should code tell that "the attack clearly has
-   the upper hand", or that a team is high-pressing? And should the first
-   version use distance only, with context added later, or include context
-   from the start?
+   the upper hand", or that a team is high-pressing?
 4. **Overload area:** what zone or distance, and how do we count defenders
    who can still recover?
 5. **"Clearly offside":** by how many metres?
