@@ -1,0 +1,36 @@
+# Fictional club (invented name and players). Demo opponent for Riverside.
+# All knobs are placeholders: TUNABLE (owner: Ian).
+id: harbour_town
+name: Harbour Town
+stadium: Quayside Park
+style: Deep compact 5-4-1, no press; on winning the ball, long and fast into the channel behind the advanced full-back.
+
+formation: "5-4-1"            # without the ball: deep and compact
+in_possession_shape: "5-3-2"  # two quick forwards on the counter
+target_ppda: 18.0             # passive, does not press
+block_height: 28              # deep
+late_lead_block_drop: 15      # drops even deeper when leading late
+directness: 0.85              # long and fast
+width: 0.45                   # compact
+tempo:
+  passes_per_possession: 3.0
+  seconds_per_action: 2.4
+counterpress:
+  probability: 0.05           # almost none: straight back into shape
+  duration_s: 1
+on_regain:
+  channel_probability: 0.7    # first pass into the channel behind the ball-side full-back
+  runners: 2                  # the two quick forwards
+
+players:
+  - {number: 1, name: Piet Haldersen}
+  - {number: 2, name: Corin Maywether}
+  - {number: 5, name: Ansel Brookfield}
+  - {number: 4, name: Teodor Vass}
+  - {number: 6, name: Rui Calloway}
+  - {number: 3, name: Emeka Tidewell}
+  - {number: 7, name: Jory Penhallow}
+  - {number: 8, name: Matthias Quill}
+  - {number: 10, name: Osei Varnham}
+  - {number: 11, name: Lars Fenmore}
+  - {number: 9, name: Dario Kestrelle}

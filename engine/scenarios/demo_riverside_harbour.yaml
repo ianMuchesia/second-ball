@@ -1,0 +1,57 @@
+# Demo storyline (Ian, 2026-10-21). SCRIPTED: label it "scenario" in the UI.
+# Riverside's system is the weakness: Harbour counter behind the left-back.
+id: demo_riverside_harbour
+home: riverside_athletic
+away: harbour_town
+seed: 1
+weather: dry
+kickoff: "2026-11-07T15:00:00+03:00"   # 15:00 Nairobi
+
+beats:
+  - id: counter_goal_34
+    minute: [34, 35]
+    action: counter_goal
+    team: away
+    behind: left
+    min_xg: 0.45            # one-on-one after the run in behind. TUNABLE
+  - id: counter_chance_50_60
+    minute: [50, 60]
+    action: counter_chance
+    team: away
+    behind: left
+    min_xg: 0.3             # TUNABLE
+  - id: red_card_63
+    minute: [63, 64]
+    action: red_card_last_man
+    team: home
+    role: LCB               # covering behind the left-back
+  - id: block_drop_80_88
+    minute: [80, 88]
+    action: block_drop
+    team: away
+    extra_drop_m: 8         # on top of Harbour's late_lead_block_drop. TUNABLE
+  - id: counter_goal_88
+    minute: [88, 89]
+    action: counter_goal
+    team: away
+    behind: left
+    min_xg: 0.45            # TUNABLE
+
+# Answer key: moments the system SHOULD detect (kind names are proposals; Ian to confirm).
+expected_moments:
+  - {kind: control_rising, team: home, minute: [0, 30]}
+  - {kind: field_tilt, team: home, minute: [0, 30]}
+  - {kind: goal, team: away, minute: [34, 35]}
+  - {kind: counter_behind_fullback, team: away, minute: [34, 35], note: behind Riverside's left-back}
+  - {kind: counter_behind_fullback, team: away, minute: [50, 60]}
+  - {kind: repeated_pattern, team: away, minute: [50, 60], note: second time behind the left-back}
+  - {kind: counter_behind_fullback, team: away, minute: [63, 64]}
+  - {kind: red_card_impact, team: home, minute: [63, 70], note: last-man foul by the left centre-back}
+  - {kind: shape_change, team: home, minute: [63, 70]}
+  - {kind: control_drop, team: home, minute: [63, 80]}
+  - {kind: chaos_rising, team: null, minute: [63, 80]}
+  - {kind: block_drop, team: away, minute: [80, 88]}
+  - {kind: pressure_spike, team: home, minute: [80, 88]}
+  - {kind: goal, team: away, minute: [88, 89]}
+  - {kind: counter_behind_fullback, team: away, minute: [88, 89]}
+  - {kind: repeated_pattern, team: away, minute: [88, 89], note: again behind the left-back}

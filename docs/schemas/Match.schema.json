@@ -26,6 +26,14 @@
       "title": "Match Id",
       "type": "string"
     },
+    "mode": {
+      "enum": [
+        "scenario",
+        "free_simulation"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
     "schema_version": {
       "const": 1,
       "default": 1,
@@ -62,7 +70,8 @@
     "kickoff",
     "competition",
     "seed",
-    "weather"
+    "weather",
+    "mode"
   ],
   "title": "Match",
   "type": "object"

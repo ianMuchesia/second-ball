@@ -24,6 +24,7 @@ export interface Match {
   home_team: string;
   kickoff: string;
   match_id: string;
+  mode: "scenario" | "free_simulation";
   schema_version: 1;
   seed: number;
   venue: string;

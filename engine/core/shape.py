@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from engine.core.pitch import GOAL_Y, LENGTH, bearing, clamp, dist, on_pitch, own
 from engine.core.shapes import SIDE_Y, ball_side, generic_roles, table_for
+from engine.league import parse_shape
 
 
 @dataclass
@@ -38,6 +39,20 @@ class TeamState:
     @property
     def on_pitch(self):
         return [self.keeper, *self.roles]
+
+    def fullbacks(self):
+        """{"left": player, "right": player} still on the pitch (team's own frame)."""
+        if self.profile.shapes:
+            by_role = {r: p for p, r in self.roles.items()}
+            found = {"left": by_role.get("LB"), "right": by_role.get("RB")}
+        else:
+            back = parse_shape(self.profile.formation)[0]
+            if back < 4:
+                return {}
+            by_role = {r: p for p, r in self.roles.items()}
+            # generic lines are spread from low y (right) to high y (left)
+            found = {"right": by_role.get("P1"), "left": by_role.get(f"P{back}")}
+        return {side: p for side, p in found.items() if p is not None}
 
     @property
     def front_player(self):

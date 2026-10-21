@@ -1,54 +1,81 @@
-"""Generate one synthetic match as JSON lines (Match first, then events) on stdout.
+"""Generate one synthetic match.
 
-uv run python -m engine.generate --home ashgrove --away ironvale --seed 1 --weather rain
-uv run python -m engine.generate --demo
+Free simulation, JSON lines (Match first, then events) on stdout:
+    uv run python -m engine.generate --home ashgrove --away ironvale --seed 1 --weather rain
+
+Scenario (scripted beats), writes <out>/match.jsonl and <out>/expected_moments.json:
+    uv run python -m engine.generate --scenario demo_riverside_harbour --out demo
+    uv run python -m engine.generate --demo --out demo
 """
 
 import argparse
+import json
 import sys
-from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import get_args
 
 from core.contracts.match import Weather
 from engine.core import score, simulate_match
 from engine.league import load_league
+from engine.scenarios import SCENARIOS_DIR, expected_moments, load_scenario
 
-NAIROBI = timezone(timedelta(hours=3))
-# Demo match (Ian, 2026-10-20). Date and seed chosen by the agent; change freely.
-DEMO = {
-    "home": "riverside_athletic",
-    "away": "ironvale",
-    "seed": 1,
-    "weather": "dry",
-    "kickoff": datetime(2026, 11, 7, 15, 0, tzinfo=NAIROBI),
-}
+DEMO_SCENARIO = "demo_riverside_harbour"
+
+
+def write_lines(result, out):
+    out.write(result.match.model_dump_json() + "\n")
+    for event in result.events:
+        out.write(event.model_dump_json() + "\n")
 
 
 def main(argv=None):
     league = load_league()
+    scenarios = sorted(p.stem for p in SCENARIOS_DIR.glob("*.yaml"))
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--demo", action="store_true", help="the demo match")
+    parser.add_argument(
+        "--demo", action="store_true", help=f"= --scenario {DEMO_SCENARIO}"
+    )
+    parser.add_argument("--scenario", choices=scenarios)
+    parser.add_argument("--out", type=Path, help="output folder (scenario mode)")
     parser.add_argument("--home", choices=sorted(league))
     parser.add_argument("--away", choices=sorted(league))
     parser.add_argument("--seed", type=int)
     parser.add_argument("--weather", default="dry", choices=get_args(Weather))
     args = parser.parse_args(argv)
     if args.demo:
-        for k, v in DEMO.items():
-            setattr(args, k, v)
-    elif None in (args.home, args.away, args.seed):
-        parser.error("--home, --away and --seed are required (or use --demo)")
+        args.scenario = DEMO_SCENARIO
 
-    kwargs = {"kickoff": args.kickoff} if args.demo else {}
-    result = simulate_match(
-        league[args.home], league[args.away], args.seed, weather=args.weather, **kwargs
-    )
-    print(result.match.model_dump_json())
-    for event in result.events:
-        print(event.model_dump_json())
+    if args.scenario:
+        if args.out is None:
+            parser.error("--out is required for a scenario")
+        sc = load_scenario(args.scenario)
+        result = simulate_match(
+            league[sc.home],
+            league[sc.away],
+            sc.seed,
+            weather=sc.weather,
+            kickoff=sc.kickoff,
+            scenario=sc,
+        )
+        args.out.mkdir(parents=True, exist_ok=True)
+        with (args.out / "match.jsonl").open("w") as f:
+            write_lines(result, f)
+        key = expected_moments(sc, result.match)
+        (args.out / "expected_moments.json").write_text(
+            json.dumps(key, indent=2) + "\n"
+        )
+    else:
+        if None in (args.home, args.away, args.seed):
+            parser.error("--home, --away and --seed are required (or use --scenario)")
+        result = simulate_match(
+            league[args.home], league[args.away], args.seed, weather=args.weather
+        )
+        write_lines(result, sys.stdout)
+
     home, away = score(result)
+    m = result.match
     print(
-        f"{args.home} {home}-{away} {args.away}, {len(result.events)} events",
+        f"[{m.mode}] {m.home_team} {home}-{away} {m.away_team}, {len(result.events)} events",
         file=sys.stderr,
     )
 

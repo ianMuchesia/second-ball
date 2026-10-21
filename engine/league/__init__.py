@@ -78,6 +78,15 @@ class Shapes(Strict):
     transition: TransitionShapes | None = None  # default: halfway between in and out
 
 
+class OnRegain(Strict):
+    channel_probability: Annotated[
+        float, Field(ge=0, le=1)
+    ]  # first pass behind the ball-side FB
+    runners: Annotated[
+        int, Field(ge=1, le=3)
+    ]  # most advanced players who run in behind
+
+
 class BuildUp(Strict):
     short_until_x: Annotated[float, Field(ge=0, le=60)]  # keep it short this far out
     flank_bias: Annotated[float, Field(ge=0, le=1)]  # then prefer the ball-side flank
@@ -100,6 +109,7 @@ class ClubProfile(Strict):
     players: Annotated[list[Player], Field(min_length=11, max_length=11)]
     shapes: Shapes | None = None
     build_up: BuildUp | None = None
+    on_regain: OnRegain | None = None
 
     @field_validator("formation", "in_possession_shape")
     @classmethod

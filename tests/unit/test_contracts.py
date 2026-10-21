@@ -33,6 +33,7 @@ def match():
         "competition": "Synthetic League",
         "seed": 42,
         "weather": "rain",
+        "mode": "free_simulation",
     }
 
 
@@ -179,6 +180,11 @@ def test_overlay_requires_english_text():
 def test_match_rejects_unknown_weather():
     with pytest.raises(ValidationError):
         Match.model_validate(with_(match, weather="snow"))
+
+
+def test_match_rejects_unknown_mode():
+    with pytest.raises(ValidationError):
+        Match.model_validate(with_(match, mode="replay"))
 
 
 def test_unknown_field_is_rejected():
