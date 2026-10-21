@@ -1,0 +1,83 @@
+# Ian's club. Fictional; invented player names (rename freely).
+# Numbers marked TUNABLE are placeholders (owner: Ian).
+id: riverside_athletic
+name: Riverside Athletic
+stadium: Riverside Ground
+style: High, aggressive press; short build-up through a back three, then quick to the ball-side flank.
+
+formation: "4-3-3"            # base team sheet
+in_possession_shape: "3-2-5"  # summary; the real positions are in shapes below
+target_ppda: 6.0              # high, aggressive press. TUNABLE
+block_height: 50              # TUNABLE
+late_lead_block_drop: 6       # TUNABLE
+directness: 0.4               # TUNABLE
+width: 0.8                    # TUNABLE
+tempo:
+  passes_per_possession: 6.0  # TUNABLE
+  seconds_per_action: 2.6     # TUNABLE
+counterpress:
+  probability: 0.85           # high. TUNABLE
+  duration_s: 4               # short. TUNABLE
+build_up:
+  short_until_x: 35           # short through the back three until here. TUNABLE
+  flank_bias: 0.7             # then quick to the ball-side flank. TUNABLE
+
+# Starting XI. Roles mirror: LB <-> RB, LCM <-> RCM, ...
+players:
+  - {number: 1, name: Odin Marrowby, role: GK}
+  - {number: 2, name: Tevi Ashcombe, role: RB}
+  - {number: 4, name: Bruno Kettleworth, role: RCB}
+  - {number: 5, name: Ilya Stonebridge, role: LCB}
+  - {number: 3, name: Kofi Lindqvane, role: LB}
+  - {number: 6, name: Marek Duvalle, role: DM}
+  - {number: 8, name: Sami Harrowgate, role: RCM}
+  - {number: 10, name: Nico Fernhallow, role: LCM}
+  - {number: 7, name: Jovan Reedmere, role: RW}
+  - {number: 9, name: Ade Wolstenholt, role: ST}
+  - {number: 11, name: Luca Brightwater, role: LW}
+
+# Anchors: [depth, y]. depth 0 = back line, 1 = front line.
+# y in metres in our attacking frame: LEFT touchline = 68, right = 0.
+# Only LEFT (and optionally CENTRE) are written; RIGHT is mirrored automatically.
+shapes:
+  in_possession:
+    # 3-2-5, ball on the left.
+    left:
+      LCB: [0.0, 46]
+      RCB: [0.0, 34]
+      RB:  [0.0, 22]     # far-side FB stays deep as the third CB
+      DM:  [0.4, 37]     # base two = DM + the other CM
+      LCM: [0.4, 47]
+      LB:  [0.95, 64]    # ball-side FB high and wide
+      LW:  [1.0, 50]     # ball-side winger moves inside
+      ST:  [1.0, 34]
+      RCM: [0.9, 21]     # far-side CM joins the front five (right half-space)
+      RW:  [1.0, 5]
+    # centre: not written -> halfway between left and right (check the PNG)
+  out_of_possession:
+    # 4-4-2 press, ball on the left: ball-side CM steps up beside the 9,
+    # wingers drop into the midfield four.
+    left:
+      LB:  [0.0, 54]
+      LCB: [0.0, 42]
+      RCB: [0.0, 30]
+      RB:  [0.0, 18]
+      LW:  [0.5, 60]
+      DM:  [0.5, 44]
+      RCM: [0.5, 30]
+      RW:  [0.5, 16]
+      LCM: [1.0, 46]     # ball-side CM beside the 9
+      ST:  [1.0, 34]
+    # ball in the centre: the left CM steps up (Ian, 2026-10-20)
+    centre:
+      LB:  [0.0, 54]
+      LCB: [0.0, 40]
+      RCB: [0.0, 28]
+      RB:  [0.0, 14]
+      LW:  [0.5, 56]
+      DM:  [0.5, 40]
+      RCM: [0.5, 28]
+      RW:  [0.5, 12]
+      LCM: [1.0, 40]
+      ST:  [1.0, 28]
+  # transition: not written -> halfway between in and out of possession

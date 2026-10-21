@@ -27,3 +27,12 @@ to add weather (dry | rain | wind | heat), required, schema_version stays 1.
 Phase 1a (2026-10-20): the engine sets under_pressure with Ian's rule only:
 at least one opponent within 2 m. The full pressure formula waits for Phase 2.
 League: 7 placeholder clubs + engine/league/clubs/_template.yaml for Ian's club.
+
+Phase 1b (2026-10-20), Ian's answers: Riverside Athletic is the 8th club.
+In possession with the ball on the left, the far-side CM (RCM) joins the front
+five and the LCM stays in the base two with the DM. Out of possession, the
+ball-side CM steps up beside the 9 (left CM when the ball is central).
+Demo match: Riverside Athletic v Ironvale, dry, 15:00 Nairobi time.
+Defaults chosen by the agent (check the PNGs in docs/shapes/): in-possession
+centre = halfway between left and right; transition = halfway between in and
+out of possession, used by both teams for 5 s after a turnover.

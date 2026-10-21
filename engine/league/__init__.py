@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 CLUBS_DIR = Path(__file__).parent / "clubs"
 COMPETITION = "Second Ball League (fictional)"
@@ -25,6 +25,15 @@ def parse_shape(shape):
     return lines
 
 
+def mirror_role(role):
+    """LB <-> RB, LCM <-> RCM, ... ; DM, ST, GK stay."""
+    if role.startswith("L"):
+        return "R" + role[1:]
+    if role.startswith("R"):
+        return "L" + role[1:]
+    return role
+
+
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -42,6 +51,36 @@ class Counterpress(Strict):
 class Player(Strict):
     number: Annotated[int, Field(ge=1, le=99)]
     name: Annotated[str, Field(min_length=1)]
+    role: str | None = None  # needed when the club writes its own shapes
+
+
+# [depth, y]: depth 0 = back line, 1 = front line; y in metres, left touchline = 68.
+Anchor = tuple[
+    Annotated[float, Field(ge=0, le=1)], Annotated[float, Field(ge=0, le=68)]
+]
+
+
+class SideShapes(Strict):
+    left: dict[str, Anchor]
+    centre: dict[str, Anchor] | None = None  # default: halfway between left and right
+    # right is always the mirror of left
+
+
+class TransitionShapes(Strict):
+    left: dict[str, Anchor] | None = None
+    centre: dict[str, Anchor] | None = None
+    right: dict[str, Anchor] | None = None
+
+
+class Shapes(Strict):
+    in_possession: SideShapes
+    out_of_possession: SideShapes
+    transition: TransitionShapes | None = None  # default: halfway between in and out
+
+
+class BuildUp(Strict):
+    short_until_x: Annotated[float, Field(ge=0, le=60)]  # keep it short this far out
+    flank_bias: Annotated[float, Field(ge=0, le=1)]  # then prefer the ball-side flank
 
 
 class ClubProfile(Strict):
@@ -59,6 +98,8 @@ class ClubProfile(Strict):
     tempo: Tempo
     counterpress: Counterpress
     players: Annotated[list[Player], Field(min_length=11, max_length=11)]
+    shapes: Shapes | None = None
+    build_up: BuildUp | None = None
 
     @field_validator("formation", "in_possession_shape")
     @classmethod
@@ -72,6 +113,36 @@ class ClubProfile(Strict):
         if len({p.number for p in players}) != len(players):
             raise ValueError("players have duplicate numbers")
         return players
+
+    @model_validator(mode="after")
+    def shapes_match_roles(self):
+        if self.shapes is None:
+            return self
+        if self.players[0].role != "GK":
+            raise ValueError("with shapes, the first player must have role GK")
+        roles = [p.role for p in self.players[1:]]
+        if None in roles or len(set(roles)) != 10:
+            raise ValueError("with shapes, every outfield player needs a unique role")
+        expected = set(roles)
+        if {mirror_role(r) for r in expected} != expected:
+            raise ValueError(
+                "roles must mirror (LB<->RB, ...) so right can mirror left"
+            )
+        shapes = [
+            self.shapes.in_possession.left,
+            self.shapes.in_possession.centre,
+            self.shapes.out_of_possession.left,
+            self.shapes.out_of_possession.centre,
+        ]
+        if self.shapes.transition:
+            t = self.shapes.transition
+            shapes += [t.left, t.centre, t.right]
+        for shape in shapes:
+            if shape is not None and set(shape) != expected:
+                raise ValueError(
+                    f"shape roles {sorted(shape)} != player roles {sorted(expected)}"
+                )
+        return self
 
     def player_id(self, index):
         return f"{self.id}-{self.players[index].number}"
