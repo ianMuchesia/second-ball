@@ -9,6 +9,7 @@ as "no reference", never compared against a remembered number.
 """
 
 import itertools
+import multiprocessing
 import random
 import statistics
 import sys
@@ -46,6 +47,9 @@ OPEN_PLAY_PASSES = {"pass", "cross"}
 DEFENSIVE_ACTIONS = {"tackle", "interception", "foul"}
 PPDA_ZONE_X = 63.0  # the passing team's own 60% (its frame)
 LENGTH = 105.0
+
+# spawn, not fork: forking a multi-threaded process can deadlock.
+SPAWN = multiprocessing.get_context("spawn")
 
 
 def fixtures(n=MATCHES, first_seed=FIRST_SEED):
@@ -269,7 +273,7 @@ def main(argv=None):
     ref = reference["metrics"]
 
     def run(seed0):
-        with ProcessPoolExecutor() as pool:
+        with ProcessPoolExecutor(mp_context=SPAWN) as pool:
             sample = list(pool.map(summarise, fixtures(n, seed0), chunksize=8))
         values, clubs = metric_values(sample)
         intervals = bootstrap(sample)

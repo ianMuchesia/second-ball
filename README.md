@@ -23,4 +23,14 @@ make lint test
 cd web && npm ci && npm run dev
 ```
 
+## Data
+
+```sh
+uv run secondball generate --matches 100 --seed 7 --out data/   # synthetic dataset
+make demo                                                        # scripted demo scenario
+make realism                                                     # realism report vs real leagues
+```
+
+See [docs/DATASHEET.md](docs/DATASHEET.md) and [docs/DATA_REALISM.md](docs/DATA_REALISM.md).
+
 Rules for coding agents: [AGENTS.md](AGENTS.md). Decisions: [DECISIONS.md](DECISIONS.md).
