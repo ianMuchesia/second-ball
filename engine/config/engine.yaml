@@ -1,6 +1,7 @@
 # Engine mechanics for the synthetic match generator.
-# Every value is TUNABLE (owner: Ian). Placeholders, roughly tuned on 40 matches
-# (2026-10-20) to ~2.7 goals, ~18 shots and ~81% pass completion per match.
+# Every value is TUNABLE (owner: Ian). Tuned on 2026-10-21 against real
+# 2024/25 reference bands: see docs/DATA_REALISM.md (make realism) and the
+# before/after list in DECISIONS.md.
 
 # Pass success = logistic(intercept - distance - pressure - angle - lines broken).
 pass_model:
@@ -15,7 +16,7 @@ pass_model:
 
 # Shot xG = logistic(intercept + distance + angle + body part + assist type).
 xg_model:
-  intercept: -1.4
+  intercept: -1.45
   per_metre: -0.11
   per_radian_of_goal: 1.0    # angle the goal mouth makes from the shot spot
   header: -0.8
@@ -34,7 +35,7 @@ pressing:
   open_distance_m: [2.5, 12.0]
   goal_side_share: 0.6       # how often the closest defender is goal-side
   counterpress_probability: 0.8   # chance of a close defender inside a counterpress window
-  counterpress_regain: 0.25       # chance the counterpress wins the ball straight back
+  counterpress_regain: 0.15       # chance the counterpress wins the ball straight back
 
 # Ian's rule (2026-10-20): at least one opponent within 2 m = under pressure.
 under_pressure_m: 2.0
@@ -44,22 +45,22 @@ facing_back:
   otherwise: 0.10
 
 failed_pass:                 # what happens after a pass fails (relative weights)
-  interception: 0.5
-  tackle: 0.25
-  loose_ball: 0.25           # multiplied by the weather's loose_ball
+  interception: 0.18
+  tackle: 0.08
+  loose_ball: 0.77           # multiplied by the weather's loose_ball
 loose_ball_out_of_play: 0.2
 loose_ball_kept: 0.5
 
 challenges:
-  foul: 0.12                 # per tackle attempt
-  yellow_per_foul: 0.12
-  red_per_foul: 0.006
+  foul: 0.46                 # per tackle attempt
+  yellow_per_foul: 0.185
+  red_per_foul: 0.008
   min_players: 7             # no more red cards below this many players
 
 shots:
-  bias: 1.5                  # how readily players shoot, scaled by xG (re-tuned 1b)
+  bias: 2.42                 # how readily players shoot, scaled by xG
   min_x: 75.0                # no shots from further out
-  save_share: 0.45           # share of missed shots the keeper saves
+  save_share: 0.27           # share of missed shots the keeper saves
   corner_after_save: 0.3
   corner_success: 0.32
 
