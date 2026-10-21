@@ -89,6 +89,13 @@
           "minLength": 1,
           "type": "string"
         },
+        "mode": {
+          "enum": [
+            "scenario",
+            "free_simulation"
+          ],
+          "type": "string"
+        },
         "schema_version": {
           "const": 1,
           "default": 1,
@@ -121,7 +128,8 @@
         "kickoff",
         "competition",
         "seed",
-        "weather"
+        "weather",
+        "mode"
       ],
       "title": "Match",
       "type": "object"

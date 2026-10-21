@@ -36,3 +36,11 @@ Demo match: Riverside Athletic v Ironvale, dry, 15:00 Nairobi time.
 Defaults chosen by the agent (check the PNGs in docs/shapes/): in-possession
 centre = halfway between left and right; transition = halfway between in and
 out of possession, used by both teams for 5 s after a turnover.
+
+Exception (2026-10-21): Ian allowed the agent to edit core/contracts/match.py once,
+to add mode ("scenario" | "free_simulation"), required. Scenario matches are
+scripted and must be labelled "scenario" in the UI.
+
+Phase 1c (2026-10-21), Ian: opponent Harbour Town; demo scenario ends 0-2
+(Harbour's third counter behind Riverside's left-back at 88' replaces the
+1-1 equaliser). The demo match is now this scenario (was Riverside v Ironvale).
