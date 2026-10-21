@@ -28,6 +28,10 @@ def demo():
     return play()
 
 
+def truth(m, event):
+    return m.truth_by_event().get(event.event_id, {})
+
+
 def goals(m):
     return [e for e in m.events if e.type.startswith("shot") and e.outcome == "success"]
 
@@ -35,7 +39,7 @@ def goals(m):
 def test_demo_has_exactly_the_scripted_goals(demo):
     assert score(demo) == (0, 2)
     scored = goals(demo)
-    assert [(e.team_id, e.qualifiers["scenario_beat"]) for e in scored] == [
+    assert [(e.team_id, truth(demo, e)["scenario_beat"]) for e in scored] == [
         ("harbour_town", "counter_goal_34"),
         ("harbour_town", "counter_goal_88"),
     ]
@@ -51,7 +55,7 @@ def test_demo_has_exactly_one_red_card_at_63_for_riverside_lcb(demo):
     assert red.team_id == "riverside_athletic"
     lcb = next(p for p in LEAGUE["riverside_athletic"].players if p.role == "LCB")
     assert red.player_id == f"riverside_athletic-{lcb.number}"
-    assert red.qualifiers["last_man"] is True
+    assert truth(demo, red)["last_man"] is True
 
 
 def test_riverside_play_with_ten_after_the_red_card(demo):
@@ -67,11 +71,11 @@ def test_counters_go_behind_riversides_left_back(demo):
     scripted = [
         e
         for e in demo.events
-        if e.qualifiers.get("channel") and "scenario_beat" in e.qualifiers
+        if truth(demo, e).get("channel") and "scenario_beat" in truth(demo, e)
     ]
     assert len(scripted) == 4  # 34', 50-60', 63', 88'
     for e in scripted:
-        assert e.qualifiers["channel"] == "behind_left_fullback"
+        assert truth(demo, e)["channel"] == "behind_left_fullback"
         full_back = next(p for p in e.freeze_frame if p.player_id == lb_id)
         # Harbour's frame: Riverside's goal is at x = 105, so behind = larger x.
         assert e.end_x > full_back.x
@@ -81,7 +85,7 @@ def test_second_counter_is_a_chance_not_a_goal(demo):
     shots = [
         e
         for e in demo.events
-        if e.qualifiers.get("scenario_beat") == "counter_chance_50_60"
+        if truth(demo, e).get("scenario_beat") == "counter_chance_50_60"
         and e.type == "shot"
     ]
     assert len(shots) == 1 and shots[0].outcome == "fail"
@@ -120,15 +124,16 @@ def test_generate_writes_match_and_answer_key(tmp_path):
     lines = (tmp_path / "match.jsonl").read_text().splitlines()
     assert json.loads(lines[0])["mode"] == "scenario"
     key = json.loads((tmp_path / "expected_moments.json").read_text())
+    assert (tmp_path / "engine_truth.jsonl").read_text().strip()
     assert key["scenario"] == "demo_riverside_harbour"
 
 
 def test_harbour_go_behind_the_full_back_in_free_play_too():
     free = simulate_match(LEAGUE["harbour_town"], LEAGUE["saltmere"], 4)
-    channel = [e for e in free.events if e.qualifiers.get("channel")]
+    channel = [e for e in free.events if truth(free, e).get("channel")]
     assert channel
     assert {e.team_id for e in channel} == {"harbour_town"}
-    assert all("scenario_beat" not in e.qualifiers for e in free.events)
+    assert all("scenario_beat" not in t for t in free.truth)
 
 
 def test_missed_beat_is_an_error():

@@ -9,7 +9,7 @@ up, fatigue lowers the press, and red cards remove players.
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,6 +33,10 @@ from engine.league import COMPETITION
 from engine.weather import load_weather
 
 CONFIG = Path(__file__).parent.parent / "config" / "engine.yaml"
+# What a real event feed carries. Every other label the engine knows (counter,
+# channel, last_man, lines_broken, scenario_beat, ...) goes to the engine-truth
+# sidecar, which only evals may read: the analyser sees events alone.
+FEED_QUALIFIERS = frozenset({"xg", "assist", "length_m"})
 DEFAULT_KICKOFF = datetime(2026, 11, 7, 15, 0, tzinfo=UTC)
 
 
@@ -44,6 +48,11 @@ def load_config(path=CONFIG):
 class SimulatedMatch:
     match: Match
     events: list
+    # Engine-only labels per event: [{"event_id": ..., **labels}]. Evals only.
+    truth: list = field(default_factory=list)
+
+    def truth_by_event(self):
+        return {t["event_id"]: t for t in self.truth}
 
 
 def simulate_match(
@@ -78,7 +87,7 @@ def simulate_match(
         missed = [b.id for b in scenario.scripted() if b.id not in sim.done]
         if missed:
             raise RuntimeError(f"scenario beats never played: {missed}")
-    return SimulatedMatch(match, events)
+    return SimulatedMatch(match, events, sim.truth)
 
 
 class _Sim:
@@ -92,6 +101,7 @@ class _Sim:
         self.rng = random.Random(match.seed)
         self.teams = (TeamState.start(0, home), TeamState.start(1, away))
         self.events = []
+        self.truth = []
         self.t = 0.0
         self.period = 1
         self.possessions = 0
@@ -355,10 +365,13 @@ class _Sim:
             ball_speed_kmh=None
             if speed is None
             else round(speed * self.wx.ball_speed, 1),
-            qualifiers=qual,
+            qualifiers={k: v for k, v in qual.items() if k in FEED_QUALIFIERS},
             freeze_frame=players,
         )
         self.events.append(event)
+        labels = {k: v for k, v in qual.items() if k not in FEED_QUALIFIERS}
+        if labels:
+            self.truth.append({"event_id": event.event_id, **labels})
         return event
 
     def foot(self):

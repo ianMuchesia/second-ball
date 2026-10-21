@@ -29,6 +29,7 @@ Same arguments = same data, byte for byte in content. Match *i* uses seed
 | `matches.parquet` | match | contract `Match` fields + `home_goals`, `away_goals`, `events` |
 | `events.parquet` | event | contract `MatchEvent` fields; `freeze_frame` is a nested list; `qualifiers` is a JSON string |
 | `jsonl/<match_id>.jsonl` | `Match`, then each `MatchEvent` | exactly the contract JSON (`docs/schemas/`) |
+| `engine_truth.parquet` | labelled event | engine-only labels (evals only, never the analyser) |
 | `manifest.json` | dataset | arguments, counts, clubs, schema version |
 
 Size: about 1,450 events per match. 100 matches ≈ 30 MB Parquet, ≈ 340 MB JSONL.
@@ -47,9 +48,13 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   `player_id`, `team_id`, `x`, `y`, `facing_deg` (0 = +x, anticlockwise, 0.1° steps).
 - **under_pressure:** at least one opponent within 2 m of the acting player in
   the stored freeze frame (Ian's rule; `core` metric definitions come in Phase 2).
-- **qualifiers:** engine facts such as `xg` (the engine's own xG model),
-  `assist`, `length_m`, `lines_broken`, `counter`, `channel`, `last_man`, and
-  `scenario_beat` on scripted events.
+- **qualifiers:** only what a real event feed carries: `xg` (the engine's own
+  xG model), `assist` (pass type before a shot) and `length_m`.
+- **Engine truth (separate file):** labels only the engine knows (`counter`,
+  `channel`, `last_man`, `lines_broken`, `scenario_beat`) are in
+  `engine_truth.parquet` / `engine_truth.jsonl`, keyed by `event_id`. They are
+  for evals only: the analyser (core/, stream/, agents/) works from events alone,
+  so it cannot "detect" a moment by reading the answer.
 
 ## How it was made
 
@@ -71,8 +76,8 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   alone decides what happens.
 - **Scenario** matches (`engine/scenarios/`, e.g. `make demo`) are **scripted**:
   goals, red cards and some counters happen at set minutes. They carry
-  `mode: "scenario"` on the `Match`, `scenario_beat` on scripted events, and
-  an `expected_moments.json` answer key. Never present a scenario as a natural
+  `mode: "scenario"` on the `Match`, `scenario_beat` in the engine-truth file
+  for scripted events, and an `expected_moments.json` answer key. Never present a scenario as a natural
   outcome of the engine.
 
 ## Known limits

@@ -59,3 +59,10 @@ Tuned on 500 matches (seeds 10000-10499) against 2024/25 top-five-league bands
 - challenges.red_per_foul: 0.006 -> 0.008 (reds 0.05 -> ~0.17; band 0.14-0.21)
 Red cards cannot strictly pass at 500 matches: they are rare, so the 95%
 interval is about as wide as the real band. The mean sits in the band.
+
+Blind analyser (2026-10-21, Ian): events carry only what a real feed has
+(xg, assist, length_m). Engine-only labels (counter, channel, last_man,
+lines_broken, scenario_beat, and the new mode/threat) live in an engine-truth
+sidecar used only by evals. core/, stream/ and agents/ may not import the
+engine. Reason: otherwise the moment detector could read the answer key and
+evals would be circular.

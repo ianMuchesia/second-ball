@@ -3,7 +3,8 @@
 Free simulation, JSON lines (Match first, then events) on stdout:
     uv run python -m engine.generate --home ashgrove --away ironvale --seed 1 --weather rain
 
-Scenario (scripted beats), writes <out>/match.jsonl and <out>/expected_moments.json:
+Scenario (scripted beats), writes <out>/match.jsonl, <out>/expected_moments.json and
+<out>/engine_truth.jsonl (engine-only labels; evals only, never the analyser):
     uv run python -m engine.generate --scenario demo_riverside_harbour --out demo
     uv run python -m engine.generate --demo --out demo
 """
@@ -60,6 +61,9 @@ def main(argv=None):
         args.out.mkdir(parents=True, exist_ok=True)
         with (args.out / "match.jsonl").open("w") as f:
             write_lines(result, f)
+        with (args.out / "engine_truth.jsonl").open("w") as f:
+            for row in result.truth:
+                f.write(json.dumps(row, sort_keys=True) + "\n")
         key = expected_moments(sc, result.match)
         (args.out / "expected_moments.json").write_text(
             json.dumps(key, indent=2) + "\n"
