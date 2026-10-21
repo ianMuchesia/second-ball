@@ -11,7 +11,8 @@ Same seed = identical match. Output is `Match` then one `MatchEvent` per line
 
 | Path | What |
 |---|---|
-| `league/clubs/*.yaml` | 8 club style profiles, incl. Ian's `riverside_athletic.yaml`. Files starting with `_` are ignored. |
+| `league/clubs/*.yaml` | 10 club style profiles, incl. Ian's `riverside_athletic.yaml` and `kilele_chui.yaml`. Files starting with `_` are ignored. |
+| `scenarios/*.yaml` | scripted scenarios (seed + beats + answer key) |
 | `config/weather.yaml` | weather multipliers |
 | `config/engine.yaml` | engine mechanics: pass model, xG, pressing, cards, game state |
 | `core/` | possession-chain state machine, shapes and freeze frames |
@@ -31,3 +32,18 @@ Every number in the YAML files is **TUNABLE (owner: Ian)**.
 `under_pressure` uses Ian's rule: at least one opponent within 2 m. The engine's
 own pressure load (`engine/core/models.py`) drives the simulation only; it is
 not the pressure metric, which comes in Phase 2.
+
+## Scenario mode (scripted)
+
+`make demo` plays `scenarios/demo_riverside_harbour.yaml` and writes
+`demo/match.jsonl` and `demo/expected_moments.json` (the answer key for evals).
+
+A scenario is a seed plus **beats**: minute windows where the engine plays a
+scripted sequence (a counter behind a full-back that scores or misses, a
+last-man red card) or a modifier (a deeper block). Between beats the normal
+engine runs, but it scores no goals and shows no red cards of its own, so the
+final score is exactly the scripted one.
+
+Honesty: scenario matches have `mode: "scenario"` on the `Match`, and every
+scripted event has the qualifier `scenario_beat`. The UI must label them as
+scenarios. Free matches have `mode: "free_simulation"`.
