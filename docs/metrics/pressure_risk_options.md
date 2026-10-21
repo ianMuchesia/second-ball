@@ -49,6 +49,12 @@ How costly losing the ball here would be.
   has the upper hand**: no defenders left, or a counter-attack where attackers
   outnumber defenders with clear passing lanes and triangles.
   (Ian, 2026-10-20)
+- **"Upper hand" = the attack is on top right now** (Ian, 2026-10-21):
+  - many touches in the opponent's final third, around their goalkeeper, **and**
+  - shot attempts, on or off target.
+  - Final-third play **with no threat** (no shots) is **not** the upper hand.
+  - Not measured by possession, pass counts or xG.
+  - "Right now" = a recent window of play, not the whole match.
 - Ian notes it also depends on the situation, e.g. a team playing a high press.
 - **Version 1 includes the situation, not distance only.** (Ian, 2026-10-20)
 - Exact curve and values: **TUNABLE** (owner: Ian)
@@ -109,8 +115,10 @@ Attackers vs defenders around the ball, e.g. 3v2 or 3v1. (Ian, 2026-10-20)
 
 1. **Pressure between 2 m and 5 m:** how fast does the weight fall off?
 2. **In front and goal-side at once:** does that opponent count ×2 or ×4?
-3. **Risk with context:** how should code tell that "the attack clearly has
-   the upper hand", or that a team is high-pressing?
+3. **Upper hand, in numbers:** how long is the recent window (e.g. last
+   5 minutes)? How many final-third touches and how many shots count? Does
+   "around their goalkeeper" mean the penalty box? And how should code tell
+   that a team is high-pressing?
 4. **Overload area:** what zone or distance, and how do we count defenders
    who can still recover?
 5. **"Clearly offside":** by how many metres?
