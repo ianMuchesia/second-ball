@@ -7,6 +7,8 @@ via xG. Late on, the leading team drops its block, the trailing team speeds
 up, fatigue lowers the press, and red cards remove players.
 """
 
+import collections
+import itertools
 import math
 import random
 from dataclasses import dataclass, field
@@ -50,6 +52,8 @@ class SimulatedMatch:
     events: list
     # Engine-only labels per event: [{"event_id": ..., **labels}]. Evals only.
     truth: list = field(default_factory=list)
+    # Engine-internal mode switches (manage / protect / chase). Never emitted.
+    mode_log: list = field(default_factory=list)
 
     def truth_by_event(self):
         return {t["event_id"]: t for t in self.truth}
@@ -87,7 +91,7 @@ def simulate_match(
         missed = [b.id for b in scenario.scripted() if b.id not in sim.done]
         if missed:
             raise RuntimeError(f"scenario beats never played: {missed}")
-    return SimulatedMatch(match, events, sim.truth)
+    return SimulatedMatch(match, events, sim.truth, sim.mode_log)
 
 
 class _Sim:
@@ -102,6 +106,8 @@ class _Sim:
         self.teams = (TeamState.start(0, home), TeamState.start(1, away))
         self.events = []
         self.truth = []
+        self.samples = collections.deque()  # (t, side in possession, ball x)
+        self.mode_log = []  # engine-internal mode switches (never emitted)
         self.t = 0.0
         self.period = 1
         self.possessions = 0
@@ -123,20 +129,23 @@ class _Sim:
     def tick(self, seconds):
         self.t += max(0.5, seconds)
 
-    def late(self):
-        return self.minute >= self.cfg["game_state"]["late_minute"]
-
     def lead(self, side):
         return self.teams[side].goals - self.teams[1 - side].goals
 
+    def effect(self, side, key, default):
+        """A mode effect from game_state.<mode>.<key> (engine-internal)."""
+        mode = self.teams[side].mode
+        return self.cfg["game_state"].get(mode, {}).get(key, default)
+
     def block_height(self, side):
         team = self.teams[side]
-        drop = (
-            team.profile.late_lead_block_drop
-            if self.late() and self.lead(side) > 0
-            else 0
-        )
+        drop = self.effect(side, "block_drop_m", 0.0)
+        if team.mode == "protect":
+            drop = team.profile.late_lead_block_drop
         return team.profile.block_height - drop - self.scripted_drop(side)
+
+    def push(self, side):
+        return self.effect(side, "fullback_push_m", 0.0)
 
     def scripted_drop(self, side):
         if not self.scenario:
@@ -151,18 +160,12 @@ class _Sim:
         )
 
     def directness(self, side):
-        extra = (
-            self.cfg["game_state"]["trailing_directness"]
-            if self.late() and self.lead(side) < 0
-            else 0
-        )
+        extra = self.effect(side, "directness", 0.0)
         return clamp(self.teams[side].profile.directness + extra, 0, 1)
 
     def seconds_per_action(self, side):
         spa = self.teams[side].profile.tempo.seconds_per_action
-        if self.late() and self.lead(side) < 0:
-            spa *= self.cfg["game_state"]["trailing_tempo"]
-        return spa
+        return spa * self.effect(side, "tempo", 1.0)
 
     def legs(self):
         return fatigue(self.cfg, self.minute, self.wx.fatigue_rate)
@@ -173,9 +176,85 @@ class _Sim:
         intensity = 1.0
         if carrier_x < pr["high_press_zone_x"]:
             intensity = pr["ppda_reference"] / self.teams[side].profile.target_ppda
-        if self.late() and self.lead(side) > 0:
-            intensity *= self.cfg["game_state"]["leading_press"]
+        intensity *= self.effect(side, "press", 1.0)
         return intensity * self.legs()
+
+    # ---- match modes (engine-internal: never emitted) -------------------------
+
+    def territory(self, side):
+        """Share of the last threat window the opponent had the ball in `side`'s
+        defensive third. The engine's own signal; the analyser never sees it."""
+        gs = self.cfg["game_state"]
+        lo = self.t - gs["threat_window_s"]
+        inside = 0.0
+        for (t0, attack, bx), (t1, _, _) in itertools.pairwise(
+            [*self.samples, (self.t, None, None)]
+        ):
+            a, b = max(t0, lo), t1
+            if b <= a or attack != 1 - side:
+                continue
+            if own(side, bx, GOAL_Y)[0] < gs["defensive_third_x"]:
+                inside += b - a
+        return inside / gs["threat_window_s"]
+
+    def update_modes(self):
+        gs = self.cfg["game_state"]
+        self.samples.append((self.t, self.attack, self.ball[0]))
+        while (
+            len(self.samples) > 2
+            and self.samples[1][0] < self.t - gs["threat_window_s"]
+        ):
+            self.samples.popleft()
+        for side in (0, 1):
+            team = self.teams[side]
+            lead = self.lead(side)
+            late = self.minute >= gs["from_minute"]
+            if not late or lead == 0 or abs(lead) >= gs["comfortable_margin"]:
+                base = "normal"
+            elif lead > 0:
+                base = "manage"
+            else:
+                base = "chase" if -lead <= gs["chase_max_deficit"] else "normal"
+
+            if base != "manage":
+                if team.mode != base:
+                    self.set_mode(team, base, "score_or_clock")
+                continue
+            if team.mode not in ("manage", "protect"):
+                self.set_mode(team, "manage", "score_or_clock")
+                continue
+
+            share = self.territory(side)
+            settled = self.t - team.mode_since >= gs["min_mode_s"]
+            if team.mode == "manage":
+                opp = self.teams[1 - side].profile.strength
+                stronger = opp > team.profile.strength + gs["stronger_by"]
+                limit = (
+                    gs["escalate_share_vs_stronger"]
+                    if stronger
+                    else gs["escalate_share"]
+                )
+                if share >= limit and settled:
+                    self.set_mode(team, "protect", "threat")
+            else:
+                if share < gs["calm_share"]:
+                    team.calm_since = (
+                        team.calm_since if team.calm_since is not None else self.t
+                    )
+                else:
+                    team.calm_since = None
+                calm = (
+                    team.calm_since is not None
+                    and self.t - team.calm_since >= gs["calm_s"]
+                )
+                if calm and settled:
+                    self.set_mode(team, "manage", "calm")
+
+    def set_mode(self, team, mode, reason):
+        team.mode, team.mode_since, team.calm_since = mode, self.t, None
+        self.mode_log.append(
+            {"t": self.t, "team": team.profile.id, "mode": mode, "reason": reason}
+        )
 
     def counterpressing(self, side):
         return (
@@ -251,11 +330,13 @@ class _Sim:
             blocks,
             phases,
             self.previous,
+            {s: self.push(s) for s in (0, 1)},
         )
         self.previous = frame.shape_positions
         return frame, presser_dist
 
     def step(self):
+        self.update_modes()
         beat = self.due_beat()
         if beat is not None:
             self.play_beat(beat)
@@ -272,7 +353,11 @@ class _Sim:
             self.challenge(frame, presser)
             return
 
-        won_ball = won_ball and self.teams[attack].profile.on_regain is not None
+        team = self.teams[attack]
+        won_ball = won_ball and (
+            team.profile.on_regain is not None
+            or self.effect(attack, "counter_probability", 0.0) > 0
+        )
         choice = self.choose_action(bx, by, pressed, won_ball)
         if choice == "shot":
             self.shot(frame)
@@ -292,7 +377,8 @@ class _Sim:
             "pass": (3.0 if regain else 1.0) * (1.2 if self.passes < target else 1.0),
             "carry": (0.15 if pressed else 0.45) * (0.3 if bx > 95 else 1.0),
             "take_on": 0.05 + (0.15 if pressed and bx > 55 else 0.0),
-            "clearance": 0.6 if pressed and bx < 25 else 0.0,
+            "clearance": (0.6 if pressed and bx < 25 else 0.0)
+            * self.effect(self.attack, "clearance", 1.0),
             "shot": 0.0,
         }
         if bx >= shots["min_x"]:
@@ -300,6 +386,7 @@ class _Sim:
             chance = xg(self.cfg, bx, by, header, self.assist)
             boost = 3.0 if self.assist in ("cross", "through_ball") else 1.0
             w["shot"] = shots["bias"] * chance * boost * (0.6 if pressed else 1.0)
+            w["shot"] *= self.effect(self.attack, "shot_bias", 1.0)
             if self.passes >= target:
                 w["shot"] *= 1.3
         names = list(w)
@@ -481,8 +568,12 @@ class _Sim:
 
         channel = None
         on_regain = self.teams[side].profile.on_regain
-        wants_channel = forced is None and regain and kind == "pass" and on_regain
-        if wants_channel and self.rng.random() < on_regain.channel_probability:
+        counter_p = max(
+            on_regain.channel_probability if on_regain else 0.0,
+            self.effect(side, "counter_probability", 0.0),
+        )
+        wants_channel = forced is None and regain and kind == "pass" and counter_p > 0
+        if wants_channel and self.rng.random() < counter_p:
             channel = self.channel_target(frame, side)
 
         cross = (

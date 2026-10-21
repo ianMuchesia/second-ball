@@ -87,6 +87,28 @@ def generic_table(profile):
     return table
 
 
+def override_table(profile, override, present):
+    """Table for a ShapeOverride, for the roles still `present`."""
+    order = [r for r in (override.order or generic_roles()) if r in present]
+    lines = parse_shape(override.formation, len(order))
+    table = {}
+    settings = {
+        "in_possession": (26 + 40 * profile.width, 0.3),
+        "out_of_possession": (22 + 18 * profile.width, 0.45),
+    }
+    for phase, (span, pull) in settings.items():
+        for side in SIDES:
+            centre = GOAL_Y + pull * (SIDE_Y[side] - GOAL_Y)
+            shape, it = {}, iter(order)
+            for i, n in enumerate(lines):
+                depth = 0.0 if len(lines) == 1 else i / (len(lines) - 1)
+                for y in _spread(n, min(span, WIDTH - 4), centre):
+                    shape[next(it)] = (depth, y)
+            table[(phase, side)] = shape
+    _add_transition(table, None)
+    return table
+
+
 def _add_transition(table, explicit):
     for side in SIDES:
         if explicit is not None and getattr(explicit, side, None):

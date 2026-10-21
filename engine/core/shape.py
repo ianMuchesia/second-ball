@@ -10,7 +10,13 @@ import math
 from dataclasses import dataclass, field
 
 from engine.core.pitch import GOAL_Y, LENGTH, bearing, clamp, dist, on_pitch, own
-from engine.core.shapes import SIDE_Y, ball_side, generic_roles, table_for
+from engine.core.shapes import (
+    SIDE_Y,
+    ball_side,
+    generic_roles,
+    override_table,
+    table_for,
+)
 from engine.league import parse_shape
 
 
@@ -27,6 +33,12 @@ class TeamState:
     keeper: int = 0
     goals: int = 0
     reds: int = 0
+    # Engine-internal match mode: normal | manage | protect | chase. Never emitted.
+    mode: str = "normal"
+    mode_since: float = 0.0
+    calm_since: float | None = None
+    overrides: dict = field(default_factory=dict)  # "protect" / "chase" -> table
+    red_table: dict | None = None
 
     @classmethod
     def start(cls, side, profile):
@@ -34,7 +46,40 @@ class TeamState:
             roles = {i: p.role for i, p in enumerate(profile.players) if i > 0}
         else:
             roles = dict(zip(range(1, 11), generic_roles(), strict=True))
-        return cls(side=side, profile=profile, table=table_for(profile), roles=roles)
+        present = set(roles.values())
+        overrides = {
+            kind: override_table(profile, ov, present)
+            for kind, ov in (
+                ("protect", profile.shape_when_protecting_lead),
+                ("chase", profile.shape_when_chasing),
+            )
+            if ov is not None
+        }
+        return cls(
+            side=side,
+            profile=profile,
+            table=table_for(profile),
+            roles=roles,
+            overrides=overrides,
+        )
+
+    def shape(self, phase, side):
+        """Anchors in use now: red-card shape, then mode shape, then the base table."""
+        if self.red_table is not None:
+            return self.red_table[(phase, side)]
+        if (
+            self.mode == "protect"
+            and "protect" in self.overrides
+            and phase != "in_possession"
+        ):
+            return self.overrides["protect"][(phase, side)]
+        if (
+            self.mode == "chase"
+            and "chase" in self.overrides
+            and phase == "in_possession"
+        ):
+            return self.overrides["chase"][(phase, side)]
+        return self.table[(phase, side)]
 
     @property
     def on_pitch(self):
@@ -70,12 +115,22 @@ class TeamState:
         )
         if donor is not None and depth[self.roles[donor]][0] > depth[vacated][0]:
             self.roles[donor] = vacated
+        ov = self.profile.shape_after_red_card
+        if ov is not None and self.reds == 1:
+            present = set(self.roles.values())
+            order = [r for r in (ov.order or generic_roles()) if r in present]
+            if len(order) == len(present) == 9:
+                self.red_table = override_table(self.profile, ov, present)
 
 
-def lines(phase, bx, block_height):
-    """(keeper_x, back_x, front_x) in the team's frame for ball at bx."""
+def lines(phase, bx, block_height, push=0.0):
+    """(keeper_x, back_x, front_x) in the team's frame for ball at bx.
+
+    `push` moves the back line up with the ball (chasing: full-backs higher).
+    """
     if phase == "in_possession":
-        return clamp(bx - 45, 5, 22), clamp(bx - 28, 10, 62), clamp(bx + 14, 28, 99)
+        back = clamp(bx - 28 + push, 10, 62 + push)
+        return clamp(bx - 45, 5, 22), back, max(back + 10, clamp(bx + 14, 28, 99))
     back = clamp(block_height + 0.3 * (bx - 52.5), 8, 60)
     back = min(back, max(6.0, bx - 3))
     keeper_x = clamp(2 + 0.12 * bx, 2, 14)
@@ -86,12 +141,12 @@ def lines(phase, bx, block_height):
     return keeper_x, (back + ib) / 2, (min(back + 24, 100) + ifr) / 2
 
 
-def anchors(team, ball, phase, block_height, cfg):
+def anchors(team, ball, phase, block_height, cfg, push=0.0):
     """{player: (x, y)} absolute anchors for one team in one phase."""
     bx, by = own(team.side, *ball)
     side = ball_side(by, cfg)
-    shape = team.table[(phase, side)]
-    keeper_x, back, front = lines(phase, bx, block_height)
+    shape = team.shape(phase, side)
+    keeper_x, back, front = lines(phase, bx, block_height, push)
     pull = cfg["shapes"]["ball_pull"] * (by - SIDE_Y[side])
 
     spots = {team.keeper: (keeper_x, GOAL_Y + 0.15 * (by - GOAL_Y))}
@@ -132,6 +187,7 @@ def build_frame(
     blocks,
     phases,
     previous=None,
+    pushes=None,
 ):
     """Freeze frame with the carrier on the ball and the closest defender at presser_dist.
 
@@ -141,7 +197,8 @@ def build_frame(
     follow = cfg["shapes"]["follow"]
     positions = {}
     for team in teams:
-        spots = anchors(team, ball, phases[team.side], blocks[team.side], cfg)
+        push = (pushes or {}).get(team.side, 0.0)
+        spots = anchors(team, ball, phases[team.side], blocks[team.side], cfg, push)
         for pl, (x, y) in spots.items():
             tx, ty = x + rng.gauss(0, noise), y + rng.gauss(0, noise)
             prev = previous.get((team.side, pl)) if previous else None

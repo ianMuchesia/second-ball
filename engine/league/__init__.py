@@ -13,14 +13,14 @@ COMPETITION = "Second Ball League (fictional)"
 SHAPE = re.compile(r"^\d(-\d){1,4}$")
 
 
-def parse_shape(shape):
-    """'4-3-3' -> [4, 3, 3]. Outfield lines, back to front, must sum to 10."""
+def parse_shape(shape, outfield=10):
+    """'4-3-3' -> [4, 3, 3]. Outfield lines, back to front, must sum to `outfield`."""
     if not SHAPE.match(shape):
         raise ValueError(f"shape {shape!r} must look like '4-3-3'")
     lines = [int(n) for n in shape.split("-")]
-    if sum(lines) != 10 or 0 in lines:
+    if sum(lines) != outfield or 0 in lines:
         raise ValueError(
-            f"shape {shape!r} must have 10 outfield players and no empty line"
+            f"shape {shape!r} must have {outfield} outfield players and no empty line"
         )
     return lines
 
@@ -78,6 +78,15 @@ class Shapes(Strict):
     transition: TransitionShapes | None = None  # default: halfway between in and out
 
 
+class ShapeOverride(Strict):
+    """A formation used in one situation. `order` lists the roles back to front,
+    right to left within a line (clubs with roles); generic clubs omit it.
+    For shape_after_red_card, list all 10 roles: the one missing is skipped."""
+
+    formation: str
+    order: list[str] | None = None
+
+
 class OnRegain(Strict):
     channel_probability: Annotated[
         float, Field(ge=0, le=1)
@@ -107,6 +116,10 @@ class ClubProfile(Strict):
     tempo: Tempo
     counterpress: Counterpress
     players: Annotated[list[Player], Field(min_length=11, max_length=11)]
+    strength: Annotated[float, Field(ge=0, le=1)]  # 0-1; who is the stronger side
+    shape_when_protecting_lead: ShapeOverride | None = None  # without the ball
+    shape_when_chasing: ShapeOverride | None = None  # with the ball
+    shape_after_red_card: ShapeOverride | None = None  # 9 outfield players
     shapes: Shapes | None = None
     build_up: BuildUp | None = None
     on_regain: OnRegain | None = None
@@ -152,6 +165,26 @@ class ClubProfile(Strict):
                 raise ValueError(
                     f"shape roles {sorted(shape)} != player roles {sorted(expected)}"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def overrides_are_valid(self):
+        roles = {p.role for p in self.players[1:]} if self.shapes else None
+        for name, outfield in (
+            ("shape_when_protecting_lead", 10),
+            ("shape_when_chasing", 10),
+            ("shape_after_red_card", 9),
+        ):
+            ov = getattr(self, name)
+            if ov is None:
+                continue
+            parse_shape(ov.formation, outfield)
+            if roles is None and ov.order is not None:
+                raise ValueError(f"{name}: order is only for clubs with player roles")
+            if roles is not None and set(ov.order or []) != roles:
+                raise ValueError(f"{name}: order must list every outfield role once")
+            if ov.order is not None and len(ov.order) != len(set(ov.order)):
+                raise ValueError(f"{name}: order has a duplicate role")
         return self
 
     def player_id(self, index):

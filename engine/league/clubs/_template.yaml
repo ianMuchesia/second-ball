@@ -13,6 +13,7 @@ block_height: 40              # 25-55 metres from own goal
 late_lead_block_drop: 6       # 0-20 metres
 directness: 0.5               # 0-1
 width: 0.6                    # 0-1
+strength: 0.5                 # 0-1, who is the stronger side
 tempo:
   passes_per_possession: 5.0  # 2-12
   seconds_per_action: 3.0     # 1.5-8

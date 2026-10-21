@@ -12,6 +12,7 @@ block_height: 50              # TUNABLE
 late_lead_block_drop: 6       # TUNABLE
 directness: 0.4               # TUNABLE
 width: 0.8                    # TUNABLE
+strength: 0.75           # 0-1, who is the stronger side. TUNABLE (owner: Ian)
 tempo:
   passes_per_possession: 6.0  # TUNABLE
   seconds_per_action: 2.6     # TUNABLE
@@ -21,6 +22,18 @@ counterpress:
 build_up:
   short_until_x: 35           # short through the back three until here. TUNABLE
   flank_bias: 0.7             # then quick to the ball-side flank. TUNABLE
+
+# Situation shapes (TUNABLE, owner: Ian). order = roles back to front,
+# right to left within a line. Red card: list all 10; the missing role is skipped.
+shape_when_protecting_lead:   # back five: DM drops between the centre-backs
+  formation: "5-4-1"
+  order: [RB, RCB, DM, LCB, LB, RW, RCM, LCM, LW, ST]
+shape_when_chasing:           # both full-backs high and wide
+  formation: "2-3-5"
+  order: [RCB, LCB, RCM, DM, LCM, RB, RW, ST, LW, LB]
+shape_after_red_card:         # 4-4-1
+  formation: "4-4-1"
+  order: [RB, RCB, LCB, LB, RW, DM, RCM, LW, LCM, ST]
 
 # Starting XI. Roles mirror: LB <-> RB, LCM <-> RCM, ...
 players:

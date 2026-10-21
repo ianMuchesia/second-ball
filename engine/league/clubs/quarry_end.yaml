@@ -12,6 +12,7 @@ block_height: 44            # defensive line, metres from own goal
 late_lead_block_drop: 7      # metres the block drops when leading late
 directness: 0.45           # 0 = short and patient, 1 = long and forward
 width: 0.9                # 0 = narrow, 1 = touchline to touchline
+strength: 0.6           # 0-1, who is the stronger side. TUNABLE (owner: Ian)
 tempo:
   passes_per_possession: 6.0
   seconds_per_action: 3.0

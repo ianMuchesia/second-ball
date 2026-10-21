@@ -69,11 +69,42 @@ cross_share: 0.55            # chance a wide final-third pass is a cross
 
 fatigue_k: 0.3               # press at 90' = 1 - fatigue_k * weather fatigue_rate
 
+# Game state (Ian, 2026-10-21). All TUNABLE, owner: Ian.
+# From from_minute: a leader by 1-3 goals "manages"; it escalates to "protect"
+# when the opponent's share of the last threat_window_s with the ball in the
+# leader's defensive third reaches escalate_share (lower vs a stronger
+# opponent), and returns to "manage" only after calm_s below calm_share
+# (hysteresis). A side trailing by 1-2 "chases". A lead of 4+ = normal style.
+# Mode and threat are engine-internal: never in events, never read by the analyser.
 game_state:
-  late_minute: 70
-  leading_press: 0.8         # leading team presses less late on
-  trailing_tempo: 0.8        # trailing team: seconds per action x this
-  trailing_directness: 0.15  # trailing team: directness + this
+  from_minute: 65
+  comfortable_margin: 4
+  chase_max_deficit: 2
+  threat_window_s: 300
+  defensive_third_x: 35.0
+  escalate_share: 0.35
+  escalate_share_vs_stronger: 0.25
+  stronger_by: 0.0           # opponent strength > own + this = stronger
+  calm_share: 0.20
+  calm_s: 300
+  min_mode_s: 300            # threat-driven switches at most once per 5 minutes
+  manage:                    # lead 1-3: press a step lower, slower, safer
+    block_drop_m: 5
+    press: 0.55
+    tempo: 1.15
+    directness: -0.05
+  protect:                   # threatened: club's late_lead_block_drop, counters
+    press: 0.4
+    tempo: 1.2
+    directness: 0.25
+    counter_probability: 0.4
+    clearance: 2.5             # clears its lines more instead of passing out
+  chase:                     # trailing 1-2: faster, full-backs higher, more risk
+    press: 1.35
+    tempo: 0.8
+    directness: 0.0
+    fullback_push_m: 8
+    shot_bias: 1.25
 
 stoppage_minutes: [1, 5]
 frame_noise_m: 2.0

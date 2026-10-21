@@ -66,3 +66,24 @@ lines_broken, scenario_beat, and the new mode/threat) live in an engine-truth
 sidecar used only by evals. core/, stream/ and agents/ may not import the
 engine. Reason: otherwise the moment detector could read the answer key and
 evals would be circular.
+
+Phase 1e game state (2026-10-21, Ian). engine/config/engine.yaml game_state;
+all TUNABLE, owner Ian. Replaces the old late_minute 70 / leading_press /
+trailing_* rules.
+- From 65': leader by 1-3 "manages" (press a step lower, slower, slightly
+  safer passing, not deep); escalates to "protect" (club's late_lead_block_drop,
+  counters, shape_when_protecting_lead) when the opponent's share of the last
+  5 min with the ball in the leader's defensive third >= 0.35 (>= 0.25 vs a
+  stronger opponent, by club strength). Back to "manage" only after < 0.20 for
+  5 consecutive minutes; threat-driven switches at most once per 5 minutes.
+- Trailing by 1-2 from 65': "chase" (faster, presses more, full-backs higher,
+  more shots, shape_when_chasing). Lead of 4+: normal style.
+- 3-goal lead: Ian first said "like comfortable", then the addendum made it
+  "manage, then react" from 65'. The addendum stands.
+- Red card: most advanced player fills the gap, then shape_after_red_card
+  from the club YAML if given (Riverside 4-4-1).
+- Club strength 0-1 added to every club (placeholders).
+- Agent's tuning of mode effects: "safer passing" alone made leaders keep MORE
+  of the ball, so manage presses much less (x0.55) and chasers press more
+  (x1.35) and are not more direct. Result on 200 matches: one-goal leaders give
+  up ~4 points of possession after 65'; level teams 0.
