@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo
+.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference
 
 help:
 	@echo "Targets:"
@@ -11,6 +11,8 @@ help:
 	@echo "  contracts-check  fail if the generated files are out of date"
 	@echo "  shapes  draw Riverside's shapes into docs/shapes/"
 	@echo "  demo    demo SCENARIO: Riverside v Harbour Town (scripted) -> demo/"
+	@echo "  realism            500 matches vs real bands -> docs/DATA_REALISM.md"
+	@echo "  realism-reference  re-download the real reference bands"
 
 up:
 	docker compose up -d
@@ -41,3 +43,9 @@ shapes:
 
 demo:
 	uv run python -m engine.generate --demo --out demo
+
+realism:
+	uv run python -m evals.realism.report
+
+realism-reference:
+	uv run python -m evals.realism.fetch_reference --refresh

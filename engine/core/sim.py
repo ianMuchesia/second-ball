@@ -310,27 +310,31 @@ class _Sim:
         speed=None,
         **qual,
     ):
-        """Record one event in the acting team's SPADL frame."""
-        me = (side, player)
-        pos = frame.positions.get(me, start)
-        nearest = min(
-            (dist(pos, p) for (s, _), p in frame.positions.items() if s != side),
-            default=math.inf,
-        )
-        sx, sy = own(side, *on_pitch(*start))
-        ex, ey = own(side, *on_pitch(*end))
-        players = []
+        """Record one event in the acting team's SPADL frame.
+
+        Positions are rounded to the centimetre and facing to 0.1 degree;
+        under_pressure is computed from the rounded frame, exactly as stored.
+        """
+        sx, sy = _cm(*own(side, *on_pitch(*start)))
+        ex, ey = _cm(*own(side, *on_pitch(*end)))
+        players, me, opponents = [], (sx, sy), []
         for (s, pl), (x, y) in frame.positions.items():
-            fx, fy = own(side, x, y)
+            fx, fy = _cm(*own(side, x, y))
             players.append(
                 {
                     "player_id": self.teams[s].profile.player_id(pl),
                     "team_id": self.teams[s].profile.id,
                     "x": fx,
                     "y": fy,
-                    "facing_deg": own_facing(side, frame.facing[(s, pl)]),
+                    "facing_deg": round(own_facing(side, frame.facing[(s, pl)]), 1)
+                    % 360,
                 }
             )
+            if (s, pl) == (side, player):
+                me = (fx, fy)
+            elif s != side:
+                opponents.append((fx, fy))
+        nearest = min((dist(me, p) for p in opponents), default=math.inf)
         event = MatchEvent(
             event_id=f"{self.match.match_id}-e{len(self.events) + 1:05d}",
             match_id=self.match.match_id,
@@ -965,6 +969,10 @@ class _Sim:
             counter=True,
             **tag,
         )
+
+
+def _cm(x, y):
+    return round(x, 2), round(y, 2)
 
 
 def score(sim_match):

@@ -16,3 +16,4 @@ data/
 *.tsbuildinfo
 *.jsonl
 demo/
+evals/realism/.cache/
