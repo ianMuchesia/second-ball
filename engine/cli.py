@@ -6,6 +6,7 @@ Writes, for free-simulation matches (fictional clubs, synthetic only):
     <out>/matches.parquet        one row per match
     <out>/events.parquet         one row per event (freeze frame as a nested list)
     <out>/jsonl/<match_id>.jsonl Match then events, exactly the contract JSON
+    <out>/engine_truth.parquet   engine-only labels per event (evals only)
     <out>/manifest.json          how the dataset was made
 Same arguments = same data. See docs/DATASHEET.md.
 """
@@ -63,6 +64,13 @@ EVENTS = pa.schema(
         ("freeze_frame", pa.list_(PLAYER)),
     ]
 )
+TRUTH = pa.schema(
+    [
+        ("match_id", pa.string()),
+        ("event_id", pa.string()),
+        ("labels", pa.string()),  # JSON object
+    ]
+)
 MATCHES = pa.schema(
     [
         ("schema_version", pa.int32()),
@@ -115,7 +123,17 @@ def play(fixture):
         row["qualifiers"] = json.dumps(row["qualifiers"], sort_keys=True)
         event_rows.append(row)
         lines.append(e.model_dump_json())
-    return match_row, event_rows, lines
+    truth_rows = [
+        {
+            "match_id": result.match.match_id,
+            "event_id": t["event_id"],
+            "labels": json.dumps(
+                {k: v for k, v in t.items() if k != "event_id"}, sort_keys=True
+            ),
+        }
+        for t in result.truth
+    ]
+    return match_row, event_rows, lines, truth_rows
 
 
 def generate(matches, seed, out, weather="dry", workers=None, jsonl=True):
@@ -123,17 +141,18 @@ def generate(matches, seed, out, weather="dry", workers=None, jsonl=True):
     out.mkdir(parents=True, exist_ok=True)
     if jsonl:
         (out / "jsonl").mkdir(exist_ok=True)
-    match_rows = []
+    match_rows, truth_rows = [], []
     events_path = out / "events.parquet"
     total_events = 0
     with (
         ProcessPoolExecutor(max_workers=workers, mp_context=SPAWN) as pool,
         pq.ParquetWriter(events_path, EVENTS) as writer,
     ):
-        for match_row, event_rows, lines in pool.map(
+        for match_row, event_rows, lines, truth in pool.map(
             play, fixtures(matches, seed, weather)
         ):
             match_rows.append(match_row)
+            truth_rows.extend(truth)
             writer.write_table(pa.Table.from_pylist(event_rows, schema=EVENTS))
             total_events += len(event_rows)
             if jsonl:
@@ -141,6 +160,9 @@ def generate(matches, seed, out, weather="dry", workers=None, jsonl=True):
                 path.write_text("\n".join(lines) + "\n")
     pq.write_table(
         pa.Table.from_pylist(match_rows, schema=MATCHES), out / "matches.parquet"
+    )
+    pq.write_table(
+        pa.Table.from_pylist(truth_rows, schema=TRUTH), out / "engine_truth.parquet"
     )
     manifest = {
         "generator": "secondball generate",
@@ -151,7 +173,7 @@ def generate(matches, seed, out, weather="dry", workers=None, jsonl=True):
         "first_seed": seed,
         "weather": weather,
         "clubs": sorted(load_league()),
-        "files": ["matches.parquet", "events.parquet"]
+        "files": ["matches.parquet", "events.parquet", "engine_truth.parquet"]
         + (["jsonl/<match_id>.jsonl"] if jsonl else []),
         "datasheet": "docs/DATASHEET.md",
         "synthetic": True,

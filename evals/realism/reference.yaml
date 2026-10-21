@@ -177,6 +177,151 @@ metrics:
     - url: https://www.football-data.co.uk/mmz4281/2425/F1.csv
       accessed: '2026-10-21'
       matches: 306
+  team_shots_per_match:
+    status: ok
+    publisher: football-data.co.uk
+    definition: Mean over teams of each team's shots per match.
+    band:
+    - 11.8461
+    - 12.9592
+    per_league:
+      Premier League: 12.9592
+      La Liga: 11.8461
+      Bundesliga: 12.8967
+      Serie A: 12.0276
+      Ligue 1: 12.3464
+    sources:
+    - url: https://www.football-data.co.uk/mmz4281/2425/E0.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/SP1.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/D1.csv
+      accessed: '2026-10-21'
+      matches: 305
+    - url: https://www.football-data.co.uk/mmz4281/2425/I1.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/F1.csv
+      accessed: '2026-10-21'
+      matches: 306
+  team_shots_range:
+    status: ok
+    publisher: football-data.co.uk
+    definition: Highest minus lowest team average shots per match in the league.
+    band:
+    - 6.2632
+    - 9.4118
+    per_league:
+      Premier League: 8.2368
+      La Liga: 9.0263
+      Bundesliga: 8.0294
+      Serie A: 6.2632
+      Ligue 1: 9.4118
+    sources:
+    - url: https://www.football-data.co.uk/mmz4281/2425/E0.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/SP1.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/D1.csv
+      accessed: '2026-10-21'
+      matches: 305
+    - url: https://www.football-data.co.uk/mmz4281/2425/I1.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/F1.csv
+      accessed: '2026-10-21'
+      matches: 306
+  possession_spread:
+    status: ok
+    publisher: site.api.espn.com (unofficial)
+    definition: Standard deviation of the teams' season-average possession.
+    band:
+    - 0.0565
+    - 0.0755
+    per_league:
+      Premier League: 0.0565
+      La Liga: 0.0701
+      Bundesliga: 0.0755
+      Serie A: 0.0593
+      Ligue 1: 0.071
+    sources:
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary
+      accessed: '2026-10-21'
+      matches: 368
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary
+      accessed: '2026-10-21'
+      matches: 360
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/summary
+      accessed: '2026-10-21'
+      matches: 286
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary
+      accessed: '2026-10-21'
+      matches: 378
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/summary
+      accessed: '2026-10-21'
+      matches: 294
+  pass_completion:
+    status: ok
+    publisher: site.api.espn.com (unofficial)
+    definition: League accurate passes / total passes (ESPN match box scores).
+    band:
+    - 0.8213
+    - 0.8428
+    per_league:
+      Premier League: 0.8372
+      La Liga: 0.8238
+      Bundesliga: 0.8213
+      Serie A: 0.8327
+      Ligue 1: 0.8428
+    sources:
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary
+      accessed: '2026-10-21'
+      matches: 368
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary
+      accessed: '2026-10-21'
+      matches: 360
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/summary
+      accessed: '2026-10-21'
+      matches: 286
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary
+      accessed: '2026-10-21'
+      matches: 378
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/summary
+      accessed: '2026-10-21'
+      matches: 294
+  passes_per_match:
+    status: ok
+    publisher: site.api.espn.com (unofficial)
+    definition: Total passes per match, both teams (ESPN match box scores).
+    band:
+    - 843.4894
+    - 924.3497
+    per_league:
+      Premier League: 865.1304
+      La Liga: 859.5972
+      Bundesliga: 924.3497
+      Serie A: 843.4894
+      Ligue 1: 886.551
+    sources:
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary
+      accessed: '2026-10-21'
+      matches: 368
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary
+      accessed: '2026-10-21'
+      matches: 360
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/summary
+      accessed: '2026-10-21'
+      matches: 286
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary
+      accessed: '2026-10-21'
+      matches: 378
+    - url: https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/summary
+      accessed: '2026-10-21'
+      matches: 294
   xg_per_shot:
     status: ok
     publisher: understat.com
@@ -228,14 +373,3 @@ metrics:
       accessed: '2026-10-21'
     - url: https://understat.com/getLeagueData/Ligue_1/2024
       accessed: '2026-10-21'
-  pass_completion:
-    status: no_reference
-    reason: FBref removed its advanced (Opta) stats in Jan 2026 and blocks automated
-      access (HTTP 403); no other free source found.
-  passes_per_match:
-    status: no_reference
-    reason: 'Same as pass_completion: no free current source found.'
-  possession_spread:
-    status: no_reference
-    reason: FBref possession not reachable by script (HTTP 403); football-data.co.uk
-      and Understat do not publish possession.

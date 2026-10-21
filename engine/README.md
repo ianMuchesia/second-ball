@@ -45,5 +45,9 @@ engine runs, but it scores no goals and shows no red cards of its own, so the
 final score is exactly the scripted one.
 
 Honesty: scenario matches have `mode: "scenario"` on the `Match`, and every
-scripted event has the qualifier `scenario_beat`. The UI must label them as
+scripted event is labelled `scenario_beat` in `engine_truth.jsonl`.
+
+**Blind analyser:** events carry only feed qualifiers (`xg`, `assist`,
+`length_m`). Engine-only labels go to the engine-truth sidecar, for evals only.
+core/, stream/ and agents/ may not import the engine (tests enforce this). The UI must label them as
 scenarios. Free matches have `mode: "free_simulation"`.

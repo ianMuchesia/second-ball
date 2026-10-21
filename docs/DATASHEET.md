@@ -29,6 +29,7 @@ Same arguments = same data, byte for byte in content. Match *i* uses seed
 | `matches.parquet` | match | contract `Match` fields + `home_goals`, `away_goals`, `events` |
 | `events.parquet` | event | contract `MatchEvent` fields; `freeze_frame` is a nested list; `qualifiers` is a JSON string |
 | `jsonl/<match_id>.jsonl` | `Match`, then each `MatchEvent` | exactly the contract JSON (`docs/schemas/`) |
+| `engine_truth.parquet` | labelled event | engine-only labels (evals only, never the analyser) |
 | `manifest.json` | dataset | arguments, counts, clubs, schema version |
 
 Size: about 1,450 events per match. 100 matches ≈ 30 MB Parquet, ≈ 340 MB JSONL.
@@ -47,9 +48,13 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   `player_id`, `team_id`, `x`, `y`, `facing_deg` (0 = +x, anticlockwise, 0.1° steps).
 - **under_pressure:** at least one opponent within 2 m of the acting player in
   the stored freeze frame (Ian's rule; `core` metric definitions come in Phase 2).
-- **qualifiers:** engine facts such as `xg` (the engine's own xG model),
-  `assist`, `length_m`, `lines_broken`, `counter`, `channel`, `last_man`, and
-  `scenario_beat` on scripted events.
+- **qualifiers:** only what a real event feed carries: `xg` (the engine's own
+  xG model), `assist` (pass type before a shot) and `length_m`.
+- **Engine truth (separate file):** labels only the engine knows (`counter`,
+  `channel`, `last_man`, `lines_broken`, `scenario_beat`) are in
+  `engine_truth.parquet` / `engine_truth.jsonl`, keyed by `event_id`. They are
+  for evals only: the analyser (core/, stream/, agents/) works from events alone,
+  so it cannot "detect" a moment by reading the answer.
 
 ## How it was made
 
@@ -62,8 +67,10 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   including Ian's Riverside Athletic and Kilele Chui FC.
 - **Shapes:** players stand on formation anchors per phase (with / without the
   ball / transition) and ball side, and move half-way towards them each event.
-- **Calibration:** knobs were tuned so league averages fall inside real 2024/25
-  top-five-league bands; see `docs/DATA_REALISM.md` and `DECISIONS.md`.
+- **Calibration:** knobs were tuned so league and per-team averages fall
+  inside real 2024/25 top-five-league bands (football-data.co.uk, Understat,
+  ESPN match summaries); see `docs/DATA_REALISM.md` and `DECISIONS.md`.
+- **Clubs** have a strength rating (0-1): better clubs keep the ball better.
 
 ## Free simulation vs scenario
 
@@ -71,8 +78,8 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   alone decides what happens.
 - **Scenario** matches (`engine/scenarios/`, e.g. `make demo`) are **scripted**:
   goals, red cards and some counters happen at set minutes. They carry
-  `mode: "scenario"` on the `Match`, `scenario_beat` on scripted events, and
-  an `expected_moments.json` answer key. Never present a scenario as a natural
+  `mode: "scenario"` on the `Match`, `scenario_beat` in the engine-truth file
+  for scripted events, and an `expected_moments.json` answer key. Never present a scenario as a natural
   outcome of the engine.
 
 ## Known limits
@@ -80,11 +87,12 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
 - **Not real football.** Players have no individual skill, speed or stamina;
   the ball travels instantly along straight lines; there are no penalties,
   offsides, substitutions or injuries.
-- **Club spread is off.** League averages match real data, but long-ball clubs
-  take far too few shots and possession only ranges about 45–55% (real clubs
-  range much wider). See `docs/DATA_REALISM.md`.
-- **No reference** for pass completion, passes per match or possession (no
-  current free source); those values are unvalidated.
+- **Possession spread is too narrow.** Clubs range about 42–60% possession;
+  real leagues spread wider (see `docs/DATA_REALISM.md`). Shots per club are
+  now realistic on average, and the gap between clubs is at the top of the real range.
+- **Match modes** (manage / protect / chase from 65', Ian's rules) change how
+  teams play by score and minute; the modes themselves are engine-internal and
+  never in the data.
 - **xG** is the engine's own simple model, not a trained real-world model.
 - **Red cards** are rare, so short samples vary a lot.
 - **Freeze frames** are generated around the ball each event (anchors + noise +

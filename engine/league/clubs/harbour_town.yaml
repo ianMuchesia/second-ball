@@ -12,12 +12,16 @@ block_height: 28              # deep
 late_lead_block_drop: 15      # drops even deeper when leading late
 directness: 0.85              # long and fast
 width: 0.45                   # compact
+strength: 0.45           # 0-1, who is the stronger side. TUNABLE (owner: Ian)
 tempo:
   passes_per_possession: 3.0
   seconds_per_action: 2.4
 counterpress:
   probability: 0.05           # almost none: straight back into shape
   duration_s: 1
+shape_when_chasing:           # three at the back, front three (TUNABLE)
+  formation: "3-4-3"
+
 on_regain:
   channel_probability: 0.7    # first pass into the channel behind the ball-side full-back
   runners: 2                  # the two quick forwards

@@ -33,10 +33,10 @@ FIRST_SEED = 10_000
 HOLDOUT_FIRST_SEED = 50_000  # never used for tuning
 BOOTSTRAP = 2000
 SHOTS = {"shot", "shot_freekick", "shot_penalty"}
+# Throw-ins are not counted as passes (standard event-data practice).
 PASSES = {
     "pass",
     "cross",
-    "throw_in",
     "goalkick",
     "freekick_short",
     "freekick_crossed",
@@ -116,6 +116,7 @@ def metric_values(sample):
         for c in clubs.values()
         if c["passes"]
     ]
+    per_club_shots = [c["shots"] / c["matches"] for c in clubs.values()]
     ppda_passes = sum(c["ppda_passes"] for c in clubs.values())
     ppda_actions = sum(c["ppda_actions"] for c in clubs.values())
     return {
@@ -130,6 +131,8 @@ def metric_values(sample):
         "pass_completion": tot["passes_ok"] / tot["passes"],
         "passes_per_match": tot["passes"] / n,
         "possession_spread": statistics.pstdev(possession),
+        "team_shots_per_match": statistics.mean(per_club_shots),
+        "team_shots_range": max(per_club_shots) - min(per_club_shots),
     }, clubs
 
 
@@ -148,6 +151,39 @@ def bootstrap(sample, rounds=BOOTSTRAP, seed=0):
     return out
 
 
+SANITY_MATCHES = 100
+SANITY_SEED = 70_000
+
+
+def head_to_head(fixture):
+    home, away, seed = fixture
+    league = load_league()
+    m = simulate_match(league[home], league[away], seed)
+    counts = Counter(e.team_id for e in m.events if e.type in PASSES)
+    return counts["riverside_athletic"] / (
+        counts["riverside_athletic"] + counts["harbour_town"]
+    )
+
+
+def possession_sanity():
+    """Riverside (possession, high press) should clearly out-possess Harbour
+    (deep 5-4-1). Agent's threshold: mean >= 0.55 and 95% interval above 0.5."""
+    pairs = [
+        ("riverside_athletic", "harbour_town"),
+        ("harbour_town", "riverside_athletic"),
+    ]
+    games = [(*pairs[i % 2], SANITY_SEED + i) for i in range(SANITY_MATCHES)]
+    with ProcessPoolExecutor(mp_context=SPAWN) as pool:
+        shares = list(pool.map(head_to_head, games, chunksize=5))
+    rng = random.Random(1)
+    means = sorted(
+        statistics.mean(rng.choice(shares) for _ in shares) for _ in range(BOOTSTRAP)
+    )
+    lo, hi = means[int(0.025 * BOOTSTRAP)], means[int(0.975 * BOOTSTRAP) - 1]
+    mean = statistics.mean(shares)
+    return mean, lo, hi, mean >= 0.55 and lo > 0.5
+
+
 def verdict(ref, lo, hi, value=None):
     if ref["status"] != "ok":
         return "no reference"
@@ -162,6 +198,8 @@ def verdict(ref, lo, hi, value=None):
 ORDER = [
     "goals_per_match",
     "shots_per_match",
+    "team_shots_per_match",
+    "team_shots_range",
     "on_target_share",
     "xg_per_shot",
     "ppda",
@@ -178,7 +216,7 @@ def fmt(v):
     return f"{v:.3f}" if abs(v) < 1 else f"{v:.2f}"
 
 
-def render(values, intervals, clubs, reference, n, first_seed, holdout):
+def render(values, intervals, clubs, reference, n, first_seed, holdout, sanity):
     ref = reference["metrics"]
     rows, results = [], {}
     for k in ORDER:
@@ -235,6 +273,13 @@ free reference and are shown, not judged.
 |---|---|---|---|---|
 {chr(10).join(rows)}
 
+## Sanity check: possession style
+
+{SANITY_MATCHES} matches Riverside Athletic v Harbour Town (half at each ground):
+Riverside's possession (pass share) is **{sanity[0]:.1%}** (95% interval
+{sanity[1]:.1%} – {sanity[2]:.1%}). Rule (agent's choice, TUNABLE): at least 55% with
+the interval above 50%. **{"PASS" if sanity[3] else "FAIL"}**
+
 ## Per club (simulated)
 
 | Club | Matches | Goals for / match | Shots / match | Possession (pass share) | PPDA |
@@ -249,15 +294,15 @@ free reference and are shown, not judged.
 - **PPDA** = opponent open-play passes in their own 60% of the pitch, divided by
   tackles, interceptions and fouls in that zone. Understat does not publish its
   exact zone; the standard definition is assumed (see reference.yaml).
-- **Possession** = share of passes (FBref's method). **Possession spread** = the
-  standard deviation of the clubs' average possession. No current free source.
-- **Pass completion / passes per match:** no current free source (FBref removed
-  its advanced stats in January 2026 and blocks automated access).
+- **Possession** (simulated) = share of passes. **Possession spread** = the
+  standard deviation of the clubs' average possession.
+- **Possession and passing references** come from ESPN's public match
+  summaries, an unofficial API (definitions are ESPN's / its data provider's).
+  Simulated passes exclude throw-ins.
 - Weather is dry in every simulated match; real seasons have mixed weather.
-- **Known gap: club spread.** League averages pass, but clubs differ in the
-  wrong way: long-ball clubs (e.g. Ironvale, Port Ilvane) take far too few
-  shots and the possession range is too narrow (see the per-club table).
-  Club-level spread is not yet compared against a reference.
+- **Team spread** is compared on 10 fictional clubs against real leagues of
+  18-20 teams; with fewer teams the highest-minus-lowest range is naturally a
+  little smaller.
 """
 
 
@@ -299,8 +344,13 @@ def main(argv=None):
         + (f" (not passing: {', '.join(failing)})." if failing else ".")
     )
     print("hold-out:", holdout)
+    sanity = possession_sanity()
+    verdict_s = "PASS" if sanity[3] else "FAIL"
+    print(
+        f"sanity: Riverside v Harbour possession {sanity[0]:.3f} ({sanity[1]:.3f}-{sanity[2]:.3f}) {verdict_s}"
+    )
     REPORT.write_text(
-        render(values, intervals, clubs, reference, n, first_seed, holdout)
+        render(values, intervals, clubs, reference, n, first_seed, holdout, sanity)
     )
     print(f"wrote {REPORT.relative_to(ROOT)}")
 

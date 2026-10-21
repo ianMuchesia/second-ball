@@ -12,6 +12,7 @@ block_height: 40
 late_lead_block_drop: 6
 directness: 0.5
 width: 0.6
+strength: 0.6           # 0-1, who is the stronger side. TUNABLE (owner: Ian)
 tempo:
   passes_per_possession: 5.0
   seconds_per_action: 3.0

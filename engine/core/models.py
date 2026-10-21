@@ -26,17 +26,20 @@ def pass_success(
     lines_broken,
     cross,
     restart,
+    strength=0.5,
 ):
     m = cfg["pass_model"]
     z = (
         m["intercept"]
         - m["per_metre"] * distance_m
+        - m["long_per_metre"] * max(0.0, distance_m - m["long_from_m"])
         - m["passer_pressure"] * passer_load
         - m["receiver_pressure"] * receiver_load
         - m["forward_angle"] * forwardness
         - m["per_line_broken"] * lines_broken
         - (m["cross"] if cross else 0.0)
         + (m["restart_bonus"] if restart else 0.0)
+        + m["per_strength"] * (strength - 0.5)  # better teams keep the ball
     )
     return logistic(z)
 
