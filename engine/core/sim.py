@@ -28,6 +28,7 @@ from engine.core.pitch import (
     own_facing,
 )
 from engine.core.shape import TeamState, build_frame, centre_spot, keeper_spot
+from engine.core.shapes import ball_side
 from engine.league import COMPETITION
 from engine.weather import load_weather
 
@@ -46,9 +47,19 @@ class SimulatedMatch:
 
 
 def simulate_match(
-    home, away, seed, weather="dry", kickoff=DEFAULT_KICKOFF, config=None
+    home,
+    away,
+    seed,
+    weather="dry",
+    kickoff=DEFAULT_KICKOFF,
+    config=None,
+    scenario=None,
 ):
-    """Simulate one match between two ClubProfiles. Returns Match + list[MatchEvent]."""
+    """Simulate one match between two ClubProfiles. Returns Match + list[MatchEvent].
+
+    With a `scenario` (engine.scenarios.Scenario) the scripted beats are played
+    at their minutes and the match is recorded as mode "scenario".
+    """
     cfg = config or load_config()
     match = Match(
         match_id=f"m-{home.id}-{away.id}-{seed}",
@@ -59,14 +70,23 @@ def simulate_match(
         competition=COMPETITION,
         seed=seed,
         weather=weather,
+        mode="scenario" if scenario else "free_simulation",
     )
-    sim = _Sim(match, home, away, cfg, load_weather()[weather])
-    return SimulatedMatch(match, sim.run())
+    sim = _Sim(match, home, away, cfg, load_weather()[weather], scenario)
+    events = sim.run()
+    if scenario:
+        missed = [b.id for b in scenario.scripted() if b.id not in sim.done]
+        if missed:
+            raise RuntimeError(f"scenario beats never played: {missed}")
+    return SimulatedMatch(match, events)
 
 
 class _Sim:
-    def __init__(self, match, home, away, cfg, weather):
+    def __init__(self, match, home, away, cfg, weather, scenario=None):
         self.match = match
+        self.scenario = scenario
+        self.done = set()  # scripted beats already played
+        self.just_won = False  # possession was just won in open play
         self.cfg = cfg
         self.wx = weather
         self.rng = random.Random(match.seed)
@@ -106,7 +126,19 @@ class _Sim:
             if self.late() and self.lead(side) > 0
             else 0
         )
-        return team.profile.block_height - drop
+        return team.profile.block_height - drop - self.scripted_drop(side)
+
+    def scripted_drop(self, side):
+        if not self.scenario:
+            return 0.0
+        team = "home" if side == 0 else "away"
+        return sum(
+            b.extra_drop_m
+            for b in self.scenario.beats
+            if b.action == "block_drop"
+            and b.team == team
+            and b.minute[0] <= self.minute <= b.minute[1]
+        )
 
     def directness(self, side):
         extra = (
@@ -166,6 +198,7 @@ class _Sim:
         lost = 1 - side
         self.new_possession(side, player, ball)
         self.transition_until = self.t + self.cfg["shapes"]["transition_s"]
+        self.just_won = True
         cp = self.teams[lost].profile.counterpress
         if self.rng.random() < cp.probability * self.legs():
             self.counterpress = (lost, self.t + cp.duration_s)
@@ -213,6 +246,11 @@ class _Sim:
         return frame, presser_dist
 
     def step(self):
+        beat = self.due_beat()
+        if beat is not None:
+            self.play_beat(beat)
+            return
+        won_ball, self.just_won = self.just_won, False
         attack, defence = self.attack, 1 - self.attack
         frame, presser_dist = self.frame()
         bx, by = own(attack, *self.ball)
@@ -224,7 +262,8 @@ class _Sim:
             self.challenge(frame, presser)
             return
 
-        choice = self.choose_action(bx, by, pressed)
+        won_ball = won_ball and self.teams[attack].profile.on_regain is not None
+        choice = self.choose_action(bx, by, pressed, won_ball)
         if choice == "shot":
             self.shot(frame)
         elif choice == "carry":
@@ -234,13 +273,13 @@ class _Sim:
         elif choice == "clearance":
             self.clearance(frame)
         else:
-            self.pass_(frame, presser_dist)
+            self.pass_(frame, presser_dist, regain=won_ball)
 
-    def choose_action(self, bx, by, pressed):
+    def choose_action(self, bx, by, pressed, regain=False):
         shots = self.cfg["shots"]
         target = self.teams[self.attack].profile.tempo.passes_per_possession
         w = {
-            "pass": 1.0 * (1.2 if self.passes < target else 1.0),
+            "pass": (3.0 if regain else 1.0) * (1.2 if self.passes < target else 1.0),
             "carry": (0.15 if pressed else 0.45) * (0.3 if bx > 95 else 1.0),
             "take_on": 0.05 + (0.15 if pressed and bx > 55 else 0.0),
             "clearance": 0.6 if pressed and bx < 25 else 0.0,
@@ -405,19 +444,44 @@ class _Sim:
 
     # ---- actions --------------------------------------------------------------
 
-    def pass_(self, frame, presser_dist, kind="pass", restart=False, backwards=False):
+    def pass_(
+        self,
+        frame,
+        presser_dist,
+        kind="pass",
+        restart=False,
+        backwards=False,
+        regain=False,
+        forced=None,
+        qual=None,
+    ):
+        """A pass. `forced` = {"receiver", "target", "ok"} for scripted passes."""
         side, carrier = self.attack, self.carrier
         start = self.ball
         bx, by = own(side, *start)
         directness = self.directness(side)
+        qual = dict(qual or {})
+
+        channel = None
+        on_regain = self.teams[side].profile.on_regain
+        wants_channel = forced is None and regain and kind == "pass" and on_regain
+        if wants_channel and self.rng.random() < on_regain.channel_probability:
+            channel = self.channel_target(frame, side)
 
         cross = (
-            kind == "pass"
+            forced is None
+            and channel is None
+            and kind == "pass"
             and bx > 78
             and (by < 16 or by > WIDTH - 16)
             and self.rng.random() < self.cfg["cross_share"]
         )
-        if cross:
+        if forced is not None:
+            receiver, target = forced["receiver"], forced["target"]
+        elif channel is not None:
+            receiver, target, label = channel
+            qual.update(counter=True, channel=label)
+        elif cross:
             target = own(side, self.rng.uniform(92, 101), self.rng.uniform(26, 42))
             receiver, _ = frame.nearest(side, target, exclude={(side, carrier)})
             kind = "cross"
@@ -450,7 +514,7 @@ class _Sim:
             p *= self.wx.long_pass_accuracy
         if cross:
             p *= self.wx.cross_accuracy
-        ok = self.rng.random() < p
+        ok = forced["ok"] if forced is not None else self.rng.random() < p
 
         speed = min(120.0, (35 + 1.3 * d) * self.rng.uniform(0.9, 1.1))
         body = "other" if kind == "throw_in" else self.foot()
@@ -467,6 +531,7 @@ class _Sim:
             speed,
             length_m=round(d, 1),
             lines_broken=lines,
+            **qual,
         )
         self.tick(
             self.seconds_per_action(side) * self.rng.uniform(0.6, 1.4)
@@ -568,25 +633,35 @@ class _Sim:
                 defender, _ = frame.nearest(defence, target)
                 self.turnover(defence, defender, target)
 
-    def challenge(self, frame, defender):
-        """`defender` goes in on the carrier: foul (maybe a card) or a won tackle."""
+    def challenge(self, frame, defender, card=None, **qual):
+        """`defender` goes in on the carrier: foul (maybe a card) or a won tackle.
+
+        `card` forces a foul with that outcome (scripted). In scenario mode the
+        engine shows no red cards of its own.
+        """
         side, defence = self.attack, 1 - self.attack
         at = self.ball
         frame.positions[(defence, defender)] = at
         ch = self.cfg["challenges"]
-        if self.rng.random() < ch["foul"]:
-            r = self.rng.random()
-            team = self.teams[defence]
+        team = self.teams[defence]
+        if card is not None or self.rng.random() < ch["foul"]:
+            r = 1.0 if card is not None else self.rng.random()
             can_send_off = (
-                len(team.on_pitch) > ch["min_players"] and defender != team.keeper
+                len(team.on_pitch) > ch["min_players"]
+                and defender != team.keeper
+                and self.scenario is None
             )
-            if r < ch["red_per_foul"] and can_send_off:
+            if card is not None:
+                outcome = card
+            elif r < ch["red_per_foul"] and can_send_off:
                 outcome = "red_card"
             elif r < ch["red_per_foul"] + ch["yellow_per_foul"]:
                 outcome = "yellow_card"
             else:
                 outcome = "fail"
-            self.emit(frame, defence, defender, "foul", outcome, at, at, self.foot())
+            self.emit(
+                frame, defence, defender, "foul", outcome, at, at, self.foot(), **qual
+            )
             self.tick(25)
             if outcome == "red_card":
                 team.send_off(defender)
@@ -684,13 +759,26 @@ class _Sim:
         else:
             self.turnover(defence, player, end)
 
-    def shot(self, frame, kind="shot"):
+    def shot(self, frame, kind="shot", forced=None, min_xg=None, **qual):
+        """A shot. `forced` True/False scripts the result; `min_xg` raises its xG.
+
+        In scenario mode the engine scores no goals of its own.
+        """
         side, defence = self.attack, 1 - self.attack
         bx, by = own(side, *self.ball)
         header = kind == "shot" and self.assist == "cross" and self.rng.random() < 0.6
         chance = xg(self.cfg, bx, by, header, self.assist)
-        goal = self.rng.random() < chance
-        on_target = goal or self.rng.random() < self.cfg["shots"]["save_share"]
+        if min_xg is not None:
+            chance = max(chance, min_xg)
+        if forced is None:
+            goal = self.rng.random() < chance and self.scenario is None
+        else:
+            goal = forced
+        on_target = (
+            goal
+            or forced is False
+            or self.rng.random() < self.cfg["shots"]["save_share"]
+        )
         aim_y = (
             GOAL_Y + self.rng.uniform(-3.5, 3.5)
             if on_target
@@ -709,6 +797,7 @@ class _Sim:
             self.rng.uniform(60, 110),
             xg=round(chance, 3),
             assist=self.assist,
+            **qual,
         )
         self.tick(3)
         if goal:
@@ -730,6 +819,152 @@ class _Sim:
         else:
             self.tick(20)
             self.goalkick(defence)
+
+    # ---- counters and scripted beats -----------------------------------------
+
+    def channel_target(self, frame, side, behind=None):
+        """(runner, target, label): a ball into the channel behind the opponent's
+        full-back (`behind`, or the ball-side / more advanced one), or None."""
+        opp = 1 - side
+        fullbacks = self.teams[opp].fullbacks()
+        if not fullbacks:
+            return None
+        if behind is None:
+            _, by = own(opp, *self.ball)
+            behind = ball_side(by, self.cfg)
+            if behind not in fullbacks:
+                behind = max(
+                    fullbacks,
+                    key=lambda s: own(opp, *frame.positions[(opp, fullbacks[s])])[0],
+                )
+        if behind not in fullbacks:
+            return None
+        fx, fy = own(opp, *frame.positions[(opp, fullbacks[behind])])
+        tx = clamp(fx - 15, 12, 80)
+        ty = clamp(fy + (-4 if fy > GOAL_Y else 4), 6, WIDTH - 6)
+        target = on_pitch(*own(opp, tx, ty))
+
+        team = self.teams[side]
+        n = team.profile.on_regain.runners if team.profile.on_regain else 2
+        outfield = [p for (s, p) in frame.positions if s == side and p != team.keeper]
+        outfield.sort(key=lambda p: (-own(side, *frame.positions[(side, p)])[0], p))
+        runner = min(
+            outfield[:n], key=lambda p: (dist(frame.positions[(side, p)], target), p)
+        )
+        return runner, target, f"behind_{behind}_fullback"
+
+    def due_beat(self):
+        if not self.scenario:
+            return None
+        for beat in self.scenario.scripted():
+            lo, hi = beat.minute
+            if beat.id not in self.done and lo <= self.minute <= hi:
+                return beat
+        return None
+
+    def play_beat(self, beat):
+        """Script: the victim attacks down `behind` with the full-back high, loses
+        the ball, and the other team counters into the channel behind that
+        full-back. Then a goal, a miss, or a last-man red card."""
+        self.done.add(beat.id)
+        named = 0 if beat.team == "home" else 1
+        victim = named if beat.action == "red_card_last_man" else 1 - named
+        counter = 1 - victim
+        tag = {"scenario_beat": beat.id}
+        flank = 54.0 if beat.behind == "left" else WIDTH - 54.0
+
+        # 1. Victim attacking on that flank; the forward pass is intercepted.
+        self.restart()
+        start = own(victim, 68.0, flank)
+        self.new_possession(victim, self.teams[victim].front_player, start)
+        frame, _ = self.frame(pressed=False)
+        self.carrier, _ = frame.nearest(
+            victim, start, outfield_only=True, keeper=self.teams[victim].keeper
+        )
+        frame, _ = self.frame(pressed=False)
+        aim = own(victim, 84.0, flank + (-8 if beat.behind == "left" else 8))
+        self.emit(
+            frame,
+            victim,
+            self.carrier,
+            "pass",
+            "fail",
+            start,
+            aim,
+            self.foot(),
+            50.0,
+            **tag,
+        )
+        mid = ((start[0] + aim[0]) / 2, (start[1] + aim[1]) / 2)
+        interceptor, _ = frame.nearest(counter, mid)
+        frame.positions[(counter, interceptor)] = mid
+        self.emit(
+            frame,
+            counter,
+            interceptor,
+            "interception",
+            "success",
+            mid,
+            mid,
+            self.foot(),
+            **tag,
+        )
+        self.tick(2)
+        self.turnover(counter, interceptor, mid)
+        self.just_won = False
+
+        # 2. Long ball into the channel behind the full-back.
+        frame, _ = self.frame(pressed=False)
+        runner, target, label = self.channel_target(frame, counter, beat.behind)
+        self.pass_(
+            frame,
+            10.0,
+            forced={"receiver": runner, "target": target, "ok": True},
+            qual={**tag, "counter": True, "channel": label},
+        )
+
+        # 3a. Last-man foul.
+        if beat.action == "red_card_last_man":
+            frame, _ = self.frame(pressed=False)
+            by_role = {r: p for p, r in self.teams[victim].roles.items()}
+            defender = by_role.get(beat.role)
+            if defender is None:
+                defender, _ = frame.nearest(
+                    victim,
+                    self.ball,
+                    outfield_only=True,
+                    keeper=self.teams[victim].keeper,
+                )
+            self.challenge(frame, defender, card="red_card", last_man=True, **tag)
+            return
+
+        # 3b. Carry towards goal, then the shot.
+        frame, _ = self.frame(pressed=False)
+        _, cy = own(counter, *self.ball)
+        end = own(counter, 93.0, GOAL_Y + clamp(cy - GOAL_Y, -7, 7))
+        self.emit(
+            frame,
+            counter,
+            self.carrier,
+            "dribble",
+            "success",
+            self.ball,
+            end,
+            self.foot(),
+            14.0,
+            counter=True,
+            **tag,
+        )
+        self.tick(dist(self.ball, end) / 7.0)
+        self.ball = end
+        frame, _ = self.frame(pressed=False)
+        self.shot(
+            frame,
+            forced=beat.action == "counter_goal",
+            min_xg=beat.min_xg,
+            counter=True,
+            **tag,
+        )
 
 
 def score(sim_match):
