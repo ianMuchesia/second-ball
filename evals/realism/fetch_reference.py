@@ -97,6 +97,7 @@ def football_data_league(text):
     on_target = complete("HS", "AS", "HST", "AST")
     fouls = complete("HF", "AF")
     cards = complete("HY", "AY", "HR", "AR")
+    corners = complete("HC", "AC")
     values = {
         "goals_per_match": total(goals, "FTHG", "FTAG") / len(goals),
         "shots_per_match": total(shots, "HS", "AS") / len(shots),
@@ -105,6 +106,7 @@ def football_data_league(text):
         "fouls_per_match": total(fouls, "HF", "AF") / len(fouls),
         "yellow_cards_per_match": total(cards, "HY", "AY") / len(cards),
         "red_cards_per_match": total(cards, "HR", "AR") / len(cards),
+        "corners_per_match": total(corners, "HC", "AC") / len(corners),
     }
     # Per team: each team's average shots per match (home + away).
     team_shots = {}
@@ -122,6 +124,7 @@ def football_data_league(text):
         "fouls_per_match": len(fouls),
         "yellow_cards_per_match": len(cards),
         "red_cards_per_match": len(cards),
+        "corners_per_match": len(corners),
         "team_shots_per_match": len(shots),
         "team_shots_range": len(shots),
     }
@@ -199,6 +202,7 @@ METRICS = {
     "fouls_per_match": ("football-data.co.uk", "Fouls per match (both teams)."),
     "yellow_cards_per_match": ("football-data.co.uk", "Yellow cards per match."),
     "red_cards_per_match": ("football-data.co.uk", "Red cards per match."),
+    "corners_per_match": ("football-data.co.uk", "Corners per match (both teams)."),
     "team_shots_per_match": (
         "football-data.co.uk",
         "Mean over teams of each team's shots per match.",

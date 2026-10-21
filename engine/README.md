@@ -11,7 +11,7 @@ Same seed = identical match. Output is `Match` then one `MatchEvent` per line
 
 | Path | What |
 |---|---|
-| `league/clubs/*.yaml` | 10 club style profiles, incl. Ian's `riverside_athletic.yaml` and `kilele_chui.yaml`. Files starting with `_` are ignored. |
+| `league/clubs/*.yaml` | 13 club style profiles (incl. set pieces), incl. Ian's `riverside_athletic.yaml` and `kilele_chui.yaml`. Files starting with `_` are ignored. |
 | `scenarios/*.yaml` | scripted scenarios (seed + beats + answer key) |
 | `config/weather.yaml` | weather multipliers |
 | `config/engine.yaml` | engine mechanics: pass model, xG, pressing, cards, game state |

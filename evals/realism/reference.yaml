@@ -177,6 +177,35 @@ metrics:
     - url: https://www.football-data.co.uk/mmz4281/2425/F1.csv
       accessed: '2026-10-21'
       matches: 306
+  corners_per_match:
+    status: ok
+    publisher: football-data.co.uk
+    definition: Corners per match (both teams).
+    band:
+    - 9.3105
+    - 10.2974
+    per_league:
+      Premier League: 10.2974
+      La Liga: 9.5184
+      Bundesliga: 9.6393
+      Serie A: 9.3105
+      Ligue 1: 9.3562
+    sources:
+    - url: https://www.football-data.co.uk/mmz4281/2425/E0.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/SP1.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/D1.csv
+      accessed: '2026-10-21'
+      matches: 305
+    - url: https://www.football-data.co.uk/mmz4281/2425/I1.csv
+      accessed: '2026-10-21'
+      matches: 380
+    - url: https://www.football-data.co.uk/mmz4281/2425/F1.csv
+      accessed: '2026-10-21'
+      matches: 306
   team_shots_per_match:
     status: ok
     publisher: football-data.co.uk

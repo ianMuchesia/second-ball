@@ -5,7 +5,7 @@
 
 # Pass success = logistic(intercept - distance - pressure - angle - lines broken).
 pass_model:
-  intercept: 4.75
+  intercept: 5.25
   per_metre: 0.045           # longer passes fail more
   passer_pressure: 1.8       # pressure load on the passer (0-1)
   receiver_pressure: 2.0     # pressure load on the receiver (0-1)
@@ -15,7 +15,8 @@ pass_model:
   restart_bonus: 2.0         # free kicks, throw-ins, kick-offs
   long_from_m: 30.0          # long balls are contested: extra difficulty beyond this
   long_per_metre: 0.08
-  per_strength: 4.0          # logit per unit of club strength above 0.5. TUNABLE
+  per_strength: 4.0          # logit per unit of club strength above the centre. TUNABLE
+  strength_centre: 0.63      # ~ the league's mean club strength (relative quality)
 
 # Shot xG = logistic(intercept + distance + angle + body part + assist type).
 xg_model:
@@ -57,17 +58,31 @@ loose_ball_out_of_play: 0.2
 loose_ball_kept: 0.5
 
 challenges:
-  foul: 0.42                 # per tackle attempt
+  foul: 0.36                 # per tackle attempt
   yellow_per_foul: 0.17
-  red_per_foul: 0.0075
+  red_per_foul: 0.0065
   min_players: 7             # no more red cards below this many players
 
 shots:
-  bias: 1.65                 # how readily players shoot, scaled by xG
+  bias: 1.8                 # how readily players shoot, scaled by xG
   min_x: 75.0                # no shots from further out
   save_share: 0.27           # share of missed shots the keeper saves
   corner_after_save: 0.3
   corner_success: 0.32
+
+# Set pieces (Ian, 2026-10-22). Club knobs: set_pieces.threat / foul_drawing /
+# corner_seeking (0-1). All TUNABLE, owner: Ian.
+set_pieces:
+  threat_delivery: 0.8       # delivery success x (0.6 + this x threat)
+  threat_xg: 1.2             # set-piece shot logit + this x (threat - 0.5)
+  foul_drawing: 1.0          # final-third foul chance x (1 + this x foul_drawing)
+  cross_to_corner: 0.15       # failed cross -> corner, x (1 + corner_seeking)
+  shot_to_corner: 0.13       # missed shot deflected out -> corner, x (1 + corner_seeking)
+  wide_free_kick_cross: 0.7  # final-third free kicks not shot directly are crossed in
+  late_minute: 85            # dying minutes ...
+  late_leader_fouls: 1.5     # ... a leading team wins more fouls up the pitch ...
+  late_extra_s: 25           # ... takes its time ...
+  # ... and always puts a final-third free kick into the box (a set piece).
 
 # Club identity (Phase 1e). TUNABLE, owner: Ian.
 style:

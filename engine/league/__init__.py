@@ -96,6 +96,16 @@ class OnRegain(Strict):
     ]  # most advanced players who run in behind
 
 
+class SetPieces(Strict):
+    threat: Annotated[float, Field(ge=0, le=1)] = 0.5  # delivery + aerial quality
+    foul_drawing: Annotated[float, Field(ge=0, le=1)] = (
+        0.3  # wins fouls in the final third
+    )
+    corner_seeking: Annotated[float, Field(ge=0, le=1)] = (
+        0.3  # crosses / shots that win corners
+    )
+
+
 class BuildUp(Strict):
     short_until_x: Annotated[float, Field(ge=0, le=60)]  # keep it short this far out
     flank_bias: Annotated[float, Field(ge=0, le=1)]  # then prefer the ball-side flank
@@ -123,6 +133,7 @@ class ClubProfile(Strict):
     shapes: Shapes | None = None
     build_up: BuildUp | None = None
     on_regain: OnRegain | None = None
+    set_pieces: SetPieces = SetPieces()
 
     @field_validator("formation", "in_possession_shape")
     @classmethod

@@ -20,6 +20,11 @@ counterpress:
   probability: 0.5           # chance of pressing straight after losing the ball
   duration_s: 5
 
+set_pieces:                   # mid-table: wins fouls and corners. TUNABLE (owner: Ian)
+  threat: 0.7                 # delivery and aerial quality, 0-1
+  foul_drawing: 0.75           # wins fouls in the final third, 0-1
+  corner_seeking: 0.75         # wins corners, 0-1
+
 # Starting XI in formation order: goalkeeper first, then back to front.
 players:
   - {number: 1, name: Bram Zanard}

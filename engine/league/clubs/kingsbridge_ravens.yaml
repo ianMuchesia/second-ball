@@ -1,0 +1,41 @@
+# Style inspired by a famous 3-4-3 title-winning side (2016/17). Fictional club.
+# Invented names; any resemblance to real clubs or players is accidental.
+# All knobs TUNABLE (owner: Ian).
+id: kingsbridge_ravens
+name: Kingsbridge Ravens
+stadium: Ravenscourt
+style: Compact 5-4-1 mid block that presses on triggers; 3-4-3 with wing-backs high and quick vertical play to the striker.
+
+formation: "5-4-1"            # out of possession, back to front
+in_possession_shape: "3-2-5"  # with the ball, back to front
+target_ppda: 11.0            # lower = more pressing
+block_height: 38            # defensive line, metres from own goal
+late_lead_block_drop: 10      # metres the block drops when protecting a lead
+directness: 0.45           # 0 = short and patient, 1 = long and forward
+width: 0.85                # 0 = narrow, 1 = touchline to touchline
+strength: 0.8             # 0-1, who is the stronger side
+tempo:
+  passes_per_possession: 5.0
+  seconds_per_action: 2.8
+counterpress:
+  probability: 0.5
+  duration_s: 3
+
+set_pieces:                   # dangerous at set pieces. TUNABLE (owner: Ian)
+  threat: 0.75                 # delivery and aerial quality, 0-1
+  foul_drawing: 0.4           # wins fouls in the final third, 0-1
+  corner_seeking: 0.5         # wins corners, 0-1
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Vero Lorenko}
+  - {number: 2, name: Corin Freysworth}
+  - {number: 3, name: Brisk Harrwick}
+  - {number: 4, name: Hale Ashmere}
+  - {number: 5, name: Benno Goldston}
+  - {number: 6, name: Jory Wintovic}
+  - {number: 7, name: Yanis Goldmere}
+  - {number: 8, name: Quin Dovston}
+  - {number: 9, name: Soren Orkley}
+  - {number: 10, name: Soren Dovholt}
+  - {number: 11, name: Elio Tarrholt}

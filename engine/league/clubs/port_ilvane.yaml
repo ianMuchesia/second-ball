@@ -20,6 +20,11 @@ counterpress:
   probability: 0.4           # chance of pressing straight after losing the ball
   duration_s: 4
 
+set_pieces:                   # mid-table: lives on fouls and corners. TUNABLE (owner: Ian)
+  threat: 0.8                 # delivery and aerial quality, 0-1
+  foul_drawing: 0.85           # wins fouls in the final third, 0-1
+  corner_seeking: 0.85         # wins corners, 0-1
+
 # Starting XI in formation order: goalkeeper first, then back to front.
 players:
   - {number: 1, name: Obi Melridge}

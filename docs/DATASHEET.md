@@ -63,8 +63,11 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   the club's style and pressure. Pass success and shot xG are logistic models;
   failed passes become interceptions, tackles or loose balls; late in the game
   leading teams drop deeper, trailing teams speed up, fatigue lowers pressing.
-- **Clubs:** 10 fictional clubs with style knobs (`engine/league/clubs/`),
-  including Ian's Riverside Athletic and Kilele Chui FC.
+- **Clubs:** 13 fictional clubs with style knobs (`engine/league/clubs/`),
+  including Ian's Riverside Athletic and Kilele Chui FC, and three clubs
+  inspired by famous styles (invented names).
+- **Set pieces:** each club has a set-piece threat, foul drawing and corner
+  seeking; corners and wide free kicks are crossed into the box.
 - **Shapes:** players stand on formation anchors per phase (with / without the
   ball / transition) and ball side, and move half-way towards them each event.
 - **Calibration:** knobs were tuned so league and per-team averages fall

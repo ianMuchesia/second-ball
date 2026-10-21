@@ -45,6 +45,29 @@ def play(fixture):
     return passes, m.mode_log, leads
 
 
+STRONG = [
+    "westmarch",
+    "thornfield_athletic",
+    "riverside_athletic",
+    "kingsbridge_ravens",
+]
+WEAK = ["ironvale", "port_ilvane", "harbour_town"]
+
+
+def mismatches(n, first_seed=60_000):
+    """Strong v weak fixtures, where 4-goal leads actually happen."""
+    pairs = [(s, w) for s in STRONG for w in WEAK] + [
+        (w, s) for s in STRONG for w in WEAK
+    ]
+    return [(*pairs[i % len(pairs)], first_seed + i) for i in range(n)]
+
+
+@pytest.fixture(scope="module")
+def mismatch_season():
+    with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
+        return list(pool.map(play, mismatches(200), chunksize=8))
+
+
 @pytest.fixture(scope="module")
 def season():
     with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
@@ -72,10 +95,12 @@ def test_one_goal_leaders_have_less_possession_after_65(season):
     assert drop >= 0.02  # at least 2 points of possession given up
 
 
-def test_four_goal_leaders_change_less_than_one_goal_leaders(season):
-    drop1, _ = possession_drop(season, "lead1")
-    drop4, n = possession_drop(season, "lead4")
-    assert n >= 5
+def test_four_goal_leaders_change_less_than_one_goal_leaders(mismatch_season):
+    # Both groups from the same strong-v-weak matches (with 13 clubs, 4-goal
+    # leads are too rare in a general sample of 200 to compare).
+    drop1, n1 = possession_drop(mismatch_season, "lead1")
+    drop4, n4 = possession_drop(mismatch_season, "lead4")
+    assert n1 >= 20 and n4 >= 20
     assert drop4 < drop1
 
 

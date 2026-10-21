@@ -390,9 +390,11 @@ class _Sim:
             "shot": 0.0,
         }
         if bx >= shots["min_x"]:
-            header = self.assist == "cross"
+            header = self.assist in ("cross", "set_piece")
             chance = xg(self.cfg, bx, by, header, self.assist)
-            boost = 3.0 if self.assist in ("cross", "through_ball") else 1.0
+            boost = (
+                3.0 if self.assist in ("cross", "through_ball", "set_piece") else 1.0
+            )
             w["shot"] = shots["bias"] * chance * boost * (0.6 if pressed else 1.0)
             w["shot"] *= self.effect(self.attack, "shot_bias", 1.0)
             direct = self.teams[self.attack].profile.directness
@@ -515,17 +517,29 @@ class _Sim:
             at,
         )
         bx, by = own(side, *at)
+        sp = self.cfg["set_pieces"]
+        late_leader = self.minute >= sp["late_minute"] and self.lead(side) > 0
+        if late_leader and bx > LENGTH * 2 / 3:
+            self.tick(sp["late_extra_s"])  # no hurry: run the clock
         frame, _ = self.frame(pressed=False)
         if bx > 80 and abs(by - GOAL_Y) < 15 and self.rng.random() < 0.3:
             self.assist = "set_piece"
             self.shot(frame, kind="shot_freekick")
+        elif bx > LENGTH * 2 / 3 and (
+            late_leader or self.rng.random() < sp["wide_free_kick_cross"]
+        ):
+            self.delivery(side, at, "freekick_crossed")
         else:
             self.pass_(frame, 10.0, kind="freekick_short", restart=True)
 
     def corner(self, side):
         self.restart()
         y_own = 0.0 if self.rng.random() < 0.5 else WIDTH
-        spot = own(side, LENGTH, y_own)
+        self.delivery(side, own(side, LENGTH, y_own), "corner_crossed")
+
+    def delivery(self, side, spot, kind):
+        """A set-piece ball into the box (corner or wide free kick). Better
+        set-piece clubs find a teammate more often and make better chances."""
         frame, _ = self.frame(pressed=False)
         taker, _ = frame.nearest(
             side, spot, outfield_only=True, keeper=self.teams[side].keeper
@@ -533,15 +547,18 @@ class _Sim:
         self.new_possession(side, taker, spot)
         frame, _ = self.frame(pressed=False)
         target = own(side, self.rng.uniform(95, 101), self.rng.uniform(28, 40))
-        ok = (
-            self.rng.random()
-            < self.cfg["shots"]["corner_success"] * self.wx.cross_accuracy
+        threat = self.teams[side].profile.set_pieces.threat
+        p = (
+            self.cfg["shots"]["corner_success"]
+            * (0.6 + self.cfg["set_pieces"]["threat_delivery"] * threat)
+            * self.wx.cross_accuracy
         )
+        ok = self.rng.random() < p
         self.emit(
             frame,
             side,
             taker,
-            "corner_crossed",
+            kind,
             "success" if ok else "fail",
             spot,
             target,
@@ -551,7 +568,7 @@ class _Sim:
         self.tick(4)
         if ok:
             receiver, _ = frame.nearest(side, target, exclude={(side, taker)})
-            self.new_possession(side, receiver, target, assist="cross", same=True)
+            self.new_possession(side, receiver, target, assist="set_piece", same=True)
         else:
             defender, _ = frame.nearest(1 - side, target)
             self.turnover(1 - side, defender, target)
@@ -666,7 +683,7 @@ class _Sim:
             self.passes += 1
             self.assist = "cross" if cross else ("through_ball" if through else "pass")
             return
-        self.failed_pass(frame, side, receiver, start, target)
+        self.failed_pass(frame, side, receiver, start, target, kind)
 
     def pick_receiver(self, frame, side, carrier, bx, directness, backwards):
         team = self.teams[side]
@@ -720,8 +737,15 @@ class _Sim:
         same_flank = abs(ry - GOAL_Y) > 18 and (ry - GOAL_Y) * (by - GOAL_Y) > 0
         return 1.0 + 2.0 * bu.flank_bias if same_flank and gain > 0 else 1.0
 
-    def failed_pass(self, frame, side, receiver, start, target):
+    def failed_pass(self, frame, side, receiver, start, target, kind="pass"):
         defence = 1 - side
+        if kind == "cross":
+            sp = self.cfg["set_pieces"]
+            seeking = self.teams[side].profile.set_pieces.corner_seeking
+            if self.rng.random() < sp["cross_to_corner"] * (1 + seeking):
+                self.tick(10)
+                self.corner(side)  # cleared behind
+                return
         fp = self.cfg["failed_pass"]
         _, receiver_gap = frame.nearest(defence, target)
         weights = {
@@ -781,7 +805,14 @@ class _Sim:
         frame.positions[(defence, defender)] = at
         ch = self.cfg["challenges"]
         team = self.teams[defence]
-        if card is not None or self.rng.random() < ch["foul"]:
+        foul_p = ch["foul"]
+        if own(side, *at)[0] > LENGTH * 2 / 3:
+            sp = self.cfg["set_pieces"]
+            drawing = self.teams[side].profile.set_pieces.foul_drawing
+            foul_p *= 1 + sp["foul_drawing"] * drawing
+            if self.minute >= sp["late_minute"] and self.lead(side) > 0:
+                foul_p *= sp["late_leader_fouls"]
+        if card is not None or self.rng.random() < min(foul_p, 0.95):
             r = 1.0 if card is not None else self.rng.random()
             can_send_off = (
                 len(team.on_pitch) > ch["min_players"]
@@ -903,8 +934,16 @@ class _Sim:
         """
         side, defence = self.attack, 1 - self.attack
         bx, by = own(side, *self.ball)
-        header = kind == "shot" and self.assist == "cross" and self.rng.random() < 0.6
-        chance = xg(self.cfg, bx, by, header, self.assist)
+        header = (
+            kind == "shot"
+            and self.assist in ("cross", "set_piece")
+            and self.rng.random() < 0.6
+        )
+        bonus = 0.0
+        if self.assist == "set_piece":
+            threat = self.teams[side].profile.set_pieces.threat
+            bonus = self.cfg["set_pieces"]["threat_xg"] * (threat - 0.5)
+        chance = xg(self.cfg, bx, by, header, self.assist, bonus)
         if min_xg is not None:
             chance = max(chance, min_xg)
         if forced is None:
@@ -954,8 +993,14 @@ class _Sim:
             else:
                 self.turnover(defence, keeper, spot)
         else:
-            self.tick(20)
-            self.goalkick(defence)
+            sp = self.cfg["set_pieces"]
+            seeking = self.teams[side].profile.set_pieces.corner_seeking
+            if self.rng.random() < sp["shot_to_corner"] * (1 + seeking):
+                self.tick(15)
+                self.corner(side)
+            else:
+                self.tick(20)
+                self.goalkick(defence)
 
     # ---- counters and scripted beats -----------------------------------------
 
