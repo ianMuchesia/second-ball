@@ -150,3 +150,36 @@ Style clubs + set pieces (2026-10-22, Ian).
   strong-v-weak fixtures (both groups from the same set, min 20 teams each);
   with 13 clubs a general 200-match sample had only 8 such teams. Checked on
   800 general matches: drop 0.030 (1 goal) vs 0.018 (4+ goals).
+
+Phase 2a: replayer, interpreter, metric registry (2026-10-21).
+- Permission exception (Ian): the agent may create core/metrics/ (new files
+  only; budget.py and core/contracts untouched).
+- Dedupe store (Ian): Postgres. Each event is inserted with event_id as the
+  primary key before it is counted; the Kafka offset is committed after. A
+  restart rebuilds MatchState from the stored events. Stream tests start
+  throwaway Kafka/Postgres containers (CI: services).
+- New dependencies: confluent-kafka (Kafka client; also speaks the Azure Event
+  Hubs Kafka endpoint via SASL_SSL), psycopg[binary] (Postgres for the store).
+- Metric definitions (agent's, for Ian to review; one place each in
+  core/metrics/basic.py):
+  - Possession owner = first team on the ball in a possession_id; the tackle,
+    interception or foul that ends it belongs to the other side.
+  - Possession (time) = share of in-play time; gaps before a restart, after a
+    goal and across half-time are not in play.
+  - Passes exclude throw-ins (same set as the realism report). PPDA uses the
+    realism report's zone (the passer's own 60%).
+  - Field tilt = share of final-third passes (x >= 70 in each team's frame).
+  - Windows (5/10/15 min) run on a continuous match clock: first-half
+    stoppage time counts, so early second-half windows reach into it.
+  - A metric that is undefined (PPDA with no defensive actions) is left out of
+    MatchState rather than shown as 0 or infinity. A zero (no shots) carries
+    the events that were checked as evidence.
+- MatchState.metrics keys: team_id or "match" (match-grain metrics); windowed
+  metrics are named "<metric>_last_<n>m". No contract change.
+- Latency at 60x: p50 ~0.02 s, max 0.07 s. The first events once paid Kafka
+  start-up (consumer group join, up to 5 s via make replay); the replayer now
+  connects before the match clock starts and, with --wait-for-group, starts
+  only once the interpreter has its partition. The test waits for the
+  assignment too (limit unchanged: every event < 1 s).
+- Timeline: docs/timelines/demo.png is committed; the CSV next to it is data
+  (git-ignored, *.csv).
