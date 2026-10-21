@@ -301,6 +301,8 @@ class _Sim:
         defence = 1 - self.attack
         if pressed is None:
             p = pr["base_probability"] * self.press_intensity(defence, bx)
+            if bx > pr["deep_zone_x"]:
+                p *= pr["deep_zone_press"]  # defences crowd their own box
             if self.counterpressing(defence):
                 p = max(p, pr["counterpress_probability"])
             pressed = self.rng.random() < min(p, 0.95)
@@ -357,6 +359,7 @@ class _Sim:
         won_ball = won_ball and (
             team.profile.on_regain is not None
             or self.effect(attack, "counter_probability", 0.0) > 0
+            or self.cfg["style"]["direct_counter"] * team.profile.directness > 0
         )
         choice = self.choose_action(bx, by, pressed, won_ball)
         if choice == "shot":
@@ -374,7 +377,12 @@ class _Sim:
         shots = self.cfg["shots"]
         target = self.teams[self.attack].profile.tempo.passes_per_possession
         w = {
-            "pass": (3.0 if regain else 1.0) * (1.2 if self.passes < target else 1.0),
+            "pass": (3.0 if regain else 1.0)
+            * (
+                self.cfg["style"]["pass_weight_before_target"]
+                if self.passes < target
+                else self.cfg["style"]["pass_weight_after_target"]
+            ),
             "carry": (0.15 if pressed else 0.45) * (0.3 if bx > 95 else 1.0),
             "take_on": 0.05 + (0.15 if pressed and bx > 55 else 0.0),
             "clearance": (0.6 if pressed and bx < 25 else 0.0)
@@ -387,6 +395,8 @@ class _Sim:
             boost = 3.0 if self.assist in ("cross", "through_ball") else 1.0
             w["shot"] = shots["bias"] * chance * boost * (0.6 if pressed else 1.0)
             w["shot"] *= self.effect(self.attack, "shot_bias", 1.0)
+            direct = self.teams[self.attack].profile.directness
+            w["shot"] *= 1.0 + self.cfg["style"]["direct_shot_bonus"] * direct
             if self.passes >= target:
                 w["shot"] *= 1.3
         names = list(w)
@@ -571,6 +581,7 @@ class _Sim:
         counter_p = max(
             on_regain.channel_probability if on_regain else 0.0,
             self.effect(side, "counter_probability", 0.0),
+            self.cfg["style"]["direct_counter"] * self.teams[side].profile.directness,
         )
         wants_channel = forced is None and regain and kind == "pass" and counter_p > 0
         if wants_channel and self.rng.random() < counter_p:
@@ -616,6 +627,10 @@ class _Sim:
             lines,
             cross,
             restart,
+            # Quality shows in keeping the ball; near the box defences crowd everyone.
+            self.teams[side].profile.strength
+            if bx <= self.cfg["style"]["final_third_x"]
+            else 0.5,
         )
         p *= self.wx.pass_success
         if d > 30:
@@ -655,6 +670,16 @@ class _Sim:
 
     def pick_receiver(self, frame, side, carrier, bx, directness, backwards):
         team = self.teams[side]
+        style = self.cfg["style"]
+        if bx > style["final_third_x"]:
+            # In the final third every team combines; long balls stop here.
+            directness = min(directness, style["final_third_directness"])
+        ppp = team.profile.tempo.passes_per_possession
+        patience = style["safe_pass_bonus"] * max(0.0, (ppp - 5.0) / 5.0)
+        # Past its usual number of passes, a team goes long and forward.
+        go_long = self.passes >= ppp and bx <= style["final_third_x"] and not backwards
+        if go_long:
+            directness = max(directness, style["go_long_directness"])
         names, weights, spots = [], [], []
         for (s, pl), pos in frame.positions.items():
             if s != side or pl == carrier:
@@ -672,6 +697,10 @@ class _Sim:
                 )
                 if d < 3:
                     w *= 0.2
+                if self.passes < ppp and d < 20 and gain < 5:
+                    w *= 1.0 + patience  # possession teams recycle safely
+                if go_long and gain < 0:
+                    w *= style["go_long_backward"]
                 w *= self.build_up_weight(team, bx, pos, gain)
             names.append(pl)
             weights.append(max(w, 1e-6))

@@ -11,15 +11,18 @@ Sources (season 2024/25, top five European leagues):
   - football-data.co.uk match CSVs: goals, shots, shots on target, fouls, cards.
   - Understat league data: xG per shot (player season totals summed per league)
     and PPDA (team-match ppda att/def summed per league).
-  - FBref blocks automated access (HTTP 403) and removed its advanced stats in
-    January 2026, so possession and passing have no reference here.
+  - ESPN public match summaries (site.api.espn.com, an unofficial API):
+    possession, total and accurate passes. FBref, the usual source, removed its
+    advanced stats in January 2026 and blocks automated access (HTTP 403).
 """
 
 import csv
 import gzip
 import io
 import json
+import statistics
 import sys
+import time
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,19 +49,23 @@ UNDERSTAT = {
     "Serie A": "https://understat.com/getLeagueData/Serie_A/2024",
     "Ligue 1": "https://understat.com/getLeagueData/Ligue_1/2024",
 }
-NO_REFERENCE = {
-    "pass_completion": "FBref removed its advanced (Opta) stats in Jan 2026 and blocks "
-    "automated access (HTTP 403); no other free source found.",
-    "passes_per_match": "Same as pass_completion: no free current source found.",
-    "possession_spread": "FBref possession not reachable by script (HTTP 403); "
-    "football-data.co.uk and Understat do not publish possession.",
+ESPN = {
+    "Premier League": "eng.1",
+    "La Liga": "esp.1",
+    "Bundesliga": "ger.1",
+    "Serie A": "ita.1",
+    "Ligue 1": "fra.1",
 }
+ESPN_API = "https://site.api.espn.com/apis/site/v2/sports/soccer"
+ESPN_SEASON = 2024  # = 2024/25
+ESPN_DELAY_S = 0.3  # unofficial public API: be polite
+NO_REFERENCE = {}
 
 
-def fetch(url, refresh, headers=None):
+def fetch(url, refresh, headers=None, delay=0.0):
     """Download once; cache the body and its access date."""
     CACHE.mkdir(exist_ok=True)
-    name = url.split("//", 1)[1].replace("/", "_")
+    name = url.split("//", 1)[1].replace("/", "_").replace("?", "_").replace("=", "_")
     body, meta = CACHE / name, CACHE / (name + ".meta.json")
     if refresh or not body.exists():
         req = urllib.request.Request(url, headers={"User-Agent": UA, **(headers or {})})
@@ -66,6 +73,7 @@ def fetch(url, refresh, headers=None):
             data = resp.read()
         if data[:2] == b"\x1f\x8b":
             data = gzip.decompress(data)
+        time.sleep(delay)
         body.write_bytes(data)
         meta.write_text(
             json.dumps({"url": url, "accessed": datetime.now(UTC).date().isoformat()})
@@ -98,6 +106,15 @@ def football_data_league(text):
         "yellow_cards_per_match": total(cards, "HY", "AY") / len(cards),
         "red_cards_per_match": total(cards, "HR", "AR") / len(cards),
     }
+    # Per team: each team's average shots per match (home + away).
+    team_shots = {}
+    for r in shots:
+        for team, col in ((r["HomeTeam"], "HS"), (r["AwayTeam"], "AS")):
+            n, total_shots = team_shots.get(team, (0, 0))
+            team_shots[team] = (n + 1, total_shots + int(r[col]))
+    averages = [t / n for n, t in team_shots.values()]
+    values["team_shots_per_match"] = sum(averages) / len(averages)
+    values["team_shots_range"] = max(averages) - min(averages)
     used = {
         "goals_per_match": len(goals),
         "shots_per_match": len(shots),
@@ -105,8 +122,65 @@ def football_data_league(text):
         "fouls_per_match": len(fouls),
         "yellow_cards_per_match": len(cards),
         "red_cards_per_match": len(cards),
+        "team_shots_per_match": len(shots),
+        "team_shots_range": len(shots),
     }
     return used, values
+
+
+def espn_league(code, refresh):
+    """Possession and passing for one league-season from ESPN's public match
+    summaries (an unofficial API). Teams come from the current team list, so
+    matches between two clubs no longer in the league are missed (counted)."""
+    teams_body, accessed = fetch(f"{ESPN_API}/{code}/teams", refresh)
+    teams = json.loads(teams_body)["sports"][0]["leagues"][0]["teams"]
+    event_ids = set()
+    for t in teams:
+        url = f"{ESPN_API}/{code}/teams/{t['team']['id']}/schedule?season={ESPN_SEASON}"
+        body, _ = fetch(url, refresh, delay=ESPN_DELAY_S)
+        for e in json.loads(body).get("events", []):
+            done = e["competitions"][0]["status"]["type"].get("completed")
+            if done and e.get("season", {}).get("year") == ESPN_SEASON:
+                event_ids.add(e["id"])
+    possession, passes, accurate, matches = {}, 0, 0, 0
+    for eid in sorted(event_ids):
+        body, _ = fetch(
+            f"{ESPN_API}/{code}/summary?event={eid}", refresh, delay=ESPN_DELAY_S
+        )
+        sides = json.loads(body).get("boxscore", {}).get("teams", [])
+        stats = []
+        for side in sides:
+            st = {x["name"]: x.get("displayValue") for x in side.get("statistics", [])}
+            stats.append((side["team"]["displayName"], st))
+        try:
+            rows = [
+                (
+                    name,
+                    float(st["possessionPct"]),
+                    int(st["totalPasses"]),
+                    int(st["accuratePasses"]),
+                )
+                for name, st in stats
+            ]
+        except (KeyError, TypeError, ValueError):
+            continue
+        if len(rows) != 2:
+            continue
+        matches += 1
+        for name, poss, total, ok in rows:
+            possession.setdefault(name, []).append(poss / 100)
+            passes += total
+            accurate += ok
+    team_means = [sum(v) / len(v) for v in possession.values() if len(v) >= 10]
+    return (
+        matches,
+        {
+            "possession_spread": statistics.pstdev(team_means),
+            "pass_completion": accurate / passes,
+            "passes_per_match": passes / matches,
+        },
+        accessed,
+    )
 
 
 def understat_league(data):
@@ -125,6 +199,26 @@ METRICS = {
     "fouls_per_match": ("football-data.co.uk", "Fouls per match (both teams)."),
     "yellow_cards_per_match": ("football-data.co.uk", "Yellow cards per match."),
     "red_cards_per_match": ("football-data.co.uk", "Red cards per match."),
+    "team_shots_per_match": (
+        "football-data.co.uk",
+        "Mean over teams of each team's shots per match.",
+    ),
+    "team_shots_range": (
+        "football-data.co.uk",
+        "Highest minus lowest team average shots per match in the league.",
+    ),
+    "possession_spread": (
+        "site.api.espn.com (unofficial)",
+        "Standard deviation of the teams' season-average possession.",
+    ),
+    "pass_completion": (
+        "site.api.espn.com (unofficial)",
+        "League accurate passes / total passes (ESPN match box scores).",
+    ),
+    "passes_per_match": (
+        "site.api.espn.com (unofficial)",
+        "Total passes per match, both teams (ESPN match box scores).",
+    ),
     "xg_per_shot": (
         "understat.com",
         "League xG / league shots (player season totals).",
@@ -152,6 +246,18 @@ def main(argv=None):
         for m, v in values.items():
             per_league[m][league] = round(v, 4)
             sources[m].append({"url": url, "accessed": accessed, "matches": used[m]})
+    for league, code in ESPN.items():
+        n, values, accessed = espn_league(code, refresh)
+        for m, v in values.items():
+            per_league[m][league] = round(v, 4)
+            sources[m].append(
+                {
+                    "url": f"{ESPN_API}/{code}/summary",
+                    "accessed": accessed,
+                    "matches": n,
+                }
+            )
+        print(f"espn {league}: {n} matches", file=sys.stderr)
     for league, url in UNDERSTAT.items():
         body, accessed = fetch(url, refresh, {"X-Requested-With": "XMLHttpRequest"})
         for m, v in understat_league(json.loads(body)).items():

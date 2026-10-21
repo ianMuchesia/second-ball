@@ -1,3 +1,4 @@
+import collections
 import json
 
 import pytest
@@ -131,8 +132,10 @@ def test_generate_writes_match_and_answer_key(tmp_path):
 def test_harbour_go_behind_the_full_back_in_free_play_too():
     free = simulate_match(LEAGUE["harbour_town"], LEAGUE["saltmere"], 4)
     channel = [e for e in free.events if truth(free, e).get("channel")]
-    assert channel
-    assert {e.team_id for e in channel} == {"harbour_town"}
+    by_team = collections.Counter(e.team_id for e in channel)
+    # Since Phase 1e every club counters in proportion to its directness;
+    # Harbour's identity is doing it far more than a possession side.
+    assert by_team["harbour_town"] >= 3 * max(1, by_team["saltmere"])
     assert all("scenario_beat" not in t for t in free.truth)
 
 

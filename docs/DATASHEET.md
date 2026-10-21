@@ -67,8 +67,10 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
   including Ian's Riverside Athletic and Kilele Chui FC.
 - **Shapes:** players stand on formation anchors per phase (with / without the
   ball / transition) and ball side, and move half-way towards them each event.
-- **Calibration:** knobs were tuned so league averages fall inside real 2024/25
-  top-five-league bands; see `docs/DATA_REALISM.md` and `DECISIONS.md`.
+- **Calibration:** knobs were tuned so league and per-team averages fall
+  inside real 2024/25 top-five-league bands (football-data.co.uk, Understat,
+  ESPN match summaries); see `docs/DATA_REALISM.md` and `DECISIONS.md`.
+- **Clubs** have a strength rating (0-1): better clubs keep the ball better.
 
 ## Free simulation vs scenario
 
@@ -85,11 +87,12 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
 - **Not real football.** Players have no individual skill, speed or stamina;
   the ball travels instantly along straight lines; there are no penalties,
   offsides, substitutions or injuries.
-- **Club spread is off.** League averages match real data, but long-ball clubs
-  take far too few shots and possession only ranges about 45–55% (real clubs
-  range much wider). See `docs/DATA_REALISM.md`.
-- **No reference** for pass completion, passes per match or possession (no
-  current free source); those values are unvalidated.
+- **Possession spread is too narrow.** Clubs range about 42–60% possession;
+  real leagues spread wider (see `docs/DATA_REALISM.md`). Shots per club are
+  now realistic on average, and the gap between clubs is at the top of the real range.
+- **Match modes** (manage / protect / chase from 65', Ian's rules) change how
+  teams play by score and minute; the modes themselves are engine-internal and
+  never in the data.
 - **xG** is the engine's own simple model, not a trained real-world model.
 - **Red cards** are rare, so short samples vary a lot.
 - **Freeze frames** are generated around the ball each event (anchors + noise +

@@ -149,9 +149,26 @@ def anchors(team, ball, phase, block_height, cfg, push=0.0):
     keeper_x, back, front = lines(phase, bx, block_height, push)
     pull = cfg["shapes"]["ball_pull"] * (by - SIDE_Y[side])
 
+    # Attacking runs: deep in the opponent's half, every line but the back one
+    # moves part of the way up to the front line (midfielders join the attack).
+    runs = 0.0
+    if phase == "in_possession":
+        r = cfg["shapes"]["attack_runs"]
+        ramp = clamp((bx - r["from_x"]) / (r["full_x"] - r["from_x"]), 0.0, 1.0)
+        # Shapes that already attack with many forwards push fewer players up.
+        forwards = sum(
+            1 for d, _ in team.table[("in_possession", "centre")].values() if d >= 0.85
+        )
+        need = clamp(
+            (r["forwards_wanted"] - forwards) / (r["forwards_wanted"] - 2), 0.0, 1.0
+        )
+        runs = r["share"] * ramp * need
+
     spots = {team.keeper: (keeper_x, GOAL_Y + 0.15 * (by - GOAL_Y))}
     for player, role in team.roles.items():
         depth, y = shape[role]
+        if depth > 0:
+            depth += (1.0 - depth) * runs
         spots[player] = (back + depth * (front - back), y + pull)
     return {pl: on_pitch(*own(team.side, x, y)) for pl, (x, y) in spots.items()}
 

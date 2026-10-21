@@ -85,5 +85,35 @@ trailing_* rules.
 - Club strength 0-1 added to every club (placeholders).
 - Agent's tuning of mode effects: "safer passing" alone made leaders keep MORE
   of the ball, so manage presses much less (x0.55) and chasers press more
-  (x1.35) and are not more direct. Result on 200 matches: one-goal leaders give
+  (x1.35) and are not more direct. Result on 400 matches: one-goal leaders give
   up ~4 points of possession after 65'; level teams 0.
+
+Phase 1e club identity + re-tuning (2026-10-21), engine/config/engine.yaml,
+before (main) -> after. All TUNABLE, owner Ian. Agent's changes, each with why:
+- New mechanics: long balls contested (long_from_m 30, long_per_metre 0.08);
+  final third: every team combines (final_third_directness 0.35); possession
+  teams recycle short (safe_pass_bonus 4); past its usual passes a team goes
+  long (go_long_directness 0.95, go_long_backward 0.2); every club counters
+  after winning the ball with p = 0.6 x directness (direct_counter); direct
+  teams shoot more readily (direct_shot_bonus 1.5); attacking runs: in
+  2-striker shapes midfielders push up from x 30 (attack_runs share 0.85,
+  scaled down for shapes with more forwards); defences crowd their own box
+  (deep_zone_x 80, deep_zone_press 5); better clubs keep the ball better
+  outside the final third (pass_model.per_strength 4).
+  Why: long-ball clubs took ~4 shots/match and kept ~52% possession.
+- pass_model.intercept 3.9 -> 4.75, passer_pressure 0.9 -> 1.8,
+  receiver_pressure 1.2 -> 2.0 (pressure ends possessions; completion back to 83%)
+- xg_model.intercept -1.45 -> -1.25 (xG/shot 0.118, goals 2.8)
+- shots.bias 2.42 -> 1.65 (shots 24.3/match)
+- failed_pass.interception 0.18 -> 0.27 (PPDA 12.5)
+- challenges.foul 0.46 -> 0.42, yellow_per_foul 0.185 -> 0.17,
+  red_per_foul 0.008 -> 0.0075 (fouls 23, yellows 4.0, reds ~0.17)
+Result (docs/DATA_REALISM.md): 10 of 13 pass on tuning seeds, 8 of 13 on
+hold-out. Possession spread 0.048 vs real 0.057-0.076 still fails: the
+fictional clubs' placeholder strengths/styles are close together.
+Test change: Harbour v Saltmere no longer has channel balls by Harbour only
+(every club now counters by directness); the test now requires Harbour to do
+it at least 3x as often (127 vs 31 over four matches).
+Reference: possession, pass completion, passes per match and per-team shots
+now have sources (ESPN public match summaries, an unofficial API; and
+football-data.co.uk per-team shots).

@@ -5,18 +5,21 @@
 
 # Pass success = logistic(intercept - distance - pressure - angle - lines broken).
 pass_model:
-  intercept: 3.9
+  intercept: 4.75
   per_metre: 0.045           # longer passes fail more
-  passer_pressure: 0.9       # pressure load on the passer (0-1)
-  receiver_pressure: 1.2     # pressure load on the receiver (0-1)
+  passer_pressure: 1.8       # pressure load on the passer (0-1)
+  receiver_pressure: 2.0     # pressure load on the receiver (0-1)
   forward_angle: 0.5         # straight forward passes are harder than square ones
   per_line_broken: 0.3       # each opponent bypassed by the pass
   cross: 1.4                 # crosses are hard
   restart_bonus: 2.0         # free kicks, throw-ins, kick-offs
+  long_from_m: 30.0          # long balls are contested: extra difficulty beyond this
+  long_per_metre: 0.08
+  per_strength: 4.0          # logit per unit of club strength above 0.5. TUNABLE
 
 # Shot xG = logistic(intercept + distance + angle + body part + assist type).
 xg_model:
-  intercept: -1.45
+  intercept: -1.25
   per_metre: -0.11
   per_radian_of_goal: 1.0    # angle the goal mouth makes from the shot spot
   header: -0.8
@@ -31,6 +34,8 @@ pressing:
   base_probability: 0.30     # chance a defender is close to the carrier
   ppda_reference: 10.0       # press intensity = reference / club target_ppda
   high_press_zone_x: 63.0    # PPDA counts in the carrier's own 60% (x < 63)
+  deep_zone_x: 80.0          # near the defenders' goal ...
+  deep_zone_press: 5.0       # ... a close defender is this many times more likely. TUNABLE
   close_distance_m: [0.5, 2.0]
   open_distance_m: [2.5, 12.0]
   goal_side_share: 0.6       # how often the closest defender is goal-side
@@ -45,24 +50,36 @@ facing_back:
   otherwise: 0.10
 
 failed_pass:                 # what happens after a pass fails (relative weights)
-  interception: 0.18
+  interception: 0.27
   tackle: 0.08
   loose_ball: 0.77           # multiplied by the weather's loose_ball
 loose_ball_out_of_play: 0.2
 loose_ball_kept: 0.5
 
 challenges:
-  foul: 0.46                 # per tackle attempt
-  yellow_per_foul: 0.185
-  red_per_foul: 0.008
+  foul: 0.42                 # per tackle attempt
+  yellow_per_foul: 0.17
+  red_per_foul: 0.0075
   min_players: 7             # no more red cards below this many players
 
 shots:
-  bias: 2.42                 # how readily players shoot, scaled by xG
+  bias: 1.65                 # how readily players shoot, scaled by xG
   min_x: 75.0                # no shots from further out
   save_share: 0.27           # share of missed shots the keeper saves
   corner_after_save: 0.3
   corner_success: 0.32
+
+# Club identity (Phase 1e). TUNABLE, owner: Ian.
+style:
+  final_third_x: 70.0        # beyond this, every team combines
+  final_third_directness: 0.35
+  safe_pass_bonus: 4.0       # possession teams (passes_per_possession > 5) recycle short
+  direct_shot_bonus: 1.5     # shot willingness x (1 + this x directness)
+  pass_weight_before_target: 1.3   # below the club's passes_per_possession ...
+  pass_weight_after_target: 1.0    # ... above it
+  go_long_directness: 0.95   # past passes_per_possession (outside the final third): go long
+  go_long_backward: 0.2      # ... and rarely pass backwards
+  direct_counter: 0.6        # after winning the ball: counter into the channel with p = this x directness
 
 clearance_kept: 0.45
 cross_share: 0.55            # chance a wide final-third pass is a cross
@@ -115,3 +132,8 @@ shapes:
   ball_pull: 0.15            # shape slides this share of the ball's offset within a side
   follow: 0.5                # each frame, players move this share towards their anchor
   transition_s: 5            # seconds both teams use the transition shape after a turnover
+  attack_runs:               # midfielders join the attack deep in the opponent's half
+    from_x: 30.0
+    full_x: 90.0
+    share: 0.85              # share of the way to the front line at full_x. TUNABLE
+    forwards_wanted: 5       # shapes with this many forwards push nobody up; 2 forwards = full share
