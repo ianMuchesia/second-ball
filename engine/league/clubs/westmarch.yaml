@@ -1,0 +1,41 @@
+# Style inspired by a record-breaking positional-play side (2017/18). Fictional club.
+# Invented names; any resemblance to real clubs or players is accidental.
+# All knobs TUNABLE (owner: Ian).
+id: westmarch
+name: Westmarch FC
+stadium: Westmarch Park
+style: Relentless high press and long counter-press; patient positional play, full-back inverts into a 3-2-5.
+
+formation: "4-3-3"            # out of possession, back to front
+in_possession_shape: "3-2-5"  # with the ball, back to front
+target_ppda: 7.0            # lower = more pressing
+block_height: 52            # defensive line, metres from own goal
+late_lead_block_drop: 6      # metres the block drops when protecting a lead
+directness: 0.15           # 0 = short and patient, 1 = long and forward
+width: 0.9                # 0 = narrow, 1 = touchline to touchline
+strength: 0.9             # 0-1, who is the stronger side
+tempo:
+  passes_per_possession: 10.0
+  seconds_per_action: 2.4
+counterpress:
+  probability: 0.9
+  duration_s: 6
+
+set_pieces:                   # above-average set pieces. TUNABLE (owner: Ian)
+  threat: 0.6                 # delivery and aerial quality, 0-1
+  foul_drawing: 0.3           # wins fouls in the final third, 0-1
+  corner_seeking: 0.5         # wins corners, 0-1
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Pell Brinsworth}
+  - {number: 2, name: Brisk Evermere}
+  - {number: 3, name: Orrin Caldovic}
+  - {number: 4, name: Soren Harrford}
+  - {number: 5, name: Davor Freystead}
+  - {number: 6, name: Talo Nevane}
+  - {number: 7, name: Niall Orksworth}
+  - {number: 8, name: Elio Marrston}
+  - {number: 9, name: Zeno Brinane}
+  - {number: 10, name: Loris Dovenko}
+  - {number: 11, name: Quin Goldley}

@@ -89,6 +89,8 @@ def summarise(fixture):
             t["passes_in_own_60"] += 1
         if e.type in DEFENSIVE_ACTIONS and e.start_x > LENGTH - PPDA_ZONE_X:
             t["def_actions_high"] += 1
+        if e.type == "corner_crossed":
+            s["corners"] += 1
         if e.type == "foul":
             s["fouls"] += 1
             s["yellows"] += e.outcome == "yellow_card"
@@ -125,6 +127,7 @@ def metric_values(sample):
         "on_target_share": tot["on_target"] / tot["shots"],
         "xg_per_shot": tot["xg"] / tot["shots"],
         "fouls_per_match": tot["fouls"] / n,
+        "corners_per_match": tot["corners"] / n,
         "yellow_cards_per_match": tot["yellows"] / n,
         "red_cards_per_match": tot["reds"] / n,
         "ppda": ppda_passes / ppda_actions,
@@ -204,6 +207,7 @@ ORDER = [
     "xg_per_shot",
     "ppda",
     "fouls_per_match",
+    "corners_per_match",
     "yellow_cards_per_match",
     "red_cards_per_match",
     "pass_completion",

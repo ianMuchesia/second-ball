@@ -117,3 +117,36 @@ it at least 3x as often (127 vs 31 over four matches).
 Reference: possession, pass completion, passes per match and per-team shots
 now have sources (ESPN public match summaries, an unofficial API; and
 football-data.co.uk per-team shots).
+
+Club strength spread (2026-10-22, Ian delegated the call to the agent): tried
+wider placeholder strengths (0.30-0.85). Possession spread reached the band
+edge (0.058) but the gap between clubs' shots grew to 12-13 (real 6.3-9.4),
+because weak direct clubs fell to ~6 shots. Kept the current ratings
+(0.40-0.75): 10/13 realism metrics pass; possession spread (0.048) stays a
+known gap. Proper fix needs an underdog chance mechanism (counters, set
+pieces), to revisit once Phase 2 metrics show where chances come from.
+
+Style clubs + set pieces (2026-10-22, Ian).
+- Three fictional clubs in famous styles (invented names, no real clubs or
+  players): Kingsbridge Ravens (Conte-style 3-4-3 / 5-4-1, 2016/17), Westmarch
+  FC (Guardiola-style high press, 2017/18), Thornfield Athletic (Arteta-style
+  control + set pieces, 2025/26). League is now 13 clubs.
+- Set pieces per club (threat, foul_drawing, corner_seeking; defaults 0.5 /
+  0.3 / 0.3). Threat order: Thornfield > Kingsbridge > Westmarch. Mid-table
+  "fouls and corners" clubs (agent's pick of existing clubs): Port Ilvane,
+  Tidewick. Corners now also come from failed crosses and deflected shots;
+  wide final-third free kicks are crossed in.
+- Late game (Ian): from 85' a leading team wins more fouls in the final third,
+  takes its time, and always puts those free kicks into the box.
+- Club strength is now relative to the league (pass_model.strength_centre
+  0.63 = mean strength), so adding strong clubs does not raise everyone's
+  passing. Knobs, before -> after: pass_model.intercept 4.75 -> 5.25,
+  challenges.foul 0.42 -> 0.36 (fouls are now drawn more in the final third),
+  red_per_foul 0.0075 -> 0.0065, shots.bias 1.65 -> 1.8; new set_pieces block
+  (corners 9.6/match vs real 9.3-10.3).
+- Known: Westmarch (very patient) under-shoots for a Guardiola-style side
+  (13 shots, 1.45 goals/match); Ian to decide whether to make it more direct.
+- Test change: "4-goal leaders change less than 1-goal leaders" now uses 200
+  strong-v-weak fixtures (both groups from the same set, min 20 teams each);
+  with 13 clubs a general 200-match sample had only 8 such teams. Checked on
+  800 general matches: drop 0.030 (1 goal) vs 0.018 (4+ goals).

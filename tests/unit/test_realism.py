@@ -23,9 +23,9 @@ def test_every_metric_has_a_sourced_band_or_says_no_reference():
 
 
 def test_football_data_parsing_skips_incomplete_rows():
-    header = "Div,HomeTeam,AwayTeam,FTHG,FTAG,HS,AS,HST,AST,HF,AF,HY,AY,HR,AR\n"
-    full = "X,A,B,2,1,10,8,4,3,11,12,2,1,0,0\n"
-    missing = "X,A,B,1,1,,,,,,,,,,\n"
+    header = "Div,HomeTeam,AwayTeam,FTHG,FTAG,HS,AS,HST,AST,HF,AF,HC,AC,HY,AY,HR,AR\n"
+    full = "X,A,B,2,1,10,8,4,3,11,12,5,4,2,1,0,0\n"
+    missing = "X,A,B,1,1,,,,,,,,,,,,\n"
     used, values = football_data_league(header + full + missing)
     assert used["goals_per_match"] == 2
     assert used["shots_per_match"] == 1

@@ -29,6 +29,7 @@ def pass_success(
     strength=0.5,
 ):
     m = cfg["pass_model"]
+    strength_centre = m.get("strength_centre", 0.5)
     z = (
         m["intercept"]
         - m["per_metre"] * distance_m
@@ -39,12 +40,13 @@ def pass_success(
         - m["per_line_broken"] * lines_broken
         - (m["cross"] if cross else 0.0)
         + (m["restart_bonus"] if restart else 0.0)
-        + m["per_strength"] * (strength - 0.5)  # better teams keep the ball
+        + m["per_strength"]
+        * (strength - strength_centre)  # better than the league average
     )
     return logistic(z)
 
 
-def xg(cfg, x, y, header, assist):
+def xg(cfg, x, y, header, assist, bonus=0.0):
     m = cfg["xg_model"]
     z = (
         m["intercept"]
@@ -52,6 +54,7 @@ def xg(cfg, x, y, header, assist):
         + m["per_radian_of_goal"] * goal_angle(x, y)
         + (m["header"] if header else 0.0)
         + m["assist"][assist]
+        + bonus
     )
     return logistic(z)
 

@@ -1,0 +1,41 @@
+# Style inspired by a modern control-and-set-pieces side (2025/26). Fictional club. Set-piece strength is not modelled yet.
+# Invented names; any resemblance to real clubs or players is accidental.
+# All knobs TUNABLE (owner: Ian).
+id: thornfield_athletic
+name: Thornfield Athletic
+stadium: Thornfield Lane
+style: Organised 4-4-2 mid-high block, high counter-press, control in possession (3-2-5), strong defence.
+
+formation: "4-4-2"            # out of possession, back to front
+in_possession_shape: "3-2-5"  # with the ball, back to front
+target_ppda: 9.0            # lower = more pressing
+block_height: 46            # defensive line, metres from own goal
+late_lead_block_drop: 8      # metres the block drops when protecting a lead
+directness: 0.35           # 0 = short and patient, 1 = long and forward
+width: 0.75                # 0 = narrow, 1 = touchline to touchline
+strength: 0.85             # 0-1, who is the stronger side
+tempo:
+  passes_per_possession: 7.0
+  seconds_per_action: 2.6
+counterpress:
+  probability: 0.75
+  duration_s: 5
+
+set_pieces:                   # set-piece specialists: best delivery and headers. TUNABLE (owner: Ian)
+  threat: 0.95                 # delivery and aerial quality, 0-1
+  foul_drawing: 0.5           # wins fouls in the final third, 0-1
+  corner_seeking: 0.7         # wins corners, 0-1
+
+# Starting XI in formation order: goalkeeper first, then back to front.
+players:
+  - {number: 1, name: Davor Caldini}
+  - {number: 2, name: Hale Tarrander}
+  - {number: 3, name: Pell Wintane}
+  - {number: 4, name: Yanis Stavsworth}
+  - {number: 5, name: Loris Brinini}
+  - {number: 6, name: Aurel Prensworth}
+  - {number: 7, name: Hale Ashdell}
+  - {number: 8, name: Jory Rookholt}
+  - {number: 9, name: Yanis Brinenko}
+  - {number: 10, name: Orrin Ashovic}
+  - {number: 11, name: Aurel Jasksworth}
