@@ -58,13 +58,24 @@ How costly losing the ball here would be.
     shots + xG = a strong upper hand. xG alone is **not** the upper hand: a
     team under pressure can build xG from two counters and one lucky corner.
     xG's weight must stay small. **TUNABLE** (owner: Ian)
-  - **Window:** a **sliding 10-minute window** (Ian, 2026-10-21). Also keep
-    the 5-, 15- and 30-minute windows as aggregates; never drop them.
+  - **Strong upper hand:** the touches + shots rule holds **and** total xG in
+    the window ≥ **0.5**. **TUNABLE** (Ian, 2026-10-21)
+  - **Window:** a **sliding 10-minute window** is the main one
+    (Ian, 2026-10-21). Code also computes the **last 5, 15, 20 and 30
+    minutes**; never drop them.
+  - **Fixed checkpoints** every 10 minutes (10', 20', 30', ...) as well as the
+    sliding window. (Ian, 2026-10-21)
+  - **A human chooses what to show.** Code computes every window; the person
+    approving the overlay picks one (e.g. the last 5 minutes, if a change in
+    those minutes gave this team the upper hand). (Ian, 2026-10-21)
   - **Rule in the window:** at least **10 touches** in the opponent's final
     third **and** at least **2 shots** (on or off target). **TUNABLE**
     (Ian, 2026-10-21)
   - **Where:** the opponent's final third (not only the box), **with constant
     pressure on their defenders.** (Ian, 2026-10-21)
+  - **Constant pressure** = in the window, at least **half** of the
+    defending team's touches in their own third happen with an attacker
+    within **2 m**. **TUNABLE** (Ian, 2026-10-21)
 - Ian notes it also depends on the situation, e.g. a team playing a high press.
 - **Version 1 includes the situation, not distance only.** (Ian, 2026-10-20)
 - Exact curve and values: **TUNABLE** (owner: Ian)
@@ -125,10 +136,7 @@ Attackers vs defenders around the ball, e.g. 3v2 or 3v1. (Ian, 2026-10-20)
 
 1. **Pressure between 2 m and 5 m:** how fast does the weight fall off?
 2. **In front and goal-side at once:** does that opponent count ×2 or ×4?
-3. **Upper hand, still open:** what counts as "constant pressure on their
-   defenders"? How much exactly does xG add? Does "every 10 minutes" also mean
-   fixed snapshots at 10', 20', 30' ... as well as the sliding window? And how
-   should code tell that a team is high-pressing?
+3. **High press:** how should code tell that a team is high-pressing?
 4. **Overload area:** what zone or distance, and how do we count defenders
    who can still recover?
 5. **"Clearly offside":** by how many metres?
