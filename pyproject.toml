@@ -3,7 +3,9 @@ name = "second-ball"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "confluent-kafka>=2.6",
     "google-genai>=2.31.0",
+    "psycopg[binary]>=3.2",
     "pyarrow>=26.0.0",
     "pydantic>=2",
     "python-dotenv>=1.2.4",

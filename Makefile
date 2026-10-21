@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference
+.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay
 
 help:
 	@echo "Targets:"
@@ -13,6 +13,8 @@ help:
 	@echo "  demo    demo SCENARIO: Riverside v Harbour Town (scripted) -> demo/"
 	@echo "  realism            500 matches vs real bands -> docs/DATA_REALISM.md"
 	@echo "  realism-reference  re-download the real reference bands"
+	@echo "  replay  MATCH=demo|<file.jsonl> SPEED=1|10|60: replay into Kafka, interpret,"
+	@echo "          timeline CSV + PNG -> docs/timelines/ (needs make up)"
 
 up:
 	docker compose up -d
@@ -49,3 +51,15 @@ realism:
 
 realism-reference:
 	uv run python -m evals.realism.fetch_reference --refresh
+
+MATCH ?= demo
+SPEED ?= 10
+MATCH_FILE = $(if $(filter demo,$(MATCH)),demo/match.jsonl,$(MATCH))
+TIMELINE = docs/timelines/$(basename $(notdir $(if $(filter demo,$(MATCH)),demo,$(MATCH)))).csv
+
+replay:
+	@test "$(MATCH)" != demo || test -f demo/match.jsonl || $(MAKE) demo
+	uv run python -m stream.interpreter --exit-on-end --timeline $(TIMELINE) & pid=$$!; \
+		uv run python -m stream.replayer $(MATCH_FILE) --speed $(SPEED) \
+			--wait-for-group interpreter && wait $$pid
+	uv run python -m scripts.timeline $(TIMELINE)

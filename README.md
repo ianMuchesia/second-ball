@@ -29,6 +29,7 @@ cd web && npm ci && npm run dev
 uv run secondball generate --matches 100 --seed 7 --out data/   # synthetic dataset
 make demo                                                        # scripted demo scenario
 make realism                                                     # realism report vs real leagues
+make replay MATCH=demo SPEED=10                                  # demo through Kafka -> live metrics -> docs/timelines/demo.png
 ```
 
 See [docs/DATASHEET.md](docs/DATASHEET.md) and [docs/DATA_REALISM.md](docs/DATA_REALISM.md).
