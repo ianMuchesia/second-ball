@@ -481,6 +481,7 @@ def test_one_pass_needs_a_one_pass_move(passes, ok):
         ("Ten men for Riverside as Harbour break behind the left-back.", True),
         ("Nine men for Riverside as Harbour break behind the left-back.", False),
         ("Harbour break behind Riverside's left-back once more.", True),
+        ("Harbour break behind Riverside's left-back for 3 goals.", False),
     ],
 )
 def test_count_words_must_match_code_counts(line, ok):
@@ -492,3 +493,12 @@ def test_lock_types_the_tokens():
     masked, slots = lock("Harbour lead 0-1 with xG 0.61 at 34'.", analysis())
     assert masked == "[T1] lead [S1] with [X1] [N1] at [N2]'."
     assert slots["[S1]"] == "0-1" and slots["[T1]"] == "Harbour"
+
+
+def test_a_decimal_before_goals_is_xg_not_a_count():
+    from agents.pipeline.verifier import wrong_counts
+
+    a = analysis(goal_task(1))
+    assert wrong_counts("xG from 0.16 to 0.61 goals", a) == []
+    assert wrong_counts("1.28 goals to 1.73 goals", a) == []
+    assert wrong_counts("61 goals", a) != []

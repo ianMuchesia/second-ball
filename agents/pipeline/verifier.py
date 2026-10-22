@@ -198,7 +198,8 @@ NOUNS = {
     **dict.fromkeys(["time", "times"], "times"),
 }
 COUNT = re.compile(
-    r"\b(?P<n>\d+|" + "|".join([*CARDINALS, *ORDINALS]) + r")"
+    # A whole number only: "0.61 goals" is xG, not 61 goals.
+    r"(?<![\d.])\b(?P<n>\d+(?![.,]\d)|" + "|".join([*CARDINALS, *ORDINALS]) + r")"
     r"(?:\s+(?P<adj>[a-z][a-z'\-]*))?\s+(?P<noun>" + "|".join(NOUNS) + r")\b",
     re.IGNORECASE,
 )
