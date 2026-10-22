@@ -1,6 +1,6 @@
 """Producer (code): what airs, when; stale lines are dropped.
 
-- Stat cards air at once.
+- Stat cards and recaps air at once.
 - A narrative line must air within 8 s of its moment or it expires.
 - At most one narrative per 45 s; when several wait, the most important
   first (then the oldest).
@@ -20,6 +20,7 @@ from agents.pipeline.prompts import KIND_WORDS
 from core.contracts import Moment, Overlay
 from core.contracts.overlay import OverlayTime
 
+INSTANT = {"stat_card", "recap"}  # slots that air as soon as they are ready
 FRESH_S = 8.0
 NARRATIVE_GAP_S = 45.0
 
@@ -49,7 +50,7 @@ class Producer:
 
     def offer(self, overlay: Overlay, moment_t: float, importance: float, now: float):
         """A finished overlay (narrative or stat card). Returns what aired now."""
-        if overlay.slot == "stat_card":
+        if overlay.slot in INSTANT:
             return [self.air(overlay)]
         status = "pending" if overlay.risk_tier == "high" else "approved"
         self.queue.append(

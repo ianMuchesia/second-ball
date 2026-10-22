@@ -175,7 +175,9 @@ max {max(totals)} (about {statistics.mean(totals) / 95:.2f} per minute).
 def main():
     demo = run_demo()
     per_match = run_free()
-    OUT.write_text(keep_sections(render(demo, per_match), OUT, ["narration"]))
+    OUT.write_text(
+        keep_sections(render(demo, per_match), OUT, ["narration", "latency"])
+    )
     _, _, found, in_scope, hits = demo
     print(
         f"demo recall {sum(found)}/{len(found)}, precision {len(hits)}/{len(in_scope)}; "

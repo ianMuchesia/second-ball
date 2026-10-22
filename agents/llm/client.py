@@ -8,7 +8,7 @@ from agents.llm.fake import FakeProvider
 from agents.llm.foundry import FoundryProvider
 from agents.llm.gemini import GeminiProvider
 from agents.llm.prices import PRICES
-from core.budget import Budget
+from core.budget import Budget, BudgetExceeded
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +16,7 @@ DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 # Requests a minute we allow ourselves; set GEMINI_RPM to your project's AI
 # Studio limit (a little under it). Low default: safe on the free tier.
 DEFAULT_GEMINI_RPM = 10
+DEFAULT_GEMINI_TIMEOUT_S = 20.0  # per HTTP request; the pipeline has its own per agent
 DEFAULT_MAX_RUN_TOKENS = 500_000
 DEFAULT_KES_RATE = 130.0
 DEFAULT_KES_RATE_DATE = "2026-09-29"
@@ -27,12 +28,21 @@ class LLMClient:
     def __init__(self, provider, budget):
         self.provider = provider
         self.budget = budget
+        # Kill switch: once the budget says no, no more model calls this run;
+        # the pipeline switches to code templates.
+        self.killed = False
 
     def complete(self, prompt, *, max_output_tokens, system=None):
         model = self.provider.model
+        if self.killed:
+            raise BudgetExceeded("kill switch: the budget stopped model calls")
         input_tokens = self.provider.count_tokens(prompt, system)
         # Raises BudgetExceeded (and logs a blocked row) before any paid call.
-        self.budget.precheck(model, input_tokens, max_output_tokens)
+        try:
+            self.budget.precheck(model, input_tokens, max_output_tokens)
+        except BudgetExceeded:
+            self.killed = True
+            raise
         response = self.provider.generate(prompt, system, max_output_tokens)
         self.budget.charge(model, response.input_tokens, response.output_tokens)
         log.info("llm call %s", self.budget.ledger[-1])
@@ -51,6 +61,7 @@ def from_env(env=None):
             api_key=env.get("GEMINI_API_KEY"),
             model=env.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
             rpm=float(env.get("GEMINI_RPM", DEFAULT_GEMINI_RPM)),
+            timeout_s=float(env.get("GEMINI_TIMEOUT_S", DEFAULT_GEMINI_TIMEOUT_S)),
         )
     elif provider_name == "foundry":
         provider = FoundryProvider(

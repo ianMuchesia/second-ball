@@ -443,3 +443,50 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   produced them.
 - More soft predictions: knockout blow, killer blow, nail in the coffin,
   coup de grace.
+
+## 2026-10-22: Phase 3c (failure recovery, tracing, recaps, live narrator)
+
+- Live narrator (agents/live/): Phase 3 had no path from the stream to the
+  agents; this is it. Consumes match-events (group "narrator", from "latest":
+  a live broadcast starts now), runs the detector, airs a stat card for every
+  moment, narrates moments with importance >= 0.7 (goals 1.0, red card 0.9,
+  big chances 0.7) for both personas, one at a time (the model's request
+  limit), most important first, and skips a moment that is already stale
+  before any model call. Recaps at the start of the second half and at
+  MatchEnd. Every overlay status change goes to the "overlays" topic (and a
+  JSONL file with --out). Restart: in-memory dedupe of event ids; state is
+  not rebuilt from Postgres yet (the interpreter's store could do it later).
+- Freshness counts from when a moment FIRED (Moment.clock), not from its
+  evidence: a red card's impact fires minutes after the card by design.
+- FINDING for Ian, not changed: at 10x the one-narrative-per-45 s rule is 7.5
+  match minutes, so a goal 4 minutes after an aired big chance expires in the
+  queue (both demo goals do, at 10x). At 1x both air. Options: let importance
+  >= 0.9 (goals, red cards) jump the gap; or scale the gap differently from
+  freshness. Ian's call.
+- Recovery (agents/pipeline/resilience.py): per-call time budget by role
+  (analyst 10 s, narrator 8 s, localizer 8 s, recap 15 s); timeout, 429, 5xx
+  and network errors -> one retry after 2 s (exponential); 400 -> no retry;
+  no answer -> code (Insight, template line, language dropped). Retrying a
+  line the model could not produce at all is skipped: straight to the
+  template. BudgetExceeded trips LLMClient.killed: no model call for the rest
+  of the run. narrate() catches anything left: the template, English only.
+  An empty line and a line over 25 words are Verifier rejections.
+- A timed-out model call keeps running in its thread; it is still charged to
+  the budget when it returns (the precheck already passed). Acceptable.
+- ProviderError (agents/llm/base.py) is what every provider raises: Gemini's
+  APIError and httpx errors are mapped (retryable = 408/429/5xx/network).
+  Gemini HTTP timeout: GEMINI_TIMEOUT_S, default 20 s.
+- MCP in the pipeline: the Analyst reads the events before the moment with
+  get_sequence through the in-process MCP server (its tool layer, validation
+  and errors), shown without coordinates. Tool error: one retry, then on
+  without it.
+- Tracing: OpenTelemetry SDK + OTLP/HTTP exporter (new dependencies:
+  opentelemetry-sdk, opentelemetry-exporter-otlp-proto-http, for traces to
+  Jaeger now and App Insights later). Jaeger is a compose service under the
+  "tracing" profile, so `make up` does not start it. Azure exporter: env
+  var path exists, package added in Phase 7.
+- Recaps: input only aired lines (with their tasks' counts) and the
+  MatchState (xG, shots, big chances per team). The Verifier allows the stats
+  and the aired lines' values; at full time soft "predictions" ("sealed the
+  win") are facts and allowed; max 60 words; template fallback uses only the
+  score, shots or xG and the most important aired line.

@@ -176,8 +176,17 @@ def values_block(task: NarrationTask, values: dict[str, float]) -> str:
     return "VALUES: " + json.dumps(block)
 
 
-def analyst_prompt(task: NarrationTask, values: dict[str, float]) -> str:
-    return f"Moment: {task.moment.kind}.\n{values_block(task, values)}"
+def analyst_prompt(
+    task: NarrationTask, values: dict[str, float], sequence: list[str] = ()
+) -> str:
+    seq = (
+        "SEQUENCE (the events just before, oldest first):\n"
+        + "\n".join(f"- {x}" for x in sequence)
+        + "\n"
+        if sequence
+        else ""
+    )
+    return f"Moment: {task.moment.kind}.\n{seq}{values_block(task, values)}"
 
 
 def narrator_system(persona: str) -> str:

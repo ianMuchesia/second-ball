@@ -56,6 +56,7 @@ class Draft(Part):
     text: str
     attempt: int  # 1 = first try; at most 3 (two retries)
     history: list["Verdict"] = Field(default_factory=list)  # earlier attempts
+    unavailable: bool = False  # the model gave no answer (timeout, error, budget)
 
 
 class Verdict(Part):

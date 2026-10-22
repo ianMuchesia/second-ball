@@ -100,7 +100,8 @@ COMMON_WORDS = """
     full fullback full-back striker midfield centre center left right wide deep high
     big huge great brilliant superb lovely clinical quick fast sharp clever simple
     unbelievable incredible remarkable another familiar same pattern again lightning
-    leading trailing level down
+    leading trailing level down half-time full-time halftime fulltime kick-off
+    whistle recap shots xg
     home away side sides team teams players player everyone nobody somebody
     """
 COMMON = set(COMMON_WORDS.split())
@@ -454,9 +455,25 @@ def wrong_numbers(text: str, analysis: Analysis) -> list[str]:
     return out
 
 
-def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdict:
-    """`examples`: the Narrator's style examples, which a line must not copy."""
+MAX_WORDS = 25  # one on-screen line
+
+
+def verify(
+    text: str,
+    analysis: Analysis,
+    examples: Sequence[str] = (),
+    *,
+    max_words: int = MAX_WORDS,
+    final: bool = False,
+) -> Verdict:
+    """`examples`: the Narrator's style examples, which a line must not copy.
+    `final`: the match is over (full-time recap), so "sealed the win" is a fact,
+    not a prediction."""
+    if not text.strip():
+        return Verdict(passed=False, reasons=["the line is empty"])
     reasons = wrong_numbers(text, analysis)
+    if len(text.split()) > max_words:
+        reasons.append(f"too long: at most {max_words} words")
     if analysis.task.persona == "casual" and any(d for _, d, _ in numbers(text)):
         reasons.append(
             "casual line: no index numbers or decimals; say it in words "
@@ -471,7 +488,7 @@ def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdi
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):
         reasons.append("no predictions: describe what happened, not what will happen")
-    if SOFT_PREDICTION.search(text):
+    if SOFT_PREDICTION.search(text) and not final:
         reasons.append(
             "no predictions: the match is not over, so nothing is sealed, "
             "secured or over yet"

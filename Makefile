@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate
+.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate live jaeger eval-narration eval-latency
 
 help:
 	@echo "Targets:"
@@ -18,6 +18,10 @@ help:
 	@echo "  eval-moments  moment detector vs the demo's answer key + 50 free matches -> docs/EVAL.md"
 	@echo "  mcp     football MCP server (stdio) over demo/match.jsonl"
 	@echo "  narrate  demo big moments through the real model in .env (set MAX_RUN_USD)"
+	@echo "  live    live narrator + replay: MATCH=demo SPEED=10 -> overlays topic + docs/overlays/"
+	@echo "  jaeger  start Jaeger for traces (then OTEL_EXPORTER=otlp), UI :16686"
+	@echo "  eval-narration  repeat runs: first-pass/retry/fallback rates -> docs/EVAL.md"
+	@echo "  eval-latency    live demo at SPEED, p50/p95 per stage -> docs/EVAL.md"
 
 up:
 	docker compose up -d
@@ -77,3 +81,20 @@ mcp:
 narrate:
 	@test -f demo/match.jsonl || $(MAKE) demo
 	uv run python -m scripts.narrate_demo
+
+live:
+	@test "$(MATCH)" != demo || test -f demo/match.jsonl || $(MAKE) demo
+	uv run python -m agents.live --speed $(SPEED) --exit-on-end \
+		--out docs/overlays/$(basename $(notdir $(MATCH_FILE))).jsonl & pid=$$!; \
+		uv run python -m stream.replayer $(MATCH_FILE) --speed $(SPEED) \
+			--wait-for-group narrator && wait $$pid
+
+jaeger:
+	docker compose --profile tracing up -d jaeger
+
+eval-narration:
+	uv run python -m evals.narration.report --runs 10 --translation-runs 2
+
+eval-latency:
+	@test -f demo/match.jsonl || $(MAKE) demo
+	uv run python -m evals.latency.report --speed $(SPEED)

@@ -7,6 +7,8 @@ dependencies = [
     "confluent-kafka>=2.6",
     "google-genai>=2.31.0",
     "mcp>=2.3,<3",
+    "opentelemetry-exporter-otlp-proto-http==1.45.1",
+    "opentelemetry-sdk==1.45.1",
     "psycopg[binary]>=3.2",
     "pyarrow>=26.0.0",
     "pydantic>=2",

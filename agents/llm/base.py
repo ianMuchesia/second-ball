@@ -10,6 +10,19 @@ class LLMResponse:
     output_tokens: int
 
 
+class ProviderError(Exception):
+    """A model call failed. retryable: worth trying again after a pause (rate
+    limit, server error, network); not: a bad request, an auth error."""
+
+    def __init__(self, message: str, *, retryable: bool, status: int | None = None):
+        super().__init__(message)
+        self.retryable = retryable
+        self.status = status
+
+
+RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+
+
 class Provider(Protocol):
     name: str
     model: str

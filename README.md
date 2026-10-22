@@ -34,4 +34,24 @@ make replay MATCH=demo SPEED=10                                  # demo through 
 
 See [docs/DATASHEET.md](docs/DATASHEET.md) and [docs/DATA_REALISM.md](docs/DATA_REALISM.md).
 
+## Live narration
+
+```sh
+make live MATCH=demo SPEED=10     # replay -> Kafka -> moments -> agents -> overlays (topic + docs/overlays/)
+make jaeger                       # then OTEL_EXPORTER=otlp: one trace per moment at http://localhost:16686
+make narrate                      # the demo's big moments through the model in .env
+make eval-narration eval-latency  # repeat-run rates and p50/p95 per stage -> docs/EVAL.md
+```
+
+Code computes every number; agents only choose words, and a code Verifier
+checks every line before it can air. It catches what a number check alone
+misses: **the right number on the wrong team** ("Harbour's control 0.80"
+when the 0.80 is Riverside's), the wrong team said to be leading, counts in
+words ("one pass", "second counter goal") that the events do not show,
+"halved" when the change is not about half, decimals in a fan's line, soft
+predictions ("seal it") while the clock runs, and translations that change a
+number. Rejected drafts are kept with their reasons. If the model is slow,
+down or over budget, a code template airs instead: never an empty overlay.
+Details: [agents/README.md](agents/README.md).
+
 Rules for coding agents: [AGENTS.md](AGENTS.md). Decisions: [DECISIONS.md](DECISIONS.md).

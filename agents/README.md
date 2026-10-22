@@ -53,3 +53,50 @@ Moment -> Analyst -> Narrator -> Verifier -+-> Localizer -> Overlay (pending) ->
   switch). `LLM_PROVIDER=fake` is a free, deterministic model for tests, with
   error injection (`FakeProvider(errors=1, error="wrong_number")`).
 - **Narrator voice:** `agents/narrator/examples.yaml` (Ian's lines).
+
+## What the Verifier checks (Phases 3b-2, 3b-3)
+
+Every line, in code, against code-made values, facts and counts
+(`agents/pipeline/facts.py`):
+
+- numbers (with the line's rounding, or as a %) and **who they belong to**
+  (another team's control or xG is rejected);
+- who is leading or trailing (the score decides);
+- counts in words or digits before a football noun ("one pass", "ten men",
+  "second counter goal", "twice") against passes in the move, players on the
+  pitch, goals and counter goals;
+- comparisons ("halved", "doubled", "up by a third") within 10% of a real
+  before/after change;
+- persona: no decimals in a casual line;
+- a goal from a counter behind the full-back (the detector's own rule, run on
+  the goal's move) must name the counter and the side;
+- names (teams and players on the pitch only), predictions including soft
+  ones ("seal it", "game over"), weather blame, copying a style example;
+- injury/referee talk: allowed only after a human approves (risk tier high).
+
+Translations (French, Spanish, Swahili, Arabic) see names, scores and numbers
+as locked tokens and are checked again in code.
+
+## Failure recovery, tracing, recaps, live (Phase 3c)
+
+- **Recovery** (`pipeline/resilience.py`): a time budget per agent call; a
+  timeout, 429 or 5xx gets one retry after a pause (on top of Gemini's own
+  pacing and retries); a bad request is not retried. No answer -> code:
+  Analyst -> code Insight, Narrator -> template line, Localizer -> that
+  language dropped. An MCP tool error: one retry, then the Analyst goes on
+  without it. The budget kill switch stops all model calls; templates only.
+  Fake-model failure modes test each path (`tests/unit/test_resilience.py`).
+- **Tracing** (`agents/telemetry.py`, OpenTelemetry): one trace per moment:
+  `moment -> narrate -> analyst (mcp.get_sequence, llm.analyst) -> narrator
+  -> verifier (passed, reasons) -> localizer.<lang> -> producer.offer`, and
+  `producer.air` / `producer.expire` join it later. Spans carry latency,
+  tokens and cost. `OTEL_EXPORTER=console|otlp|azure` (azure: Phase 7).
+- **Recaps** (`pipeline/recap.py`): half-time and full-time, casual and
+  analyst, from aired (verified) lines and the MatchState only; checked by
+  the Verifier ("sealed the win" is allowed only at full time); template
+  fallback; saved as overlays with evidence.
+- **Live** (`agents/live/`): consumes `match-events`, runs the detector,
+  stat cards at once, narrates moments with importance >= 0.7 (most
+  important first; already-stale moments skipped before any model call),
+  recaps at half-time and full-time, publishes every overlay status change
+  to the `overlays` topic.
