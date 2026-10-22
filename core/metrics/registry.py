@@ -10,16 +10,19 @@ from dataclasses import dataclass
 from typing import Literal
 
 from core.contracts import MetricValue
-from core.metrics import basic, chaos
+from core.metrics import basic, chaos, play, positional
 from core.metrics.events import Events
 
-Grain = Literal["match", "team", "player", "window"]
+Grain = Literal["match", "team", "player", "window", "event"]
 Frame = Literal["SPADL", "broadcast"]
 Persona = Literal["analyst", "casual"]
 
 # Rolling windows in minutes; None = the whole match so far.
 WINDOWS: tuple[int | None, ...] = (None, 5, 10, 15)
 MATCH_KEY = "match"  # MatchState.metrics key for match-grain metrics
+EVENT_KEY = (
+    "last_event"  # MatchState.metrics key: event-grain values of the latest event
+)
 
 
 @dataclass(frozen=True)
@@ -39,7 +42,17 @@ class Metric:
         """Reference to the one function that computes it."""
         return f"{self.fn.__module__}.{self.fn.__name__}"
 
+    def compute_event(self, events: Events, i: int):
+        """Event-grain metrics: the value for event i."""
+        return self.fn(events, i)
+
     def compute(self, events: Events, team: str | None = None, minutes=None):
+        if self.grain == "event":  # its value for the latest event
+            return (
+                self.compute_event(events, len(events.items) - 1)
+                if events.items
+                else None
+            )
         lo = start_index(events, minutes)
         if lo is None:
             return None
@@ -273,6 +286,381 @@ METRICS: dict[str, Metric] = {
             fn=chaos.loose_balls,
             windows=(None, 10),
         ),
+        Metric(
+            name="pressure",
+            definition="Pressure on the player on the ball (0-1): nearby opponents, doubled in front or goal-side.",
+            grain="event",
+            unit="index 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Pressure on the ball",
+                "casual": "How hard he is pressed",
+            },
+            fn=positional.pressure,
+            windows=(None,),
+        ),
+        Metric(
+            name="risk",
+            definition="How costly losing the ball here would be (0-1): high near his own goal, about 0 when his team has the upper hand in the final third.",
+            grain="event",
+            unit="index 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Risk of losing it here",
+                "casual": "How dangerous a mistake here would be",
+            },
+            fn=positional.risk,
+            windows=(None,),
+        ),
+        Metric(
+            name="options",
+            definition="Teammates with a clear passing lane (no opponent within 2 m), not clearly offside.",
+            grain="event",
+            unit="count",
+            frame="SPADL",
+            display_name={
+                "analyst": "Safe passing options",
+                "casual": "Free teammates to pass to",
+            },
+            fn=positional.options,
+            windows=(None,),
+        ),
+        Metric(
+            name="facing_own_goal",
+            definition="1 if the player on the ball faces his own goal (120-240 degrees).",
+            grain="event",
+            unit="flag",
+            frame="SPADL",
+            display_name={
+                "analyst": "Facing own goal",
+                "casual": "Facing his own goal",
+            },
+            fn=positional.facing_own_goal,
+            windows=(None,),
+        ),
+        Metric(
+            name="bad_situation",
+            definition="1 if risk >= 0.6, facing own goal, and pressure >= 0.5 or no safe option.",
+            grain="event",
+            unit="flag",
+            frame="SPADL",
+            display_name={
+                "analyst": "Danger on the ball",
+                "casual": "In trouble on the ball",
+            },
+            fn=positional.bad_situation,
+            windows=(None,),
+        ),
+        Metric(
+            name="lines_broken",
+            definition="Defending lines a pass crosses going forward (up to 3 lines from the freeze frame).",
+            grain="event",
+            unit="count",
+            frame="SPADL",
+            display_name={
+                "analyst": "Lines broken",
+                "casual": "Lines the pass cut through",
+            },
+            fn=positional.lines_broken,
+            windows=(None,),
+        ),
+        Metric(
+            name="line_gap",
+            definition="Metres between the defending team's back line and midfield line.",
+            grain="event",
+            unit="metres",
+            frame="SPADL",
+            display_name={
+                "analyst": "Back-midfield line gap",
+                "casual": "Space between their defence and midfield",
+            },
+            fn=positional.line_gap,
+            windows=(None,),
+        ),
+        Metric(
+            name="overload",
+            definition="Danger-weighted overload around the ball: attackers minus defenders >= 1 in a box 20 m ahead and 10 m behind in the ball's lane (numerator attackers, denominator defenders).",
+            grain="event",
+            unit="danger 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Overload",
+                "casual": "Outnumbering them near the ball",
+            },
+            fn=positional.overload,
+            windows=(None,),
+        ),
+        Metric(
+            name="xt_added",
+            definition="Expected threat added by this pass or carry.",
+            grain="event",
+            unit="xT",
+            frame="SPADL",
+            display_name={"analyst": "xT added", "casual": "Danger added by this move"},
+            fn=play.xt_added,
+            windows=(None,),
+        ),
+        Metric(
+            name="pass_difficulty",
+            definition="Pass difficulty 0-100 (docs/metrics/pass_difficulty.md).",
+            grain="event",
+            unit="score 0-100",
+            frame="SPADL",
+            display_name={
+                "analyst": "Pass difficulty",
+                "casual": "How hard that pass was",
+            },
+            fn=play.pass_difficulty,
+            windows=(None,),
+        ),
+        Metric(
+            name="ball_speed",
+            definition="Ball speed of a pass or shot.",
+            grain="event",
+            unit="km/h",
+            frame="SPADL",
+            display_name={"analyst": "Ball speed", "casual": "Ball speed"},
+            fn=play.ball_speed,
+            windows=(None,),
+        ),
+        Metric(
+            name="name_tag",
+            definition="1 when a shot is at least 100 km/h or a pass at least 40 m: show the player's name.",
+            grain="event",
+            unit="flag",
+            frame="SPADL",
+            display_name={"analyst": "Name-tag trigger", "casual": "Show who it was"},
+            fn=play.name_tag,
+            windows=(None,),
+        ),
+        Metric(
+            name="final_third_pressures",
+            definition="Opponent touches in their own third made under pressure, per minute.",
+            grain="team",
+            unit="per minute",
+            frame="SPADL",
+            display_name={
+                "analyst": "Final-third pressures / min",
+                "casual": "Pressing high up the pitch",
+            },
+            fn=play.final_third_pressures,
+        ),
+        Metric(
+            name="high_turnovers",
+            definition="Balls won in open play within 40 m of the opponent's goal.",
+            grain="team",
+            unit="count",
+            frame="SPADL",
+            display_name={"analyst": "High turnovers", "casual": "Balls won high up"},
+            fn=play.high_turnovers,
+        ),
+        Metric(
+            name="counterpress_regains",
+            definition="Share of balls lost in open play won back within 5 seconds.",
+            grain="team",
+            unit="share 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Counter-press regains (5 s)",
+                "casual": "Winning it straight back",
+            },
+            fn=play.counterpress_regains,
+        ),
+        Metric(
+            name="actions_per_minute",
+            definition="On-ball actions per minute of the team's own possession.",
+            grain="team",
+            unit="per minute",
+            frame="SPADL",
+            display_name={
+                "analyst": "Actions / min in possession",
+                "casual": "Tempo on the ball",
+            },
+            fn=play.actions_per_minute,
+        ),
+        Metric(
+            name="seconds_between_actions",
+            definition="Median in-play seconds between consecutive events.",
+            grain="match",
+            unit="seconds",
+            frame="SPADL",
+            display_name={
+                "analyst": "Seconds between actions",
+                "casual": "Pace of the game",
+            },
+            fn=play.seconds_between_actions,
+        ),
+        Metric(
+            name="momentum",
+            definition="Exponentially weighted xT added, home minus away (half-life 3 minutes); above 0 the home team is on top.",
+            grain="match",
+            unit="xT",
+            frame="SPADL",
+            display_name={
+                "analyst": "Momentum (xT, home - away)",
+                "casual": "Who is on top right now",
+            },
+            fn=play.momentum,
+            windows=(None,),
+        ),
+        Metric(
+            name="xt_added_total",
+            definition="Net expected threat added by the team's successful passes and carries (numerator xT, denominator moves).",
+            grain="team",
+            unit="xT",
+            frame="SPADL",
+            display_name={
+                "analyst": "xT added",
+                "casual": "Danger created by passing and carrying",
+            },
+            fn=play.team_xt_added,
+        ),
+        Metric(
+            name="big_chances",
+            definition="Shots with xG of at least 0.3.",
+            grain="team",
+            unit="count",
+            frame="SPADL",
+            display_name={"analyst": "Big chances", "casual": "Big chances"},
+            fn=play.big_chances,
+        ),
+        Metric(
+            name="pass_distance",
+            definition="Average pass length.",
+            grain="team",
+            unit="metres",
+            frame="SPADL",
+            display_name={
+                "analyst": "Average pass length",
+                "casual": "How far they pass",
+            },
+            fn=play.pass_distance,
+        ),
+        Metric(
+            name="pass_accuracy",
+            definition="Completed passes divided by passes.",
+            grain="team",
+            unit="share 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Pass accuracy",
+                "casual": "Passes that found a teammate",
+            },
+            fn=play.pass_accuracy,
+        ),
+        Metric(
+            name="lines_broken_per_pass",
+            definition="Defending lines crossed per completed pass.",
+            grain="team",
+            unit="lines per pass",
+            frame="SPADL",
+            display_name={
+                "analyst": "Lines broken per pass",
+                "casual": "Passing through the lines",
+            },
+            fn=play.lines_broken_per_pass,
+        ),
+        Metric(
+            name="pass_difficulty_mean",
+            definition="Average difficulty (0-100) of the team's passes.",
+            grain="team",
+            unit="score 0-100",
+            frame="SPADL",
+            display_name={
+                "analyst": "Average pass difficulty",
+                "casual": "How hard their passes are",
+            },
+            fn=play.mean_pass_difficulty,
+        ),
+        Metric(
+            name="fastest_shot",
+            definition="Fastest shot.",
+            grain="team",
+            unit="km/h",
+            frame="SPADL",
+            display_name={"analyst": "Fastest shot", "casual": "Hardest shot"},
+            fn=play.fastest_shot,
+        ),
+        Metric(
+            name="name_tags",
+            definition="Fast shots (100+ km/h) and long passes (40+ m).",
+            grain="team",
+            unit="count",
+            frame="SPADL",
+            display_name={
+                "analyst": "Name-tag moments",
+                "casual": "Standout strikes and passes",
+            },
+            fn=play.name_tags,
+        ),
+        Metric(
+            name="bad_situations",
+            definition="Times the team's player on the ball met the bad_situation rule (Ian's spec).",
+            grain="team",
+            unit="count",
+            frame="SPADL",
+            display_name={
+                "analyst": "Dangerous moments on the ball",
+                "casual": "Times caught in trouble",
+            },
+            fn=positional.bad_situations,
+        ),
+        Metric(
+            name="pressure_on_ball",
+            definition="Average pressure on the team's player on the ball (0-1).",
+            grain="team",
+            unit="index 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Average pressure on the ball",
+                "casual": "How much they are being pressed",
+            },
+            fn=positional.mean_pressure_on_ball,
+        ),
+        Metric(
+            name="defensive_line_gap",
+            definition="Average metres between the team's back line and midfield line while defending.",
+            grain="team",
+            unit="metres",
+            frame="SPADL",
+            display_name={
+                "analyst": "Back-midfield gap (defending)",
+                "casual": "Space between their defence and midfield",
+            },
+            fn=positional.team_line_gap,
+        ),
+        Metric(
+            name="overloads",
+            definition="Danger-weighted overloads the team created on the ball.",
+            grain="team",
+            unit="danger",
+            frame="SPADL",
+            display_name={"analyst": "Overloads", "casual": "Outnumbering them"},
+            fn=positional.overloads,
+        ),
+        Metric(
+            name="upper_hand",
+            definition="0 none, 1 upper hand (10+ final-third touches, 2+ shots, constant pressure), 2 strong (also xG 0.5+).",
+            grain="team",
+            unit="level 0-2",
+            frame="SPADL",
+            display_name={"analyst": "Upper hand", "casual": "Who is on top"},
+            fn=positional.upper_hand,
+            windows=(5, 10, 15, 20, 30),
+        ),
+        Metric(
+            name="upper_hand_checkpoint",
+            definition="Upper hand in the last completed fixed 10-minute block (0-10, 10-20, ...).",
+            grain="team",
+            unit="level 0-2",
+            frame="SPADL",
+            display_name={
+                "analyst": "Upper hand (10-min checkpoint)",
+                "casual": "Who was on top in that spell",
+            },
+            fn=positional.upper_hand_checkpoint,
+            windows=(None,),
+        ),
     ]
 }
 
@@ -285,16 +673,26 @@ def compute_all(events: Events) -> dict[str, dict[str, MetricValue]]:
     """Every metric, every window: metrics[team_id or "match"][key]."""
     out: dict[str, dict[str, MetricValue]] = {t: {} for t in events.teams}
     out[MATCH_KEY] = {}
-    for minutes in WINDOWS:
-        lo = start_index(events, minutes)
-        if lo is None:
+    starts = {}
+    for m in METRICS.values():
+        if m.grain == "event":
             continue
-        for m in METRICS.values():
-            if minutes not in m.windows:
+        for minutes in m.windows:
+            if minutes not in starts:
+                starts[minutes] = start_index(events, minutes)
+            lo = starts[minutes]
+            if lo is None:
                 continue
             owners = [MATCH_KEY] if m.grain == "match" else list(events.teams)
             for owner in owners:
                 v = m.fn(events, lo, None if owner == MATCH_KEY else owner)
                 if v is not None:
                     out[owner][key(m.name, minutes)] = v
+    if events.items:
+        last = len(events.items) - 1
+        out[EVENT_KEY] = {
+            m.name: v
+            for m in METRICS.values()
+            if m.grain == "event" and (v := m.fn(events, last)) is not None
+        }
     return out

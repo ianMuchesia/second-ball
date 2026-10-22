@@ -67,6 +67,9 @@ class Events:
     items: list[MatchEvent] = field(default_factory=list)
     elapsed: list[float] = field(default_factory=list)
     owner: dict[str, str] = field(default_factory=dict)  # possession_id -> team
+    # Per-event results of pure functions, keyed (metric, event_id): an event's
+    # value never changes once the events before it are fixed.
+    cache: dict = field(default_factory=dict)
     _defensive_only: set[str] = field(default_factory=set)
     _period: int = 1
     _offset: float = 0.0
@@ -108,6 +111,17 @@ class Events:
             (match.home_team, match.away_team),
             events,
             (match.home_strength, match.away_strength),
+        )
+
+    def upto(self, n: int) -> "Events":
+        """A view of the first n events (for per-event metrics that look back)."""
+        return Events(
+            teams=self.teams,
+            strengths=self.strengths,
+            items=self.items[:n],
+            elapsed=self.elapsed[:n],
+            owner=self.owner,
+            cache=self.cache,
         )
 
     def now(self) -> float:
