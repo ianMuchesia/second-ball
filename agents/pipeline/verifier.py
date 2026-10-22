@@ -4,9 +4,13 @@
   line uses, e.g. "0.7" or "71%" for 0.712) or the match context (score,
   minutes, players on the pitch, shirt numbers).
 - Every capitalised name must be a team or a player on the pitch.
-- Rejected outright: predictions ("will win"), and blaming one event on the
-  weather.
+- Rejected outright: predictions ("will win", and soft ones that treat the
+  match as over: "seal it", "secure the 0-2", "game over"), and blaming one
+  event on the weather.
+- When code says how a goal was made (facts: build_up, side), the line must
+  name the counter and the side.
 - Saying the wrong team leads (or trails) is rejected: the score decides.
+- Giving one team's numbers (control, xG) to the other is rejected.
 - A line too close to one of the style examples is rejected (copied).
 - Injuries and the referee are not rejected but raise the risk tier to high:
   a human must approve before the line airs.
@@ -24,6 +28,36 @@ WORD = re.compile(r"[A-Za-z][A-Za-z'\-]*")
 PREDICTION = re.compile(
     r"\b(will|going to|gonna|bound to|certain to|sure to|set to)\s+"
     r"(win|lose|score|concede|draw|go on|take|come back|hold on)",
+    re.IGNORECASE,
+)
+# Finality verbs and idioms: the clock is still running.
+SOFT_PREDICTIONS = [
+    (
+        r"\b(seal|seals|sealed|sealing)\s+"
+        r"(it|the\s+(win|game|match|points|victory|result|\d+-\d+))\b"
+    ),
+    (
+        r"\b(secure|secures|secured|securing)\s+"
+        r"(it|the\s+(win|game|match|points|victory|result|\d+-\d+))\b"
+    ),
+    r"\b(wrap|wraps|wrapped)\s+(it\s+up|up\s+the\s+(win|points|game|match|victory))\b",
+    (
+        r"\b(put|puts|putting)\s+(it|the\s+game|the\s+match|the\s+result)\s+"
+        r"(to\s+bed|beyond\s+doubt|out\s+of\s+reach)\b"
+    ),
+    (
+        r"\b(clinch|clinches|clinched|lock\s+in|locks\s+in)\s+"
+        r"(it|the\s+(win|points|victory|match))\b"
+    ),
+    r"\b(bag|bags|bagged)\s+the\s+(win|points|victory)\b",
+    (
+        r"\b(game\s+over|all\s+over|done\s+and\s+dusted|no\s+way\s+back|"
+        r"unassailable|insurmountable|surely\s+won|that\s+is\s+that|that's\s+that)\b"
+    ),
+]
+SOFT_PREDICTION = re.compile("|".join(SOFT_PREDICTIONS), re.IGNORECASE)
+COUNTER_WORDS = re.compile(
+    r"\b(counter|counters|counter-attack|counterattack|break|breakaway)\b",
     re.IGNORECASE,
 )
 WEATHER_CAUSE = re.compile(
@@ -59,11 +93,19 @@ COMMON_WORDS = """
     full fullback full-back striker midfield centre center left right wide deep high
     big huge great brilliant superb lovely clinical quick fast sharp clever simple
     unbelievable incredible remarkable another familiar same pattern again lightning
+    leading trailing level down
     home away side sides team teams players player everyone nobody somebody
     """
 COMMON = set(COMMON_WORDS.split())
-LEADS = r"(?:'s)?\s+(?:are\s+|now\s+|still\s+)?(lead|leads|leading|ahead|in front)\b"
-TRAILS = r"(?:'s)?\s+(?:are\s+|now\s+|still\s+)?(trail|trails|trailing)\b"
+# "Harbour lead", "Harbour are leading": the team is the subject. A bare
+# participle ("against Harbour trailing 0-1") is not read as a claim, nor is
+# "behind" (that is usually space: "behind the left-back").
+LEADS = r"(?:'s)?\s+(?:(?:now|still)\s+)?(lead|leads|ahead|in\s+front|(?:are|is)\s+(?:now\s+|still\s+)?leading)\b"
+TRAILS = r"\s+(?:(?:now|still)\s+)?(trail|trails|(?:are|is)\s+(?:now\s+|still\s+)?trailing)\b"
+# Metrics that belong to one team: "Harbour's control" when the numbers are
+# Riverside's is wrong. (Pressure is left out: pressure on Riverside's ball is
+# applied by Harbour, so either team's name can be right.)
+OWNED = {"control": "control", "xg": "xG", "threat": "threat", "momentum": "momentum"}
 COPY_LIMIT = 0.8  # word overlap (Jaccard) with a style example that counts as a copy
 # Common English words that should not survive a translation; 2 or more means
 # the Localizer answered (partly) in English.
@@ -151,9 +193,47 @@ def score_mistakes(text: str, analysis: Analysis) -> list[str]:
     return [
         f"wrong about the score: it is {score}, so {ctx.team_names[team]} "
         f"{'do not lead' if leads else 'are not behind'}"
-        for team, leads in claims
+        for team, leads in dict.fromkeys(claims)
         if (leader == team) != leads
     ]
+
+
+def wrong_owner(text: str, analysis: Analysis) -> list[str]:
+    """'Harbour's control' when the moment's numbers are Riverside's."""
+    ctx = analysis.task.context
+    team = analysis.task.moment.team
+    if team not in (ctx.home, ctx.away):
+        return []
+    other = ctx.away if team == ctx.home else ctx.home
+    keys = {k.split("_")[0].lower() for k in analysis.values}
+    out = []
+    for key, word in OWNED.items():
+        if key in keys and re.search(
+            rf"\b{re.escape(ctx.team_names[other])}'s\s+(\w+\s+)?{word}\b",
+            text,
+            re.IGNORECASE,
+        ):
+            out.append(
+                f"the {word} numbers are {ctx.team_names[team]}'s, "
+                f"not {ctx.team_names[other]}'s"
+            )
+    return out
+
+
+def missing_cause(text: str, analysis: Analysis) -> list[str]:
+    """A goal code knows came from a counter behind a full-back must say so."""
+    facts = analysis.task.facts
+    if "build_up" not in facts:
+        return []
+    out = []
+    if not COUNTER_WORDS.search(text):
+        out.append("say it came from a counter (the build_up in facts)")
+    side = facts.get("side", "")
+    if not re.search(
+        rf"\b{side}[\s-]*(back|side|flank|channel|wing)\b", text, re.IGNORECASE
+    ):
+        out.append(f"name the zone: {facts['exploited_zone']}")
+    return out
 
 
 def words_of(text: str) -> set[str]:
@@ -202,6 +282,13 @@ def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdi
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):
         reasons.append("no predictions: describe what happened, not what will happen")
+    if SOFT_PREDICTION.search(text):
+        reasons.append(
+            "no predictions: the match is not over, so nothing is sealed, "
+            "secured or over yet"
+        )
+    reasons += missing_cause(text, analysis)
+    reasons += wrong_owner(text, analysis)
     if WEATHER_CAUSE.search(text):
         reasons.append("do not blame a single event on the weather")
     risky = bool(RISKY.search(text))

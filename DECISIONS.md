@@ -391,3 +391,21 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   "kimatibabu", medical).
 - Real run after the fixes: all lines right about who leads and who the red
   card helps; one invented number (0.45 = 1.73 - 1.28) caught and retried.
+
+## 2026-10-22: goals linked to the counter pattern; soft predictions
+
+- agents/pipeline/facts.py: a goal "came from a counter behind the
+  full-back" only if the move that ended in it passes the detector's own
+  counter rule (core.moments, reused as is, not copied; core/ untouched).
+  Facts reach the prompt (build_up, exploited_zone, and "second counter goal
+  ... in this match"); the Verifier then requires the line to name the
+  counter and the side; the fallback names them too. Demo: both goals,
+  behind Riverside's left-back. 30 free matches: 3 of 90 goals (3%), so the
+  label is rare.
+- Verifier rejects soft predictions (seal it, secure the 0-2, game over, put
+  it beyond doubt, clinch the win ...); "make it 0-2" is allowed.
+- Verifier rejects one team's control/xG/threat/momentum given to the other
+  (pressure is left out: Harbour apply the pressure on Riverside's ball).
+- Leader check reads only clear forms ("Harbour lead", "Harbour are
+  trailing"), not a bare participle after a team that is an object, and not
+  "behind" (space). Verdicts keep the draft text, for evals and debugging.

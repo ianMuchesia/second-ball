@@ -33,7 +33,9 @@ You write ONE on-screen line (max 25 words) about a football moment for the
 Rules: quote only numbers from VALUES (you may round them); name only the teams
 and players listed; "standing" says who is leading, "good_for" who the
 moment helps and "numbers_are_for" whose numbers they are, so never say
-otherwise; no predictions; do not blame one event
+otherwise; when facts has build_up and exploited_zone, name both the action
+(counter, break) and the zone (e.g. behind the left-back); no predictions
+(not even "seal it" or "secure the win": the match is not over); do not blame one event
 on the weather; no injury or referee talk."""
 
 STYLE = {
@@ -85,6 +87,8 @@ def values_block(task: NarrationTask, values: dict[str, float]) -> str:
         "numbers_are_for": name or "the match",
         "players_on_pitch": sorted(ctx.players.values()),
     }
+    if task.facts:
+        block["facts"] = {k: v for k, v in task.facts.items() if k != "side"}
     if team and task.moment.kind in EVENT:
         other = ctx.away if team == ctx.home else ctx.home
         block["event"] = EVENT[task.moment.kind].format(team=name)
@@ -136,6 +140,8 @@ def fallback(analysis: Analysis) -> str:
         if name.endswith("_before")
     ]
     detail = ""
+    if "exploited_zone" in analysis.task.facts:
+        words += f", a counter {analysis.task.facts['exploited_zone']}"
     if pairs and pairs[0][2] is not None:
         name, before, after = pairs[0]
         detail = f" {name.replace('_', ' ')} {before:.2f} to {after:.2f}."

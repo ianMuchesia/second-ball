@@ -130,7 +130,7 @@ class VerifierExecutor(Executor):
     async def check(self, draft: Draft, ctx: WorkflowContext[Retry | Approved]) -> None:
         verdict = verify(
             draft.text, draft.analysis, examples(draft.analysis.task.persona)
-        )
+        ).model_copy(update={"text": draft.text})
         history = [*draft.history, verdict]
         if verdict.passed:
             await ctx.send_message(

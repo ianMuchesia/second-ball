@@ -6,6 +6,7 @@ import yaml
 
 from agents.mcp_server.data import MatchData
 from agents.narrator import EXAMPLES, examples
+from agents.pipeline.facts import context_at, facts_for
 from agents.pipeline.models import Analysis, NarrationTask
 from agents.pipeline.verifier import verify
 from agents.pipeline.workflow import values_of
@@ -13,7 +14,6 @@ from core.contracts import Insight
 from engine.core import simulate_match
 from engine.league import load_league
 from engine.scenarios import load_scenario
-from scripts.narrate_demo import context_at
 
 ROWS = yaml.safe_load(EXAMPLES.read_text())["examples"]
 
@@ -41,7 +41,10 @@ def test_line_passes_the_verifier_on_its_moment(demo, row, persona):
         if m.kind == row["kind"] and m.clock.minute == row["minute"]
     ]
     task = NarrationTask(
-        moment=moment, context=context_at(demo, moment), persona=persona
+        moment=moment,
+        context=context_at(demo, moment),
+        persona=persona,
+        facts=facts_for(demo, moment),
     )
     analysis = Analysis(
         task=task,
@@ -56,3 +59,17 @@ def test_line_passes_the_verifier_on_its_moment(demo, row, persona):
     verdict = verify(row[persona], analysis)
     assert verdict.passed, verdict.reasons
     assert len(row[persona].split()) <= 25
+
+
+def test_both_demo_goals_are_counters_behind_the_left_back(demo):
+    goals = [m for m in demo.moments if m.kind == "goal"]
+    facts = [facts_for(demo, m) for m in goals]
+    assert [f.get("exploited_zone") for f in facts] == [
+        "behind Riverside's left-back"
+    ] * 2
+    assert "pattern" not in facts[0]
+    assert facts[1]["pattern"].startswith("second counter goal")
+
+
+def test_moments_other_than_goals_get_no_build_up(demo):
+    assert all(facts_for(demo, m) == {} for m in demo.moments if m.kind != "goal")
