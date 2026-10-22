@@ -8,4 +8,6 @@ PRICES = {
     # Listed at half price until 2026-12-31; the full price is used here.
     "gemini-3.8-flash": {"input_per_m": 1.50, "output_per_m": 7.50},
     "gemini-2.5-flash": {"input_per_m": 0.30, "output_per_m": 2.50},
+    # The fake provider (tests, offline): free, but still goes through the budget.
+    "fake-model": {"input_per_m": 0.0, "output_per_m": 0.0},
 }

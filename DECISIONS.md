@@ -327,3 +327,26 @@ Phase 3b-1 A: answer key and detector (2026-10-22, Ian via the advisor).
 - Eval after the fixes: demo recall 19/19 (Wilson 83-100%), precision 19/44
   = 43% (the key lists the story's big moments only); free matches 64 moments
   per match.
+
+Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
+- Framework: Microsoft Agent Framework, `agent-framework-core` 1.22 (the core
+  package, not the full bundle of integrations). New dependency, why: the
+  brief scores Microsoft agent technology; agents + a typed workflow with a
+  retry edge. Models sit behind our adapter (AdapterChatClient), so every
+  call still passes core/budget.py.
+- New LLM provider "fake" (price 0, still charged through the budget):
+  deterministic, with error injection for tests.
+- Verifier is code. Agent's choices, for Ian to review: numbers match with
+  the line's own rounding (0.7 or 71% for 0.712); allowed context numbers =
+  score, current and moment minute, shirt numbers and player counts on the
+  pitch; any capitalised word that is not a team, a player on the pitch or in
+  a list of common words counts as a name (sentence starts included: the
+  Verifier would rather retry than air an invented player);
+  injury/referee words -> risk tier high (needs a human), not a rejection.
+- Producer times are match seconds; Ian/advisor's 8 s freshness and 45 s gap
+  are viewer seconds, so both scale with replay speed (x10 at 10x).
+- Localizer: target language Swahili ("sw") by default (agent's assumption
+  for a Nairobi audience; Ian to confirm). A translation whose numbers differ
+  from the English line is dropped; English always airs.
+- Narrator examples: placeholder file agents/narrator/examples.yaml; Ian
+  writes the six lines.
