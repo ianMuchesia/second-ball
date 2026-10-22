@@ -280,3 +280,26 @@ Phase 2c: remaining metrics (2026-10-22, Ian via the advisor's prompt).
   Pinned to one CPU core: max latency 0.331 s per-event saving -> 0.132 s
   throttled. Limit unchanged (every event < 1 s); the test also checks that
   saves are throttled.
+
+Phase 3a: moments + MCP server (2026-10-22, Ian).
+- Models: Gemini for development (via the agents/llm adapter); production on
+  Azure Foundry because Stage One checks the required Microsoft technologies
+  and judges score Foundry: gpt-5-mini for the Analyst (reasoning effort low),
+  gpt-4.1-mini for the Narrator and Localizer. No local Qwen backup: when a
+  model fails, the fallback is a plain template sentence (safer and free).
+- Azure region: southafricanorth. The student policy allows 5 regions; only
+  South Africa North, UAE North and Spain Central offer Foundry models; SAN
+  is closest to Nairobi. Deployment type GlobalStandard: synthetic data only,
+  so global processing is acceptable.
+- Name tags: passes of 45 m+ (was 40), never goal kicks or the keeper's long
+  kicks (clearances never counted as passes); shots 100 km/h+; at most one
+  tag per player per 5 minutes.
+- Contract: Moment gets `team` (None = match-wide) and `clock` (when it fired).
+- Eval matching (Ian): the demo answer key's kinds map to detector kinds:
+  control_rising / control_drop / field_tilt -> control_shift;
+  chaos_rising / open_spell -> openness_spike; chance -> big_chance;
+  block_drop -> shape_change; counter_behind_fullback -> big_chance or
+  repeated_pattern; goal, repeated_pattern, red_card_impact, shape_change,
+  pressure_spike -> same name.
+- Homework note: in the demo, 88' is Harbour's second counter goal (0-2), not
+  an equaliser.

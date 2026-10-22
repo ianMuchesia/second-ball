@@ -21,7 +21,7 @@ Frame: SPADL (the acting team attacks towards x = 105).
 | `xt_added` | xT added | Danger added by this move | xT | latest event | Expected threat added by this pass or carry. | `core.metrics.play.xt_added` |
 | `pass_difficulty` | Pass difficulty | How hard that pass was | score 0-100 | latest event | Pass difficulty 0-100 (docs/metrics/pass_difficulty.md). | `core.metrics.play.pass_difficulty` |
 | `ball_speed` | Ball speed | Ball speed | km/h | latest event | Ball speed of a pass or shot. | `core.metrics.play.ball_speed` |
-| `name_tag` | Name-tag trigger | Show who it was | flag | latest event | 1 when a shot is at least 100 km/h or a pass at least 40 m: show the player's name. | `core.metrics.play.name_tag` |
+| `name_tag` | Name-tag trigger | Show who it was | flag | latest event | 1 when a shot is at least 100 km/h or a pass at least 45 m (not a goal kick): show the player's name, at most once per player per 5 minutes. | `core.metrics.play.name_tag` |
 
 ## Per team
 
@@ -47,7 +47,7 @@ Frame: SPADL (the acting team attacks towards x = 105).
 | `lines_broken_per_pass` | Lines broken per pass | Passing through the lines | lines per pass | whole match, last 5 min, last 10 min, last 15 min | Defending lines crossed per completed pass. | `core.metrics.play.lines_broken_per_pass` |
 | `pass_difficulty_mean` | Average pass difficulty | How hard their passes are | score 0-100 | whole match, last 5 min, last 10 min, last 15 min | Average difficulty (0-100) of the team's passes. | `core.metrics.play.mean_pass_difficulty` |
 | `fastest_shot` | Fastest shot | Hardest shot | km/h | whole match, last 5 min, last 10 min, last 15 min | Fastest shot. | `core.metrics.play.fastest_shot` |
-| `name_tags` | Name-tag moments | Standout strikes and passes | count | whole match, last 5 min, last 10 min, last 15 min | Fast shots (100+ km/h) and long passes (40+ m). | `core.metrics.play.name_tags` |
+| `name_tags` | Name-tag moments | Standout strikes and passes | count | whole match, last 5 min, last 10 min, last 15 min | Fast shots (100+ km/h) and long passes (45+ m, not goal kicks or the keeper's), at most one per player per 5 minutes. | `core.metrics.play.name_tags` |
 | `bad_situations` | Dangerous moments on the ball | Times caught in trouble | count | whole match, last 5 min, last 10 min, last 15 min | Times the team's player on the ball met the bad_situation rule (Ian's spec). | `core.metrics.positional.bad_situations` |
 | `pressure_on_ball` | Average pressure on the ball | How much they are being pressed | index 0-1 | whole match, last 5 min, last 10 min, last 15 min | Average pressure on the team's player on the ball (0-1). | `core.metrics.positional.mean_pressure_on_ball` |
 | `defensive_line_gap` | Back-midfield gap (defending) | Space between their defence and midfield | metres | whole match, last 5 min, last 10 min, last 15 min | Average metres between the team's back line and midfield line while defending. | `core.metrics.positional.team_line_gap` |

@@ -1,0 +1,64 @@
+# Moment detector (Phase 3a). Red zone: every value is TUNABLE, owner: Ian.
+# Do not tune to the demo alone: check moments per match on free matches too
+# (evals/moments, docs/EVAL.md).
+
+importance:
+  goal: 1.0
+  red_card_impact: 0.9
+  big_chance: 0.7
+  momentum_swing: 0.6
+  repeated_pattern: 0.6        # e.g. the 2nd counter behind the same full-back
+  control_shift: 0.5
+  pressure_spike: 0.5
+  shape_change: 0.5
+  openness_spike: 0.5
+  overload: 0.4
+  bad_situation: 0.4
+  player_milestone: 0.3
+
+cooldown_s: 180                # same kind + team at most once per 3 minutes
+
+big_chance:
+  xg: 0.3                      # a non-goal shot at least this good
+
+control_shift:
+  window_min: 10               # consecutive 10-minute windows
+  min_change: 0.20             # 20 points of the 0-1 control index
+
+pressure_spike:
+  recent_min: 5
+  before_min: 10
+  ratio: 1.5                   # last 5 min >= 1.5 x the 10 min before (per minute)
+  min_per_min: 1.0             # and at least this many pressures per minute
+
+momentum_swing:                # two-sided CUSUM on momentum, sampled each minute
+  drift: 0.02                  # k: small leans are ignored
+  threshold: 0.15              # h: a swing fires when the sum passes this
+
+red_card_impact:
+  window_min: 10               # 10 minutes before vs 10 after the red card
+
+shape_change:
+  recent_min: 5
+  before_min: 10
+  back_line_players: 1.0       # average back-line size changes by a whole player
+  block_drop_m: 8.0            # or the back line sits this much deeper / higher
+  ball_x: [35.0, 70.0]         # compared only with the ball in the attacker's middle third
+
+openness_spike:
+  above_usual: 0.25            # openness at least this far above the usual for the fixture
+
+counter:                       # for repeated_pattern
+  regain_max_x: 52.5           # the ball won in the team's own half ...
+  within_s: 10                 # ... then this soon a forward pass ...
+  min_forward_m: 15.0          # ... of at least this many metres forward ...
+  wide_y: 22.67                # ... into a wide channel (outer third of the width),
+                               # ending behind the defender nearest that touchline
+  pattern_cooldown_s: 900      # the same pattern again at most once per 15 minutes
+
+overload:
+  min_danger: 1.0              # central final third only
+
+player_milestone:
+  passes: [75]
+  shots: [4]

@@ -126,6 +126,7 @@ export interface Score {
   home: number;
 }
 export interface Moment {
+  clock: Clock;
   /**
    * @minItems 1
    */
@@ -140,6 +141,7 @@ export interface Moment {
   };
   moment_id: string;
   schema_version: 1;
+  team: string | null;
 }
 export interface Overlay {
   duration_ms: number;

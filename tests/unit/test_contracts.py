@@ -75,6 +75,8 @@ def moment():
     return {
         "moment_id": "mo-001",
         "kind": "red_card_impact",
+        "team": "home",
+        "clock": {"period": 2, "minute": 63, "second": 10},
         "importance": 0.8,
         "metrics_before": {"possession": METRIC},
         "metrics_after": {"possession": METRIC},

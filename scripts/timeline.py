@@ -75,7 +75,7 @@ DETAILS = [
     ("upper_hand_last_10m", "Upper hand (0 none, 1, 2 strong), last 10 min", "level"),
     (
         "name_tags",
-        "Name-tag moments (100+ km/h shots, 40+ m passes), cumulative",
+        "Name-tag moments (100+ km/h shots, 45+ m passes), cumulative",
         "count",
     ),
 ]

@@ -269,9 +269,10 @@ def bad_situation(ev: Events, i: int):
 # ---- lines ----------------------------------------------------------------------
 
 
-def defending_lines(e: MatchEvent) -> list[float]:
-    """x of the defending team's lines, ascending (the LAST is the back line:
-    their goal is at x = 105). Outfielders split at the largest gaps in x."""
+def defending_line_groups(e: MatchEvent) -> list[list[float]]:
+    """The defending team's outfielders' x, split into up to 3 lines at the
+    largest gaps, ascending (the LAST is the back line: their goal is at
+    x = 105)."""
     _, _, opps = sides(e)
     xs = sorted(o.x for o in outfield(opps, THEIR_GOAL))
     if not xs:
@@ -283,7 +284,12 @@ def defending_lines(e: MatchEvent) -> list[float]:
     for cut in [*cuts, len(xs)]:
         groups.append(xs[prev:cut])
         prev = cut
-    return [sum(g) / len(g) for g in groups]
+    return groups
+
+
+def defending_lines(e: MatchEvent) -> list[float]:
+    """x of each defending line (mean), ascending: the last is the back line."""
+    return [sum(g) / len(g) for g in defending_line_groups(e)]
 
 
 @cached("lines_broken")

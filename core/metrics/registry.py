@@ -425,7 +425,7 @@ METRICS: dict[str, Metric] = {
         ),
         Metric(
             name="name_tag",
-            definition="1 when a shot is at least 100 km/h or a pass at least 40 m: show the player's name.",
+            definition="1 when a shot is at least 100 km/h or a pass at least 45 m (not a goal kick): show the player's name, at most once per player per 5 minutes.",
             grain="event",
             unit="flag",
             frame="SPADL",
@@ -583,7 +583,7 @@ METRICS: dict[str, Metric] = {
         ),
         Metric(
             name="name_tags",
-            definition="Fast shots (100+ km/h) and long passes (40+ m).",
+            definition="Fast shots (100+ km/h) and long passes (45+ m, not goal kicks or the keeper's), at most one per player per 5 minutes.",
             grain="team",
             unit="count",
             frame="SPADL",

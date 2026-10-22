@@ -235,11 +235,29 @@ def test_pass_difficulty_by_hand():
 
 
 def test_name_tags():
+    # Ian (2026-10-22): shots 100+ km/h; passes 45+ m, not goal kicks or the
+    # keeper's; one tag per player per 5 minutes.
+    keeper = [mate(1, 2, 34)]  # nearer our goal than the passer
     assert at0(event(1, type_="shot", speed=101), play.name_tag) == 1
     assert at0(event(1, type_="shot", speed=99), play.name_tag) == 0
-    assert at0(event(1, at=(30, 34), to=(71, 34), length_m=41.0), play.name_tag) == 1
-    assert at0(event(1, at=(30, 34), to=(69, 34), length_m=39.0), play.name_tag) == 0
+    long = {"at": (30, 34), "to": (76, 34), "others": keeper}
+    assert at0(event(1, length_m=46.0, **long), play.name_tag) == 1
+    assert at0(event(1, length_m=44.0, **long), play.name_tag) == 0
+    assert at0(event(1, type_="goalkick", length_m=60.0, **long), play.name_tag) == 0
+    # The keeper's own long pass (he is the one nearest his goal).
+    assert at0(event(1, at=(5, 34), to=(60, 34), length_m=55.0), play.name_tag) == 0
     assert at0(event(1, type_="shot", speed=101), play.ball_speed) == 101
+
+
+def test_name_tag_cooldown_per_player():
+    shot = {"type_": "shot", "outcome": "fail", "speed": 105}
+    items = [
+        event(1, 0, **shot),
+        event(2, 200, **shot),  # same player 3'20 later: no tag
+        event(3, 301, **shot),  # 5'01 after the first tag: tag again
+    ]
+    e = Events.of((H, A), items)
+    assert [play.name_tag(e, k).value for k in range(3)] == [1, 0, 1]
 
 
 # ---- pressing, rhythm, threat --------------------------------------------------------------
