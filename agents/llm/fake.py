@@ -76,11 +76,19 @@ class FakeProvider:
 
     @staticmethod
     def echo_line(v: dict) -> str:
-        numbers = v.get("numbers", {})
-        parts = [f"{name.replace('_', ' ')} {value}" for name, value in numbers.items()]
+        if "changes" in v:  # casual: words, not numbers
+            parts = [f"{name.lower()} {word}" for name, word in v["changes"].items()]
+        else:
+            numbers = v.get("numbers", {})
+            parts = [
+                f"{name.replace('_', ' ')} {value}" for name, value in numbers.items()
+            ]
         team = v.get("team") or "The match"
+        zone = v.get("facts", {}).get("exploited_zone")
+        how = f" A counter {zone}." if zone else ""
         return (
             f"{team}, {v.get('minute', 0)}': "
             + (", ".join(parts[:2]) or v.get("kind", ""))
             + "."
+            + how
         )

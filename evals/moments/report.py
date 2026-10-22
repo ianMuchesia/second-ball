@@ -25,6 +25,7 @@ from engine.core import simulate_match
 from engine.league import load_league
 from engine.scenarios import expected_moments, load_scenario
 from evals.realism.report import fixtures
+from evals.sections import keep_sections
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "docs" / "EVAL.md"
@@ -174,7 +175,7 @@ max {max(totals)} (about {statistics.mean(totals) / 95:.2f} per minute).
 def main():
     demo = run_demo()
     per_match = run_free()
-    OUT.write_text(render(demo, per_match))
+    OUT.write_text(keep_sections(render(demo, per_match), OUT, ["narration"]))
     _, _, found, in_scope, hits = demo
     print(
         f"demo recall {sum(found)}/{len(found)}, precision {len(hits)}/{len(in_scope)}; "

@@ -3,6 +3,12 @@
 - Every number must match one of the Insight's values (with the rounding the
   line uses, e.g. "0.7" or "71%" for 0.712) or the match context (score,
   minutes, players on the pitch, shirt numbers).
+- Counts written as words or digits before a football noun ("one pass",
+  "ten men", "second counter goal", "twice") must match a code-made count of
+  that kind (passes in the move, players on the pitch, goals, counters).
+- Comparisons ("halved", "doubled", "up by a third") must be within 10% of a
+  real before/after change (Ian, 2026-10-22).
+- Casual lines show no raw index numbers: no decimals at all.
 - Every capitalised name must be a team or a player on the pitch.
 - Rejected outright: predictions ("will win", and soft ones that treat the
   match as over: "seal it", "secure the 0-2", "game over"), and blaming one
@@ -52,7 +58,8 @@ SOFT_PREDICTIONS = [
     r"\b(bag|bags|bagged)\s+the\s+(win|points|victory)\b",
     (
         r"\b(game\s+over|all\s+over|done\s+and\s+dusted|no\s+way\s+back|"
-        r"unassailable|insurmountable|surely\s+won|that\s+is\s+that|that's\s+that)\b"
+        r"unassailable|insurmountable|surely\s+won|that\s+is\s+that|that's\s+that|"
+        r"knockout\s+blow|killer\s+blow|nail\s+in\s+the\s+coffin|coup\s+de\s+gr[aâ]ce)\b"
     ),
 ]
 SOFT_PREDICTION = re.compile("|".join(SOFT_PREDICTIONS), re.IGNORECASE)
@@ -122,6 +129,12 @@ def numbers(text: str) -> list[tuple[float, int, bool]]:
     return out
 
 
+def on_pitch(analysis: Analysis) -> list[float]:
+    """Players per team: 11 - red cards."""
+    ctx = analysis.task.context
+    return [float(11 - ctx.sent_off.get(t, 0)) for t in (ctx.home, ctx.away)]
+
+
 def allowed_numbers(analysis: Analysis) -> list[float]:
     ctx = analysis.task.context
     moment = analysis.task.moment
@@ -130,18 +143,138 @@ def allowed_numbers(analysis: Analysis) -> list[float]:
         for pid in ctx.players
         if pid.rsplit("-", 1)[-1].isdigit()
     ]
-    on_pitch = [
-        float(sum(1 for pid in ctx.players if pid.startswith(team + "-")))
-        for team in (ctx.home, ctx.away)
-    ]
     return [
         *analysis.values.values(),
         *ctx.score,
         float(ctx.minute),
         float(moment.clock.minute),
         *shirts,
-        *on_pitch,
+        *on_pitch(analysis),
+        *map(float, analysis.task.counts.values()),
     ]
+
+
+CARDINALS = {
+    w: n
+    for n, w in enumerate(
+        [
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+            "twenty",
+        ]
+    )
+}
+ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5}
+MULTIPLES = {"twice": 2, "thrice": 3}  # not "once": "once more" means again
+# Football nouns a count can be about -> kind of count.
+NOUNS = {
+    **dict.fromkeys(["pass", "passes"], "passes"),
+    **dict.fromkeys(["man", "men", "player", "players"], "players"),
+    **dict.fromkeys(["goal", "goals"], "goals"),
+    **dict.fromkeys(
+        ["counter", "counters", "counter-attack", "counter-attacks", "break", "breaks"],
+        "counters",
+    ),
+    **dict.fromkeys(["card", "cards"], "cards"),
+    **dict.fromkeys(["time", "times"], "times"),
+}
+COUNT = re.compile(
+    r"\b(?P<n>\d+|" + "|".join([*CARDINALS, *ORDINALS]) + r")"
+    r"(?:\s+(?P<adj>[a-z][a-z'\-]*))?\s+(?P<noun>" + "|".join(NOUNS) + r")\b",
+    re.IGNORECASE,
+)
+MULTIPLE = re.compile(r"\b(" + "|".join(MULTIPLES) + r")\b", re.IGNORECASE)
+# Comparison words -> after/before ratio they claim.
+COMPARISONS = [
+    (r"\bhalved\b|\bhalving\b|\bcut\s+in\s+half\b|\bdown\s+by\s+half\b", 0.5),
+    (r"\bhalves\b(?=\s+(from|to|in|after|since))", 0.5),
+    (r"\bdoubled\b|\bdoubles\b|\bdoubling\b", 2.0),
+    (r"\btripled\b|\btriples\b|\btrebled\b", 3.0),
+    (r"\b(up|rises?|rose|climbs?|grows?|grew)\s+by\s+a\s+third\b", 4 / 3),
+    (r"\b(down|falls?|fell|drops?|dropped)\s+by\s+a\s+third\b", 2 / 3),
+    (r"\b(up|rises?|rose|climbs?|grows?|grew)\s+by\s+half\b", 1.5),
+]
+COMPARE_TOLERANCE = 0.10
+
+
+def counts_of_kind(kind: str, analysis: Analysis) -> set[float]:
+    """Code-made counts a 'kind' of count may match."""
+    task, ctx = analysis.task, analysis.task.context
+    c = task.counts
+    repeated = {float(v) for k, v in analysis.values.items() if "counters" in k}
+    if "counter_goals" in c:
+        repeated.add(float(c["counter_goals"]))
+    if kind == "passes":
+        return {float(c["passes_in_move"])} if "passes_in_move" in c else set()
+    if kind == "players":
+        teams = on_pitch(analysis)
+        return {*teams, abs(teams[0] - teams[1])} - {0.0}
+    if kind == "goals":
+        return {float(x) for x in ctx.score} | {float(sum(ctx.score))}
+    if kind == "counters":
+        return repeated | ({1.0} if "build_up" in task.facts else set())
+    if kind == "cards":
+        return {float(v) for v in ctx.sent_off.values()} | (
+            {1.0} if task.moment.kind == "red_card_impact" else set()
+        )
+    return repeated  # times
+
+
+def wrong_counts(text: str, analysis: Analysis) -> list[str]:
+    out = []
+    for m in COUNT.finditer(text):
+        word, noun = m.group("n").lower(), m.group("noun").lower()
+        n = float(word) if word.isdigit() else CARDINALS.get(word, ORDINALS.get(word))
+        adj = (m.group("adj") or "").lower()
+        # "second counter goal" counts counter goals: a noun in between decides.
+        kind = NOUNS.get(adj, NOUNS[noun])
+        if n not in counts_of_kind(kind, analysis):
+            out.append(f"'{m.group(0)}': no code-made count of {kind} is {n:g}")
+    for m in MULTIPLE.finditer(text):
+        n = MULTIPLES[m.group(1).lower()]
+        if n not in counts_of_kind("times", analysis):
+            out.append(f"'{m.group(1)}': nothing in the evidence happened {n} times")
+    return out
+
+
+def pairs(values: dict[str, float]) -> list[tuple[str, float, float]]:
+    """(metric, before, after) for every metric with both."""
+    return [
+        (k[: -len("_before")], v, values[k[: -len("_before")] + "_after"])
+        for k, v in values.items()
+        if k.endswith("_before") and k[: -len("_before")] + "_after" in values
+    ]
+
+
+def wrong_comparisons(text: str, analysis: Analysis) -> list[str]:
+    ratios = [after / before for _, before, after in pairs(analysis.values) if before]
+    out = []
+    for pattern, target in COMPARISONS:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m and not any(abs(r / target - 1) <= COMPARE_TOLERANCE for r in ratios):
+            out.append(
+                f"'{m.group(0)}' does not match any before/after change "
+                f"(within {COMPARE_TOLERANCE:.0%})"
+            )
+    return out
 
 
 def matches(x: float, decimals: int, percent: bool, v: float) -> bool:
@@ -249,6 +382,50 @@ def copied(text: str, examples: Sequence[str]) -> bool:
     return False
 
 
+LOCKED_NUMBER = re.compile(r"\d+(?:\.\d+)?(?:-\d+)?(?:\s*%)?")
+TOKEN = re.compile(r"\[([TSNX]\d+)\]")
+
+
+def lock(text: str, analysis: Analysis) -> tuple[str, dict[str, str]]:
+    """Names, scores, numbers -> typed tokens [T1], [S1], [N1], [X1] for the
+    Localizer (the type tells it how the token reads in a sentence)."""
+    ctx = analysis.task.context
+    names = sorted(
+        {*ctx.team_names.values(), *ctx.players.values(), "xG"}, key=len, reverse=True
+    )
+    pattern = re.compile(
+        "|".join([*(rf"\b{re.escape(n)}\b" for n in names), LOCKED_NUMBER.pattern])
+    )
+    slots: dict[str, str] = {}
+
+    def slot(m):
+        s = m.group(0)
+        kind = (
+            "X"
+            if s == "xG"
+            else "S"
+            if re.fullmatch(r"\d+-\d+", s)
+            else "N"
+            if s[0].isdigit()
+            else "T"
+        )
+        key = f"[{kind}{sum(k[1] == kind for k in slots) + 1}]"
+        slots[key] = s
+        return key
+
+    return pattern.sub(slot, text), slots
+
+
+def unlock(reply: str, slots: dict[str, str]) -> tuple[str | None, str | None]:
+    """(translation, None) or (None, why): every token once, no other digits."""
+    found = TOKEN.findall(reply)
+    if sorted(found) != sorted(k.strip("[]") for k in slots):
+        return None, "copy every token ([T1], [S1], [N1] ...) exactly once, unchanged"
+    if re.search(r"\d", TOKEN.sub("", reply)):
+        return None, "write no digits of your own; the numbers are the tokens"
+    return TOKEN.sub(lambda m: slots[m.group(0)], reply), None
+
+
 def untranslated(translation: str, english: str) -> str | None:
     """Why a translation is not usable, or None. Numbers are checked too."""
     if not translation:
@@ -264,17 +441,29 @@ def untranslated(translation: str, english: str) -> str | None:
     return None
 
 
-def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdict:
-    """`examples`: the Narrator's style examples, which a line must not copy."""
-    reasons = []
+def wrong_numbers(text: str, analysis: Analysis) -> list[str]:
     allowed = allowed_numbers(analysis)
+    out = []
     for x, decimals, percent in numbers(text):
         if not any(matches(x, decimals, percent, v) for v in allowed):
             shown = f"{x:g}{'%' if percent else ''}"
-            reasons.append(
+            out.append(
                 f"number {shown} is not in the values or the match context; "
                 f"use only: {', '.join(f'{k}={v:g}' for k, v in analysis.values.items())}"
             )
+    return out
+
+
+def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdict:
+    """`examples`: the Narrator's style examples, which a line must not copy."""
+    reasons = wrong_numbers(text, analysis)
+    if analysis.task.persona == "casual" and any(d for _, d, _ in numbers(text)):
+        reasons.append(
+            "casual line: no index numbers or decimals; say it in words "
+            "(e.g. 'halved') from the changes given"
+        )
+    reasons += wrong_counts(text, analysis)
+    reasons += wrong_comparisons(text, analysis)
     for name in unknown_names(text, analysis):
         reasons.append(f"'{name}' is not a team or a player on the pitch")
     reasons += score_mistakes(text, analysis)

@@ -27,7 +27,7 @@ from agents.pipeline.models import (
     Retry,
     Verdict,
 )
-from agents.pipeline.verifier import untranslated, verify
+from agents.pipeline.verifier import lock, unlock, untranslated, verify, wrong_numbers
 from core.contracts import Insight, Overlay
 from core.contracts.overlay import OverlayTime
 
@@ -54,6 +54,8 @@ def parse_insight(text: str, task: NarrationTask) -> Insight:
     except (ValueError, KeyError, TypeError):
         claim = f"{task.moment.kind.replace('_', ' ')}"
         mechanism, confidence = "See the numbers before and after.", 0.3
+    # A claim code knows (who was sent off and why) is code's, not the model's.
+    claim = task.facts.get("claim", claim)
     return Insight(
         claim=claim or "-",
         mechanism=mechanism or "-",
@@ -167,8 +169,9 @@ class VerifierExecutor(Executor):
 
 
 class LocalizerExecutor(Executor):
-    """Translates the approved line, checked by code (numbers unchanged, not
-    still English); one retry with the reason, then the language is dropped
+    """Translates the approved line with numbers and names locked as [n]
+    tokens, then checks it in code (tokens intact, numbers allowed, not still
+    English); one retry with the reason, then that language is dropped
     (English always airs)."""
 
     def __init__(self, llm: LLMClient):
@@ -181,6 +184,7 @@ class LocalizerExecutor(Executor):
     ) -> None:
         task = approved.analysis.task
         text = {"en": approved.text}
+        masked, slots = lock(approved.text, approved.analysis)
         for lang in task.languages:
             agent = Agent(
                 client=AdapterChatClient(self.llm),
@@ -189,14 +193,20 @@ class LocalizerExecutor(Executor):
                 ),
                 name=f"localizer_{lang}",
             )
-            ask = f"TEXT: {approved.text}"
+            ask = f"TEXT: {masked}"
             for _ in range(LOCALIZER_ATTEMPTS):
                 reply = (await agent.run(ask)).text.strip()
-                problem = untranslated(reply, approved.text)
+                translation, problem = unlock(reply, slots)
+                if translation is not None:
+                    # The Verifier again, on the translation: numbers allowed,
+                    # and really translated.
+                    problem = untranslated(translation, approved.text) or next(
+                        iter(wrong_numbers(translation, approved.analysis)), None
+                    )
                 if problem is None:
-                    text[lang] = reply
+                    text[lang] = translation
                     break
-                ask = f"Your last reply was rejected: {problem}.\nTEXT: {approved.text}"
+                ask = f"Your last reply was rejected: {problem}.\nTEXT: {masked}"
         await ctx.yield_output(
             Narration(
                 overlay=overlay(approved, text),

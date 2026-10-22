@@ -36,10 +36,13 @@ class NarrationTask(Part):
     moment: Moment
     context: MatchContext
     persona: Persona
-    languages: list[str] = Field(default_factory=lambda: ["sw"])
+    languages: list[str] = Field(default_factory=lambda: ["fr", "es", "sw", "ar"])
     # Code-made words about the moment (agents/pipeline/facts.py), e.g. a
     # goal's build_up and exploited_zone.
     facts: dict[str, str] = Field(default_factory=dict)
+    # Code-made counts a line may quote (digits or words): passes_in_move,
+    # counter_goals, shirt_number.
+    counts: dict[str, int] = Field(default_factory=dict)
 
 
 class Analysis(Part):

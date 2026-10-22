@@ -6,8 +6,8 @@ import yaml
 
 from agents.mcp_server.data import MatchData
 from agents.narrator import EXAMPLES, examples
-from agents.pipeline.facts import context_at, facts_for
-from agents.pipeline.models import Analysis, NarrationTask
+from agents.pipeline.facts import facts_for, task_for
+from agents.pipeline.models import Analysis
 from agents.pipeline.verifier import verify
 from agents.pipeline.workflow import values_of
 from core.contracts import Insight
@@ -40,12 +40,7 @@ def test_line_passes_the_verifier_on_its_moment(demo, row, persona):
         for m in demo.moments
         if m.kind == row["kind"] and m.clock.minute == row["minute"]
     ]
-    task = NarrationTask(
-        moment=moment,
-        context=context_at(demo, moment),
-        persona=persona,
-        facts=facts_for(demo, moment),
-    )
+    task = task_for(demo, moment, persona)
     analysis = Analysis(
         task=task,
         insight=Insight(
@@ -72,4 +67,24 @@ def test_both_demo_goals_are_counters_behind_the_left_back(demo):
 
 
 def test_moments_other_than_goals_get_no_build_up(demo):
-    assert all(facts_for(demo, m) == {} for m in demo.moments if m.kind != "goal")
+    assert all(
+        "build_up" not in facts_for(demo, m) for m in demo.moments if m.kind != "goal"
+    )
+
+
+def test_red_card_facts_say_who_and_why_from_the_events(demo):
+    (red,) = [m for m in demo.moments if m.kind == "red_card_impact"]
+    facts = facts_for(demo, red)
+    assert facts["sent_off"] == "Riverside's number 5"
+    # Harbour won it in their own half and went 21 m forward 2 s later; two
+    # Riverside defenders were goal-side, so not a last-man foul.
+    assert facts["reason"] == "foul on a counter"
+    assert task_for(demo, red, "analyst").counts == {"shirt_number": 5}
+
+
+def test_demo_counter_goals_were_one_pass_moves(demo):
+    goals = [m for m in demo.moments if m.kind == "goal"]
+    assert [task_for(demo, m, "casual").counts for m in goals] == [
+        {"passes_in_move": 1, "counter_goals": 1},
+        {"passes_in_move": 1, "counter_goals": 2},
+    ]

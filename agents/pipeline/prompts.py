@@ -2,9 +2,11 @@
 code (the VALUES block); the model only chooses words."""
 
 import json
+import re
 
 from agents.narrator import examples
 from agents.pipeline.models import Analysis, MatchContext, NarrationTask
+from core.metrics import registry
 
 KIND_WORDS = {
     "goal": "goal",
@@ -39,13 +41,19 @@ otherwise; when facts has build_up and exploited_zone, name both the action
 on the weather; no injury or referee talk."""
 
 STYLE = {
-    "casual": "Casual fan: short, a little emotion, plain words, no jargon.",
-    "analyst": "Analyst: precise, with the number and the why.",
+    "casual": "Casual fan: short, a little emotion, plain words, no jargon. "
+    "No decimals or index numbers: say how things changed with the words in "
+    '"changes" (e.g. "halved"). Story first: who, what, why.',
+    "analyst": "Analyst: precise, one or two numbers with their units (from "
+    '"units") or a clear comparison, and the why.',
 }
 
 LOCALIZER = """ROLE: LOCALIZER
-Translate the line into {language}. Keep every number exactly as written and
-keep team and player names unchanged. Use football meanings: "clinical" means
+Translate the line into {language}. Tokens stand for locked text: [T1] a team
+name, [S1] a score (home-away), [N1] a number, [X1] a term like xG. Copy each
+token exactly once, unchanged, and write no other digits or number words of
+your own.
+Use football meanings: "clinical" means
 accurate and deadly in front of goal, never medical. Reply with the
 translation only."""
 
@@ -57,7 +65,67 @@ EVENT = {
 # Who the moment is good for: the team itself, or its opponent.
 GOOD_FOR_OPPONENT = {"red_card_impact"}
 
-LANGUAGE = {"sw": "Swahili"}
+LANGUAGE = {"fr": "French", "es": "Spanish", "sw": "Swahili", "ar": "Arabic"}
+RIGHT_TO_LEFT = {"ar"}  # the UI must render these right-to-left
+
+
+# Plain comparisons for casual lines (after/before ratio), within 10%; the
+# Verifier checks them against the same values.
+CHANGE_WORDS = [
+    ("halved", 0.5),
+    ("down by a third", 2 / 3),
+    ("up by a third", 4 / 3),
+    ("up by half", 1.5),
+    ("doubled", 2.0),
+    ("tripled", 3.0),
+]
+
+
+def change_word(before: float, after: float) -> str:
+    if before:
+        r = after / before
+        for word, target in CHANGE_WORDS:
+            if abs(r / target - 1) <= 0.10:
+                return word
+        if abs(r - 1) <= 0.05:
+            return "about the same"
+    return "up" if after > before else "down" if after < before else "about the same"
+
+
+def metric(name: str):
+    try:
+        return registry.get(name)
+    except KeyError:
+        return None
+
+
+def casual_changes(values: dict[str, float], team: str | None = None) -> dict[str, str]:
+    """Registry casual name -> plain change word, for metrics fans are shown.
+    "they" in the name becomes the team ("How much Riverside are being
+    pressed"), so a model cannot flip who does what."""
+    out = {}
+    for k, v in values.items():
+        if not k.endswith("_before") or k[: -len("_before")] + "_after" not in values:
+            continue
+        name = k[: -len("_before")]
+        m = metric(name)
+        casual = m.display_name.get("casual") if m else None
+        if casual:
+            if team:
+                casual = re.sub(r"\btheir\b", f"{team}'s", casual)
+                casual = re.sub(r"\bthey\b", team, casual)
+            out[casual] = change_word(v, values[name + "_after"])
+    return out
+
+
+def units(values: dict[str, float]) -> dict[str, str]:
+    out = {}
+    for k in values:
+        name = k.removesuffix("_before").removesuffix("_after")
+        m = metric(name)
+        if m is not None and m.unit:
+            out[name] = m.unit
+    return out
 
 
 def standing(ctx: MatchContext, team: str) -> str:
@@ -83,12 +151,23 @@ def values_block(task: NarrationTask, values: dict[str, float]) -> str:
         "score": f"{ctx.team_names[ctx.home]} {ctx.score[0]}-{ctx.score[1]} "
         f"{ctx.team_names[ctx.away]}",
         "standing": {ctx.team_names[t]: standing(ctx, t) for t in (ctx.home, ctx.away)},
-        "numbers": {k: round(v, 2) for k, v in values.items()},
         "numbers_are_for": name or "the match",
         "players_on_pitch": sorted(ctx.players.values()),
     }
+    if task.persona == "casual":
+        block["changes"] = casual_changes(values, name)
+        whole = {k: v for k, v in values.items() if float(v).is_integer()}
+        if whole:
+            block["numbers"] = {k: int(v) for k, v in whole.items()}
+    else:
+        block["numbers"] = {k: round(v, 2) for k, v in values.items()}
+        block["units"] = units(values)
+    if task.counts:
+        block["counts"] = task.counts
     if task.facts:
-        block["facts"] = {k: v for k, v in task.facts.items() if k != "side"}
+        block["facts"] = {
+            k: v for k, v in task.facts.items() if k not in ("side", "claim")
+        }
     if team and task.moment.kind in EVENT:
         other = ctx.away if team == ctx.home else ctx.home
         block["event"] = EVENT[task.moment.kind].format(team=name)
@@ -142,7 +221,12 @@ def fallback(analysis: Analysis) -> str:
     detail = ""
     if "exploited_zone" in analysis.task.facts:
         words += f", a counter {analysis.task.facts['exploited_zone']}"
-    if pairs and pairs[0][2] is not None:
+    if task.persona == "casual":
+        changes = casual_changes(analysis.values)
+        if changes:
+            name, word = next(iter(changes.items()))
+            detail = f" {name.lower()}: {word}."
+    elif pairs and pairs[0][2] is not None:
         name, before, after = pairs[0]
         detail = f" {name.replace('_', ' ')} {before:.2f} to {after:.2f}."
     return f"{who}, {task.moment.clock.minute}': {words}.{detail}"

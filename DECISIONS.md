@@ -409,3 +409,37 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
 - Leader check reads only clear forms ("Harbour lead", "Harbour are
   trailing"), not a bare participle after a team that is an object, and not
   "behind" (space). Verdicts keep the draft text, for evals and debugging.
+
+## 2026-10-22: Phase 3b-3 (number words, personas, four languages, repeat runs)
+
+- Red card facts from events (agents/pipeline/facts.py): who (shirt number;
+  the feed has no names or positions, so not "centre-back") and why. "On a
+  counter" = the fouled team won the ball in its own half, went >= 15 m
+  forward and was fouled within 10 s (the detector's counter thresholds).
+  "Last-man" = no other outfield player of the fouling team goal-side of the
+  foul (Ian's pick). Demo: "foul on a counter", NOT last-man: two Riverside
+  defenders (numbers 2 and 4) were goal-side. The scenario action
+  red_card_last_man does not place the defenders to match: engine gap,
+  reported to Ian, not tuned. The Insight claim for a red card is code's.
+- Number words: counts before a football noun ("one pass", "ten men",
+  "second counter goal", "twice") must match a code-made count of that kind
+  (passes in the move, 11 - red cards, goals, counter goals/counters, cards).
+  "once" is not checked ("once more" means again). Comparisons (halved,
+  doubled, up/down by a third, up by half) must be within 10% of a real
+  before/after ratio (Ian's pick).
+- Personas: casual lines carry no decimals; their prompt has the registry's
+  casual names with the team in place of "they" ("How much Riverside are
+  being pressed": "halved"), and the change words computed in code. Analyst
+  prompt has values plus units.
+- Localizer: French, Spanish, Swahili, Arabic (Arabic right-to-left in the
+  UI). Team names, scores, numbers and xG are locked as typed tokens ([T1],
+  [S1], [N1], [X1]); a reply must keep every token once and add no digits;
+  then the number check and the not-English check run on the translation.
+  Number words inside a translation (e.g. Arabic) are not checked yet.
+- Repeat runs (evals/narration/report.py, "narration" section of
+  docs/EVAL.md, shared with the moments report by markers): free tier, 10
+  requests/min, 10 runs English + 2 translation runs. The full 20-run report
+  runs on the Foundry models in Phase 6: eval numbers belong to the model that
+  produced them.
+- More soft predictions: knockout blow, killer blow, nail in the coffin,
+  coup de grace.

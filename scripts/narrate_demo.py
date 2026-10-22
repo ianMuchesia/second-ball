@@ -13,8 +13,7 @@ from pathlib import Path
 
 from agents.llm import from_env
 from agents.mcp_server.data import MatchData
-from agents.pipeline.facts import context_at, facts_for
-from agents.pipeline.models import NarrationTask
+from agents.pipeline.facts import task_for
 from agents.pipeline.workflow import narrate
 
 
@@ -22,14 +21,8 @@ async def run(data: MatchData, llm, min_importance: float, personas: list[str]):
     for moment in data.moments:
         if moment.importance < min_importance:
             continue
-        context = context_at(data, moment)
         for persona in personas:
-            task = NarrationTask(
-                moment=moment,
-                context=context,
-                persona=persona,
-                facts=facts_for(data, moment),
-            )
+            task = task_for(data, moment, persona)
             out = await narrate(llm, task)
             tag = " FALLBACK" if out.fallback else ""
             print(f"\n{moment.clock.minute}' {moment.kind} [{persona}]")
