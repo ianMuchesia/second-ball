@@ -96,12 +96,16 @@ class MomentDetector:
         self.drift: dict[tuple[str, str], float] = {}
         self.drift_fired: set[tuple[str, str]] = set()
 
-    def edge(self, kind: str, team: str | None, now_true: bool) -> bool:
+    def edge(
+        self, kind: str, team: str | None, now_true: bool, still: bool | None = None
+    ) -> bool:
         """True only when a condition becomes true (a spike fires once when
-        it starts, not again every few minutes while it lasts)."""
+        it starts, not again every few minutes while it lasts). With `still`
+        (hysteresis), an active condition stays active until `still` is false,
+        so a value hovering at the threshold does not fire again and again."""
         key = (kind, team)
         was = key in self.active
-        if now_true:
+        if now_true or (was and still):
             self.active.add(key)
         else:
             self.active.discard(key)
@@ -347,10 +351,10 @@ class MomentDetector:
         usual = chaos.control_baseline()["buckets"][
             chaos.signed_gap_bucket(s[team] - s[ev.opponent(team)])
         ]
-        above = (
-            now is not None and (now.value - usual["mean"]) >= c["min_z"] * usual["sd"]
-        )
-        if not self.edge("control_vs_expected", team, above):
+        z = None if now is None else (now.value - usual["mean"]) / usual["sd"]
+        above = z is not None and z >= c["min_z"]
+        still = z is not None and z >= c["release_z"]
+        if not self.edge("control_vs_expected", team, above, still):
             return None
         expected = mv(usual["mean"], now.evidence_event_ids[-20:])
         return self.fire(
@@ -464,15 +468,18 @@ class MomentDetector:
         mid = bisect_right(ev.elapsed, t - recent)
         hi = bisect_right(ev.elapsed, t)
         a, b = self.back_line(ev, lo_a, mid, team), self.back_line(ev, mid, hi, team)
-        changed = (
-            a is not None
-            and b is not None
-            and (
-                abs(b[0] - a[0]) >= c["back_line_players"]
-                or abs(b[1] - a[1]) >= c["block_drop_m"]
+
+        def moved(share):
+            return (
+                a is not None
+                and b is not None
+                and (
+                    abs(b[0] - a[0]) >= share * c["back_line_players"]
+                    or abs(b[1] - a[1]) >= share * c["block_drop_m"]
+                )
             )
-        )
-        if not self.edge("shape_change", team, changed):
+
+        if not self.edge("shape_change", team, moved(1.0), moved(c["release_share"])):
             return None
         return self.fire(
             ev,

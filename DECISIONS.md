@@ -319,6 +319,11 @@ Phase 3b-1 A: answer key and detector (2026-10-22, Ian via the advisor).
 - Block drop: two-sided CUSUM on each team's per-minute back-line depth (ball
   in the middle third) against its own earlier average; fires once per
   direction until the drift is gone. Demo: Harbour's drop confirmed at 75'.
-- Eval after the fixes: demo recall 19/19 (Wilson 83-100%), precision 21/46
-  = 46% (the key lists the story's big moments only); free matches 66 moments
-  per match (0.69 per minute).
+- Hysteresis (like Ian's game-state rule): a control-vs-fixture moment stays
+  "on" until control falls below 0.5 sd above usual; a window shape change
+  until the change falls below half its thresholds. Without it, a value
+  hovering at the line re-fired every 3 minutes (one free match hit 1.0
+  moments per minute and failed the spam test).
+- Eval after the fixes: demo recall 19/19 (Wilson 83-100%), precision 19/44
+  = 43% (the key lists the story's big moments only); free matches 64 moments
+  per match.

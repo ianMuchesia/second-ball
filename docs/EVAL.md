@@ -12,12 +12,12 @@ minute may be off by 1.
 
 - **Recall:** 19 of 19 expected moments found =
   **100%** (Wilson 95%: 83% - 100%).
-- **Precision** (detections of kinds the answer key covers): 21 of
-  46 match an expected moment = **46%**
-  (Wilson 95%: 32% - 60%). The answer key lists the story's
+- **Precision** (detections of kinds the answer key covers): 19 of
+  44 match an expected moment = **43%**
+  (Wilson 95%: 30% - 58%). The answer key lists the story's
   big moments only, so a detection outside it is not necessarily wrong.
-- Detected in the demo: 71 moments
-  (bad_situation 18, repeated_pattern 12, shape_change 11, control_shift 6, pressure_spike 5, openness_spike 5, player_milestone 4, big_chance 4, goal 2, overload 2, momentum_swing 1, red_card_impact 1).
+- Detected in the demo: 69 moments
+  (bad_situation 18, repeated_pattern 12, shape_change 11, pressure_spike 5, openness_spike 5, control_shift 4, player_milestone 4, big_chance 4, goal 2, overload 2, momentum_swing 1, red_card_impact 1).
 
 | Expected kind | Team | Minutes | Detector kind(s) | Result |
 |---|---|---|---|---|
@@ -43,8 +43,8 @@ minute may be off by 1.
 
 ## Spam check: 50 free matches
 
-Moments per match: mean **66.0**, min 41,
-max 90 (about 0.69 per minute).
+Moments per match: mean **64.3**, min 38,
+max 88 (about 0.68 per minute).
 
 | Kind | Mean per match | Max in a match |
 |---|---|---|
@@ -53,9 +53,9 @@ max 90 (about 0.69 per minute).
 | big_chance | 0.7 | 3 |
 | momentum_swing | 2.1 | 5 |
 | repeated_pattern | 7.4 | 18 |
-| control_shift | 9.8 | 14 |
+| control_shift | 8.7 | 14 |
 | pressure_spike | 5.1 | 13 |
-| shape_change | 8.6 | 16 |
+| shape_change | 8.0 | 13 |
 | openness_spike | 2.9 | 8 |
 | overload | 9.9 | 25 |
 | bad_situation | 12.1 | 18 |
