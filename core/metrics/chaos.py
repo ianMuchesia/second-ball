@@ -87,6 +87,33 @@ def control_index(ev: Events, lo: int, team: str):
     return combine(parts, c["weights"])
 
 
+def signed_gap_bucket(gap: float) -> str:
+    """Bucket for team strength minus opponent strength, e.g. "0.1..0.3"."""
+    edges = config()["control"]["gap_edges"]
+    lo = None
+    for edge in edges:
+        if gap < edge:
+            return f"{'' if lo is None else lo}..{edge}"
+        lo = edge
+    return f"{lo}.."
+
+
+@cache
+def control_baseline() -> dict:
+    v = config()["control"]["baseline_version"]
+    return json.loads((HERE / "artifacts" / f"control_baseline_v{v}.json").read_text())
+
+
+def control_expected(ev: Events, team: str) -> float | None:
+    """Usual control index for this team in this kind of fixture (from the
+    public pre-match strengths); None without them."""
+    if ev.strengths is None:
+        return None
+    s = dict(zip(ev.teams, ev.strengths, strict=True))
+    gap = s[team] - s[ev.opponent(team)]
+    return control_baseline()["buckets"][signed_gap_bucket(gap)]["mean"]
+
+
 # ---- openness -----------------------------------------------------------------
 
 

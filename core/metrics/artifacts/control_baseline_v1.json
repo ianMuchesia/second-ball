@@ -1,0 +1,40 @@
+{
+ "version": 1,
+ "metric": "control_index (rolling 10 min, one window per minute from 10')",
+ "bucket": "team strength minus opponent strength",
+ "trained_on": {
+  "mode": "free_simulation",
+  "matches": 500,
+  "first_seed": 80000,
+  "xt_version": 1,
+  "engine_config_sha256_12": "04322c7adbcb",
+  "date": "2026-10-22"
+ },
+ "buckets": {
+  "-0.1..0.1": {
+   "windows": 26566,
+   "mean": 0.5,
+   "sd": 0.1514
+  },
+  "-0.3..-0.1": {
+   "windows": 21152,
+   "mean": 0.3735,
+   "sd": 0.1464
+  },
+  "..-0.3": {
+   "windows": 8742,
+   "mean": 0.302,
+   "sd": 0.1284
+  },
+  "0.1..0.3": {
+   "windows": 20023,
+   "mean": 0.6195,
+   "sd": 0.1454
+  },
+  "0.3..": {
+   "windows": 9871,
+   "mean": 0.7039,
+   "sd": 0.1268
+  }
+ }
+}

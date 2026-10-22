@@ -303,3 +303,22 @@ Phase 3a: moments + MCP server (2026-10-22, Ian).
   pressure_spike -> same name.
 - Homework note: in the demo, 88' is Harbour's second counter goal (0-2), not
   an equaliser.
+
+Phase 3b-1 A: answer key and detector (2026-10-22, Ian via the advisor).
+- Answer key: "Riverside lose control after the red card" was wrong (control
+  rose 0.71 -> 0.80: a 10-man side chasing often has more of the ball; the
+  danger changes, not possession). Replaced by counter_threat_rising (Harbour,
+  63-80') -> detector kinds big_chance / repeated_pattern. Block drop window
+  80-88' -> 65-85' (gradual from the 65' game-state rule). 88' noted as
+  Harbour's 2nd counter goal behind the left-back, final 0-2.
+- Control: no control moment before 10'. From 15', control_shift also fires
+  when a team's control (last 10 min) is >= 1 sd above the usual for its
+  fixture (new artifact control_baseline_v1.json: control by team strength
+  minus opponent strength, same 500 free matches as the openness baseline).
+  Riverside's usual in the demo fixture: 0.70; fired at 24' (0.84).
+- Block drop: two-sided CUSUM on each team's per-minute back-line depth (ball
+  in the middle third) against its own earlier average; fires once per
+  direction until the drift is gone. Demo: Harbour's drop confirmed at 75'.
+- Eval after the fixes: demo recall 19/19 (Wilson 83-100%), precision 21/46
+  = 46% (the key lists the story's big moments only); free matches 66 moments
+  per match (0.69 per minute).

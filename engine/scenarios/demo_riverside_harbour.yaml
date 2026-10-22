@@ -61,13 +61,15 @@ expected_moments:
   - {kind: counter_behind_fullback, team: away, minute: [63, 64]}
   - {kind: red_card_impact, team: home, minute: [63, 70], note: last-man foul by the left centre-back}
   - {kind: shape_change, team: home, minute: [63, 70]}
-  - {kind: control_drop, team: home, minute: [63, 80]}
+  # Ian, 2026-10-22: with 10 men Riverside keep (even gain) the ball while
+  # Harbour sit deep; what changes is the danger, not possession.
+  - {kind: counter_threat_rising, team: away, minute: [63, 80], note: Harbour's counters become more dangerous}
   - {kind: chaos_rising, team: null, minute: [63, 80]}
-  - {kind: block_drop, team: away, minute: [80, 88]}
+  - {kind: block_drop, team: away, minute: [65, 85], note: gradual from the 65' game-state rule}
   - {kind: pressure_spike, team: home, minute: [80, 88]}
   - {kind: chance, team: home, minute: [82, 83], note: scripted; Riverside break while chasing}
   - {kind: counter_behind_fullback, team: away, minute: [85, 86], note: scripted}
   - {kind: open_spell, team: null, minute: [80, 89], note: both teams creating}
-  - {kind: goal, team: away, minute: [88, 89]}
+  - {kind: goal, team: away, minute: [88, 89], note: Harbour's 2nd counter goal behind the left-back; final score 0-2}
   - {kind: counter_behind_fullback, team: away, minute: [88, 89]}
   - {kind: repeated_pattern, team: away, minute: [88, 89], note: again behind the left-back}
