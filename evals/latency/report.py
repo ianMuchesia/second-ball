@@ -96,7 +96,6 @@ def render(live: Live, llm, out, speed: float, languages) -> str:
         ("Moment detector (per event)", st.detect_s),
         ("Job queue wait", st.queue_s),
         *((f"{label} (`{name}`)", spans.get(name, [])) for name, label in STAGES),
-        ("Moment fired -> line on air (viewer s)", st.air_delay_s),
     ]
     lines = [
         "## Latency per stage (live, demo)",
@@ -115,6 +114,11 @@ def render(live: Live, llm, out, speed: float, languages) -> str:
         lines.append(
             f"| {label} | {len(xs)} | {ms(pct(xs, 0.5))} | {ms(pct(xs, 0.95))} |"
         )
+    d = st.air_delay_s
+    lines.append(
+        f"| Moment fired -> line on air (viewer seconds) | {len(d)} | "
+        f"{pct(d, 0.5):.1f} s | {pct(d, 0.95):.1f} s |"
+    )
     o = st.outcomes
     narr = [x for x in out if x.slot == "narrative"]
     lines += [
