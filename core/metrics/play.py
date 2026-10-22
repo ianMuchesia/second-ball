@@ -299,13 +299,33 @@ def ball_speed(ev: Events, i: int):
 
 @pos.cached("name_tag")
 def name_tag(ev: Events, i: int):
-    """1 when the event earns an on-screen name tag: a shot at >= 100 km/h or
-    a pass of >= 40 m."""
+    """1 when the event earns an on-screen name tag: a shot at >= 100 km/h or a
+    pass of >= 45 m (not a goal kick or a keeper's clearance), and the same
+    player has not had a tag in the last 5 minutes."""
     e = ev.items[i]
     c = config()["speeds"]
-    fast = e.type in SHOTS and (e.ball_speed_kmh or 0) >= c["name_tag_shot_kmh"]
-    long = e.type in PASSES and length(e) >= c["name_tag_pass_m"]
-    return pos.one(float(fast or long), e)
+    if not tag_worthy(e, c):
+        return pos.one(0.0, e)
+    since = ev.elapsed[i] - c["name_tag_cooldown_s"]
+    for k in range(i - 1, -1, -1):
+        if ev.elapsed[k] <= since:
+            break
+        if ev.items[k].player_id == e.player_id and name_tag(ev, k).value:
+            return pos.one(0.0, e)
+    return pos.one(1.0, e)
+
+
+def tag_worthy(e, c) -> bool:
+    if e.type in SHOTS:
+        return (e.ball_speed_kmh or 0) >= c["name_tag_shot_kmh"]
+    if e.type not in PASSES or e.type == "goalkick":
+        return False
+    # A keeper's long kick is a clearance in all but name.
+    own = [p for p in e.freeze_frame if p.team_id == e.team_id]
+    keeper = pos.keeper(own, pos.OWN_GOAL)
+    if keeper is not None and keeper.player_id == e.player_id:
+        return False
+    return length(e) >= c["name_tag_pass_m"]
 
 
 def fastest_shot(ev: Events, lo: int, team: str):
@@ -322,7 +342,7 @@ def fastest_shot(ev: Events, lo: int, team: str):
 
 
 def name_tags(ev: Events, lo: int, team: str):
-    """Events that earn a name tag (fast shots, long passes)."""
+    """Events that earn a name tag (fast shots, 45 m+ passes; 5-min cooldown)."""
     tagged = [
         e
         for k, e in enumerate(window(ev, lo))

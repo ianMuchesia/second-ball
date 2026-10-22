@@ -406,6 +406,9 @@
     "Moment": {
       "additionalProperties": false,
       "properties": {
+        "clock": {
+          "$ref": "#/$defs/Clock"
+        },
         "evidence_event_ids": {
           "items": {
             "minLength": 1,
@@ -443,12 +446,25 @@
           "const": 1,
           "default": 1,
           "type": "integer"
+        },
+        "team": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "schema_version",
         "moment_id",
         "kind",
+        "team",
+        "clock",
         "importance",
         "metrics_before",
         "metrics_after",

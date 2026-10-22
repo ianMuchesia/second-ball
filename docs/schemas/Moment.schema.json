@@ -1,5 +1,34 @@
 {
   "$defs": {
+    "Clock": {
+      "additionalProperties": false,
+      "properties": {
+        "minute": {
+          "minimum": 0,
+          "title": "Minute",
+          "type": "integer"
+        },
+        "period": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Period",
+          "type": "integer"
+        },
+        "second": {
+          "maximum": 59,
+          "minimum": 0,
+          "title": "Second",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "period",
+        "minute",
+        "second"
+      ],
+      "title": "Clock",
+      "type": "object"
+    },
     "MetricValue": {
       "additionalProperties": false,
       "properties": {
@@ -51,6 +80,9 @@
   },
   "additionalProperties": false,
   "properties": {
+    "clock": {
+      "$ref": "#/$defs/Clock"
+    },
     "evidence_event_ids": {
       "items": {
         "minLength": 1,
@@ -95,12 +127,26 @@
       "default": 1,
       "title": "Schema Version",
       "type": "integer"
+    },
+    "team": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Team"
     }
   },
   "required": [
     "schema_version",
     "moment_id",
     "kind",
+    "team",
+    "clock",
     "importance",
     "metrics_before",
     "metrics_after",

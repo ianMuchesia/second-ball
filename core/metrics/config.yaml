@@ -104,6 +104,7 @@ pass_difficulty:               # Ian, 2026-10-22. Weights sum to 100.
     final_third: 0.7
     box: 1.0
 
-speeds:
+speeds:                        # name tags (Ian, 2026-10-22)
   name_tag_shot_kmh: 100
-  name_tag_pass_m: 40
+  name_tag_pass_m: 45          # goal kicks and keeper clearances never count
+  name_tag_cooldown_s: 300     # at most one tag per player per 5 minutes
