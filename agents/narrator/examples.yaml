@@ -1,6 +1,8 @@
-# Narrator few-shot examples: Ian writes the real lines (homework for 3b).
+# Narrator few-shot examples (Ian's lines, picked and trimmed to 25 words).
 # One casual-fan line and one analyst line per moment. Numbers in a line must
-# come from that moment's values. These become the first gold eval items.
+# come from that moment's values: tests/unit/test_narrator_examples.py runs
+# every line through the Verifier against the real demo moment. These are the
+# first gold eval items.
 #
 # Moments (demo, Riverside 0-2 Harbour):
 #   34': Harbour's counter behind Riverside's left-back, 0-1
@@ -9,11 +11,17 @@
 
 examples:
   - moment: counter_goal_34
-    casual: "PLACEHOLDER (Ian): short, a little emotion, plain words."
-    analyst: "PLACEHOLDER (Ian): precise, with the number and the why."
+    kind: goal
+    minute: 34
+    casual: "One pass in behind the left-back and Harbour bury the counter. 0-1!"
+    analyst: "When you leave the space behind your left-back open, you get punished: that one chance takes Harbour's xG from 0.16 to 0.61."
   - moment: red_card_63
-    casual: "PLACEHOLDER (Ian)"
-    analyst: "PLACEHOLDER (Ian)"
+    kind: red_card_impact
+    minute: 63
+    casual: "Red card! The last man walks, and Riverside's mountain just got steeper."
+    analyst: "Harbour sit off: pressure on the ball halves from 0.52 to 0.25, and Riverside's control climbs to 0.80. Possession Harbour are happy to give."
   - moment: counter_goal_88
-    casual: "PLACEHOLDER (Ian)"
-    analyst: "PLACEHOLDER (Ian)"
+    kind: goal
+    minute: 88
+    casual: "Twice the trap is sprung! Down that same left side again, and it's 0-2."
+    analyst: "Same space, same result: another counter behind the left-back, and Harbour's xG climbs from 1.28 to 1.73. Riverside never closed that gap."

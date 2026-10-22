@@ -350,3 +350,21 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   from the English line is dropped; English always airs.
 - Narrator examples: placeholder file agents/narrator/examples.yaml; Ian
   writes the six lines.
+
+## 2026-10-22: real model (Gemini) and Ian's narrator lines
+
+- Narrator examples: Ian's six lines (drafted with Gemini, picked and trimmed
+  to the 25-word limit by the agent). They are gold items: a test runs each
+  through the Verifier against the real demo moment.
+- Gemini rate limits are per project, per minute and per day (numbers in AI
+  Studio; https://ai.google.dev/gemini-api/docs/rate-limits). Over the limit
+  -> 429. Guards: our own pacing (GEMINI_RPM, default 10 a minute, safe on
+  the free tier) and SDK retries on 429/503 (4 tries, 2-30 s backoff; the
+  SDK does not retry by default).
+- Budget precheck token count is local (1 token per UTF-8 byte, about 3x the
+  real count on our prompts, so stricter) instead of the count_tokens API:
+  that call was a second request per model call (half the RPM cap) and took
+  about 6 s. The charge still uses the real usage from the answer.
+- `make narrate` / scripts/narrate_demo.py: demo moments with importance >= 0.9
+  through the real pipeline. First run: 3 moments x 2 personas, 18 calls,
+  every line passed first try, $0.0033, 1 min 46 s at 10 requests a minute.

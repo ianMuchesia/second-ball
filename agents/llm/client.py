@@ -13,6 +13,9 @@ from core.budget import Budget
 log = logging.getLogger(__name__)
 
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+# Requests a minute we allow ourselves; set GEMINI_RPM to your project's AI
+# Studio limit (a little under it). Low default: safe on the free tier.
+DEFAULT_GEMINI_RPM = 10
 DEFAULT_MAX_RUN_TOKENS = 500_000
 DEFAULT_KES_RATE = 130.0
 DEFAULT_KES_RATE_DATE = "2026-09-29"
@@ -47,6 +50,7 @@ def from_env(env=None):
         provider = GeminiProvider(
             api_key=env.get("GEMINI_API_KEY"),
             model=env.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+            rpm=float(env.get("GEMINI_RPM", DEFAULT_GEMINI_RPM)),
         )
     elif provider_name == "foundry":
         provider = FoundryProvider(

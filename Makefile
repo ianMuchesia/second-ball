@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp
+.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate
 
 help:
 	@echo "Targets:"
@@ -17,6 +17,7 @@ help:
 	@echo "          timeline CSV + PNG -> docs/timelines/ (needs make up)"
 	@echo "  eval-moments  moment detector vs the demo's answer key + 50 free matches -> docs/EVAL.md"
 	@echo "  mcp     football MCP server (stdio) over demo/match.jsonl"
+	@echo "  narrate  demo big moments through the real model in .env (set MAX_RUN_USD)"
 
 up:
 	docker compose up -d
@@ -72,3 +73,7 @@ eval-moments:
 mcp:
 	@test -f demo/match.jsonl || $(MAKE) demo
 	uv run python -m agents.mcp_server --match-file demo/match.jsonl
+
+narrate:
+	@test -f demo/match.jsonl || $(MAKE) demo
+	uv run python -m scripts.narrate_demo
