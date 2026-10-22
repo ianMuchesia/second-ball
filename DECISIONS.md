@@ -490,3 +490,12 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   and the aired lines' values; at full time soft "predictions" ("sealed the
   win") are facts and allowed; max 60 words; template fallback uses only the
   score, shots or xG and the most important aired line.
+- Fix after the first real run of 3c: a call that timed out on the asyncio
+  side kept running in its thread, the next call started, and the budget's
+  precheck/charge pairs interleaved ("charge() called without a passed
+  precheck()"). Now LLMClient runs precheck -> generate -> charge under a
+  lock, and the per-agent time limit is set on the HTTP request itself
+  (CALL_TIMEOUT -> GeminiProvider), so a slow call really stops; the pacing
+  wait does not count. asyncio's guard stays as a backstop (+90 s). Limits
+  raised to 20 s (recap 25 s): on the free tier a request took 19 s when
+  Google answered 429 and the SDK waited. A failed call is not charged.

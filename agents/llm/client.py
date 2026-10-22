@@ -1,6 +1,8 @@
 import logging
 import os
+import threading
 import uuid
+from contextvars import ContextVar
 
 from dotenv import load_dotenv
 
@@ -22,6 +24,11 @@ DEFAULT_KES_RATE = 130.0
 DEFAULT_KES_RATE_DATE = "2026-09-29"
 
 
+# Seconds the current model call may take (set by the pipeline per agent call,
+# read here; asyncio.to_thread carries it into the worker thread).
+CALL_TIMEOUT: ContextVar[float | None] = ContextVar("call_timeout", default=None)
+
+
 class LLMClient:
     """The only way agents call a model. Every call goes through core/budget.py."""
 
@@ -31,8 +38,15 @@ class LLMClient:
         # Kill switch: once the budget says no, no more model calls this run;
         # the pipeline switches to code templates.
         self.killed = False
+        # One call at a time: precheck -> generate -> charge must not interleave
+        # (core/budget.py pairs each charge with its precheck).
+        self.lock = threading.Lock()
 
     def complete(self, prompt, *, max_output_tokens, system=None):
+        with self.lock:
+            return self.locked_complete(prompt, max_output_tokens, system)
+
+    def locked_complete(self, prompt, max_output_tokens, system):
         model = self.provider.model
         if self.killed:
             raise BudgetExceeded("kill switch: the budget stopped model calls")
@@ -43,7 +57,11 @@ class LLMClient:
         except BudgetExceeded:
             self.killed = True
             raise
-        response = self.provider.generate(prompt, system, max_output_tokens)
+        timeout = CALL_TIMEOUT.get()
+        extra = {"timeout_s": timeout} if timeout else {}
+        # A failed call is not charged (nothing to bill); the next precheck
+        # replaces this one.
+        response = self.provider.generate(prompt, system, max_output_tokens, **extra)
         self.budget.charge(model, response.input_tokens, response.output_tokens)
         log.info("llm call %s", self.budget.ledger[-1])
         return response

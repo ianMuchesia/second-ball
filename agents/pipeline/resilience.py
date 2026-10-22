@@ -18,14 +18,18 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from agents.llm import LLMClient, ProviderError
+from agents.llm.client import CALL_TIMEOUT
 from agents.telemetry import step
 from core.budget import BudgetExceeded
 
 log = logging.getLogger(__name__)
 
-# Seconds per call, by role: generous for a slow free tier, tight enough that
-# a stuck call cannot hold a moment past its 8 s (viewer) freshness for long.
-TIMEOUT_S = {"analyst": 10.0, "narrator": 8.0, "localizer": 8.0, "recap": 15.0}
+# Seconds per model request, by role. The limit is set on the HTTP request
+# itself (so a slow call really stops; a call left running in a thread would
+# hold the client), not on the pacing wait before it. Generous: on the free
+# tier a request can take 15 s when Google answers 429 and the SDK waits.
+TIMEOUT_S = {"analyst": 20.0, "narrator": 20.0, "localizer": 20.0, "recap": 25.0}
+BACKSTOP_S = 90.0  # asyncio guard on top, for a provider that ignores its timeout
 
 
 @dataclass
@@ -55,9 +59,10 @@ async def ask(llm: LLMClient, agent, prompt: str, role: str, policy: Policy):
                 return None
         n = len(llm.budget.ledger)
         with step(f"llm.{role}", attempt=attempt) as span:
+            token = CALL_TIMEOUT.set(policy.timeout_s[role])
             try:
                 reply = await asyncio.wait_for(
-                    agent.run(prompt), policy.timeout_s[role]
+                    agent.run(prompt), policy.timeout_s[role] + BACKSTOP_S
                 )
                 span.set_attributes({**cost_since(llm, n), "outcome": "ok"})
                 return reply.text
@@ -70,10 +75,16 @@ async def ask(llm: LLMClient, agent, prompt: str, role: str, policy: Policy):
                 span.set_attributes({"outcome": "timeout"})
             except ProviderError as e:
                 span.set_attributes(
-                    {"outcome": "error", "error": str(e), "retryable": e.retryable}
+                    {
+                        "outcome": "timeout" if e.status == 408 else "error",
+                        "error": str(e),
+                        "retryable": e.retryable,
+                    }
                 )
                 if not e.retryable:
                     return None
+            finally:
+                CALL_TIMEOUT.reset(token)
         if attempt < policy.attempts:
             await policy.sleep(policy.backoff_s * 2 ** (attempt - 1))
     return None

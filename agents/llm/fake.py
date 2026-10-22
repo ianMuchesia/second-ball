@@ -63,12 +63,15 @@ class FakeProvider:
     def count_tokens(self, prompt, system):
         return len(((system or "") + prompt).split())
 
-    def generate(self, prompt, system, max_output_tokens):
+    def generate(self, prompt, system, max_output_tokens, timeout_s=None):
         role = next(
             (r for r in ROLES if f"ROLE: {r.upper()}" in (system or "")), "other"
         )
         mode = self.failures[role].pop(0) if self.failures.get(role) else None
         if mode == "timeout":
+            if timeout_s is not None and self.slow_s > timeout_s:
+                time.sleep(timeout_s)  # the request gives up, like an HTTP timeout
+                raise ProviderError("fake timeout", retryable=True, status=408)
             time.sleep(self.slow_s)
         elif mode in FAILURES:
             status, retryable = FAILURES[mode]

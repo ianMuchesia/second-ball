@@ -15,7 +15,7 @@ from agents.llm.base import RETRYABLE_STATUS, LLMResponse, ProviderError
 # - retry: the SDK retries 429/503 with backoff (it never retries by default).
 # What still fails becomes a ProviderError (retryable or not) for the pipeline.
 RETRY = types.HttpRetryOptions(
-    attempts=4, initial_delay=2.0, max_delay=30.0, http_status_codes=[429, 503]
+    attempts=3, initial_delay=2.0, max_delay=10.0, http_status_codes=[429, 503]
 )
 
 
@@ -62,8 +62,15 @@ class GeminiProvider:
         count still comes back with the answer and is what gets charged."""
         return len(((system or "") + prompt).encode())
 
-    def generate(self, prompt, system, max_output_tokens):
+    def generate(self, prompt, system, max_output_tokens, timeout_s=None):
+        """timeout_s: this request's own limit (the pipeline's per-agent time
+        budget); the pacing wait before it does not count."""
         self.pace()
+        per_request = (
+            types.HttpOptions(timeout=int(timeout_s * 1000), retry_options=RETRY)
+            if timeout_s
+            else None
+        )
         try:
             response = self.client.models.generate_content(
                 model=self.model,
@@ -71,6 +78,7 @@ class GeminiProvider:
                 config=types.GenerateContentConfig(
                     system_instruction=system,
                     max_output_tokens=max_output_tokens,
+                    http_options=per_request,
                 ),
             )
         except errors.APIError as e:  # after the SDK's own retries
