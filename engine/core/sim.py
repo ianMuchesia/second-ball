@@ -84,6 +84,8 @@ def simulate_match(
         seed=seed,
         weather=weather,
         mode="scenario" if scenario else "free_simulation",
+        home_strength=home.strength,
+        away_strength=away.strength,
     )
     sim = _Sim(match, home, away, cfg, load_weather()[weather], scenario)
     events = sim.run()
@@ -92,6 +94,13 @@ def simulate_match(
         if missed:
             raise RuntimeError(f"scenario beats never played: {missed}")
     return SimulatedMatch(match, events, sim.truth, sim.mode_log)
+
+
+def underdog_caution(cfg, own, opponent):
+    """0 for an equal or stronger team, rising to 1 at underdog.full_gap."""
+    u = cfg["underdog"]
+    gap = opponent - own
+    return clamp((gap - u["from_gap"]) / (u["full_gap"] - u["from_gap"]), 0.0, 1.0)
 
 
 class _Sim:
@@ -104,6 +113,12 @@ class _Sim:
         self.wx = weather
         self.rng = random.Random(match.seed)
         self.teams = (TeamState.start(0, home), TeamState.start(1, away))
+        for side in (0, 1):
+            self.teams[side].caution = underdog_caution(
+                cfg,
+                self.teams[side].profile.strength,
+                self.teams[1 - side].profile.strength,
+            )
         self.events = []
         self.truth = []
         self.samples = collections.deque()  # (t, side in possession, ball x)
@@ -142,6 +157,7 @@ class _Sim:
         drop = self.effect(side, "block_drop_m", 0.0)
         if team.mode == "protect":
             drop = team.profile.late_lead_block_drop
+        drop += team.caution * self.cfg["underdog"]["block_drop_m"]
         return team.profile.block_height - drop - self.scripted_drop(side)
 
     def push(self, side):
@@ -252,8 +268,15 @@ class _Sim:
 
     def set_mode(self, team, mode, reason):
         team.mode, team.mode_since, team.calm_since = mode, self.t, None
+        # "events": how many events were emitted before the switch (exact order).
         self.mode_log.append(
-            {"t": self.t, "team": team.profile.id, "mode": mode, "reason": reason}
+            {
+                "t": self.t,
+                "events": len(self.events),
+                "team": team.profile.id,
+                "mode": mode,
+                "reason": reason,
+            }
         )
 
     def counterpressing(self, side):
@@ -648,6 +671,7 @@ class _Sim:
             self.teams[side].profile.strength
             if bx <= self.cfg["style"]["final_third_x"]
             else 0.5,
+            quality=self.teams[side].profile.strength,
         )
         p *= self.wx.pass_success
         if d > 30:
@@ -870,7 +894,13 @@ class _Sim:
 
     def take_on(self, frame, presser_dist):
         side = self.attack
-        ok = self.rng.random() < 0.55 - 0.25 * pressure_load(presser_dist)
+        load = pressure_load(presser_dist)
+        technique = (
+            self.teams[side].profile.strength
+            - self.cfg["pass_model"]["strength_centre"]
+        )
+        q = self.cfg["quality"]["take_on_under_pressure"]
+        ok = self.rng.random() < 0.55 - 0.25 * load + q * technique * load
         bx, by = own(side, *self.ball)
         end = (
             on_pitch(

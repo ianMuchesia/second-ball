@@ -34,6 +34,8 @@ def match():
         "seed": 42,
         "weather": "rain",
         "mode": "free_simulation",
+        "home_strength": 0.75,
+        "away_strength": 0.45,
     }
 
 
@@ -204,3 +206,13 @@ def test_facing_deg_is_required():
     del frame[0]["facing_deg"]
     with pytest.raises(ValidationError):
         MatchEvent.model_validate(with_(event, freeze_frame=frame))
+
+
+def test_match_strengths_are_required_public_ratings():
+    for field in ("home_strength", "away_strength"):
+        missing = match()
+        del missing[field]
+        with pytest.raises(ValidationError):
+            Match.model_validate(missing)
+        with pytest.raises(ValidationError):
+            Match.model_validate({**match(), field: 1.2})

@@ -183,3 +183,60 @@ Phase 2a: replayer, interpreter, metric registry (2026-10-21).
   assignment too (limit unchanged: every event < 1 s).
 - Timeline: docs/timelines/demo.png is committed; the CSV next to it is data
   (git-ignored, *.csv).
+
+Phase 2b: control and chaos metrics (2026-10-21, Ian via the advisor's prompt).
+- Ian's definition of chaos (Argentina-France): an *open* match, both teams
+  creating, attack after attack. That is "openness"; "scrappiness" (ball
+  changing hands in midfield) is kept as a secondary, analyst-only group.
+  Metrics describe; they never call a match good or bad (tested).
+- Contract change (Ian's instruction in the 2b addendum): Match gets
+  home_strength / away_strength, public pre-match ratings (0-1). Rule: what a
+  broadcaster knows before or during a match is fair; the simulator's hidden
+  workings (mode, threat signal) are not.
+- Engine (addendum), TUNABLE: technical quality (quality.*) makes weaker
+  clubs lose more passes, receptions and take-ons under pressure; underdog
+  caution (underdog.*) grows with the strength gap: deeper block, fewer
+  attacking runs. (An extra "underdogs counter more" knob was tried and
+  removed: with it, 4-goal leaders changed more than 1-goal leaders, breaking
+  Ian's game-state rule test.)
+  Knobs, before -> after: xg_model.intercept -1.25 -> -1.3 (goals back in band).
+  Effect on realism: possession spread now PASSES (0.061, was 0.053); the
+  gap in shots between the best and worst club widened (team_shots_range
+  ~13 vs real 6.3-9.4; was 10.4). Tried lowering pass_model.per_strength and
+  an underdog counter boost: goals rose out of band and the gap stayed ~13.
+  Ian to decide whether weak clubs should shoot more.
+- field_tilt is now final-third *touches* (2b spec), not passes.
+- xT: 16 x 12 grid, value iteration on 500 free_simulation matches (seeds
+  70000+), moves = successful pass/cross/dribble/take-on; artifact
+  core/metrics/artifacts/xt_v1.json (versioned; records seeds and an engine
+  config hash). Re-fit with `uv run python -m scripts.fit_metrics`.
+- Openness scales (core/metrics/config.yaml) set near the 90th percentile of
+  10-minute windows in 500 free matches: two-way threat 0.2 xG, 4 threat
+  switches, transition 6 s (fast) to 40 s (slow). Threat = shot or ball at
+  xT > 0.05. Baseline per strength-gap bucket in
+  core/metrics/artifacts/openness_baseline_v1.json (seeds 80000+):
+  <0.1: 0.369, 0.1-0.3: 0.351, >0.3: 0.337 (window sd ~0.19, so the fixture
+  effect is real but small; most variation is within matches).
+- openness_vs_expected = openness minus the bucket mean (difference, 0-1 units).
+- Control index = equal-weight mean of possession (time), field tilt, xT share.
+- Windows: control and openness on rolling 10 minutes only; xT share and
+  scrappiness also whole-match.
+- Demo late spell (Ian, 2026-10-22): after the engine changes, 80-88' in the
+  demo was no longer open (Riverside, 10 men, chased but barely created).
+  Ian's decision: (1) script it: two labelled beats, counter_chance_82
+  (Riverside) and counter_chance_85 (Harbour), plus an open_spell moment in the
+  answer key; (2) replace the single-demo test with a general one over 300
+  free matches: two-way threat in late chasing spells (margin 1, 75'+,
+  trailing team in chase mode) vs the same matches' 0-30' windows; if it
+  fails, report, do not tune. Result on the final engine: +0.032 xG (95% CI
+  +0.021 to +0.044, n=170 matches): PASS. A "chasing teams throw players
+  forward" knob was tried (+0.044) but removed, since the rule holds without
+  it and nobody asked for it.
+- Test precision fix: "4-goal leaders never manage or protect" compared a
+  mode switch's exact time with a goal's whole-second event time, so a switch
+  just before a goal in the same second looked like it came after. The engine
+  now logs how many events came before each switch, and the test uses event
+  order. Same rule, exact instead of rounded.
+- Test changes: field-tilt test now checks touches (definition changed by the
+  spec, value unchanged, evidence check added); the registry test allows
+  analyst-only metrics (scrappiness has no casual name, per the spec).

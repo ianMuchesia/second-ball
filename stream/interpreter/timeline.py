@@ -16,7 +16,7 @@ FIELDS = ["minute", "clock", "period", "owner", "metric", "value", "evidence_cou
 
 def rows(events: Events):
     """One row per (minute, owner, metric); minute = elapsed match minutes."""
-    walk = Events(teams=events.teams)
+    walk = Events(teams=events.teams, strengths=events.strengths)
     out = []
 
     def snapshot():

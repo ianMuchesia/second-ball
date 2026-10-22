@@ -26,15 +26,11 @@ class Interpreter:
         self.matches: dict[str, Events] = {}
         self.latencies_s: list[float] = []
         for match, events in store.load():
-            self.matches[match.match_id] = Events.of(
-                (match.home_team, match.away_team), events
-            )
+            self.matches[match.match_id] = Events.for_match(match, events)
 
     def on_match(self, match: Match) -> None:
         self.store.record_match(match)
-        self.matches.setdefault(
-            match.match_id, Events(teams=(match.home_team, match.away_team))
-        )
+        self.matches.setdefault(match.match_id, Events.for_match(match))
 
     def on_event(self, event: MatchEvent) -> MatchState | None:
         """New event: update and return the MatchState. Duplicate: None."""

@@ -20,6 +20,7 @@ from core.metrics.events import (
     PPDA_ZONE_X,
     RESTARTS,
     SHOTS,
+    TOUCHES,
     Events,
     is_goal,
 )
@@ -141,10 +142,10 @@ def possession_changes_per_min(ev: Events, lo: int, team: None = None):
 
 
 def field_tilt(ev: Events, lo: int, team: str):
-    """Share of all final-third passes (each team in its attacking third) that
+    """Share of all final-third touches (each team in its attacking third) that
     are the team's: who is camped in the other's half."""
-    passes = [
-        e for e in window(ev, lo) if e.type in PASSES and e.start_x >= FINAL_THIRD_X
+    touches = [
+        e for e in window(ev, lo) if e.type in TOUCHES and e.start_x >= FINAL_THIRD_X
     ]
-    mine = [e for e in passes if e.team_id == team]
-    return share(mine, [e for e in passes if e.team_id != team], passes)
+    mine = [e for e in touches if e.team_id == team]
+    return share(mine, [e for e in touches if e.team_id != team], touches)

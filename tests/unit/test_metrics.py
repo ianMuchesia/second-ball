@@ -116,9 +116,11 @@ def test_possession_changes_per_minute():
 
 
 def test_field_tilt():
-    # Final-third passes (x >= 70): home e2 e3 e8; away none.
+    # Final-third touches (x >= 70): home passes e2 e3 e8 and shots e9 e10;
+    # away none (a tackle is not a touch).
     assert val("field_tilt", H) == 1.0
     assert val("field_tilt", A) == 0.0
+    assert ids("field_tilt", H) == ["e2", "e3", "e8", "e9", "e10"]
 
 
 def test_window_last_minute():
@@ -156,9 +158,11 @@ def test_every_number_carries_evidence():
 
 
 def test_registry_declares_everything_once():
+    analyst_only = {"possession_changes_per_min", "short_possessions", "loose_balls"}
     for m in METRICS.values():
         assert m.definition and m.unit
-        assert set(m.display_name) == {"analyst", "casual"}
+        personas = {"analyst"} if m.name in analyst_only else {"analyst", "casual"}
+        assert set(m.display_name) == personas, m.name
         assert m.formula.startswith("core.metrics.")
     assert METRICS["ppda"].display_name["casual"] == "How hard they're pressing"
     assert None in WINDOWS and {5, 10, 15} <= set(WINDOWS)

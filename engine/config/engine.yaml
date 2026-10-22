@@ -18,9 +18,25 @@ pass_model:
   per_strength: 4.0          # logit per unit of club strength above the centre. TUNABLE
   strength_centre: 0.63      # ~ the league's mean club strength (relative quality)
 
+# Technical quality (Phase 2b addendum). Under pressure, a club's strength
+# relative to the league (pass_model.strength_centre) changes how often it
+# keeps the ball: logit per unit of strength x pressure load. TUNABLE, owner: Ian.
+quality:
+  pass_under_pressure: 1.5
+  receive_under_pressure: 1.0
+  take_on_under_pressure: 0.3   # take-on success probability per unit x load
+
+# Underdog caution (Phase 2b addendum): grows with the pre-match strength gap.
+# caution = 0 at gap <= from_gap, 1 at gap >= full_gap. TUNABLE, owner: Ian.
+underdog:
+  from_gap: 0.05
+  full_gap: 0.4
+  block_drop_m: 5            # block this much deeper at full caution
+  runs_cut: 0.3              # share of attacking runs dropped at full caution
+
 # Shot xG = logistic(intercept + distance + angle + body part + assist type).
 xg_model:
-  intercept: -1.25
+  intercept: -1.3
   per_metre: -0.11
   per_radian_of_goal: 1.0    # angle the goal mouth makes from the shot spot
   header: -0.8

@@ -31,7 +31,7 @@ def topic(kafka_env):
 
 def expected(path):
     match, events = read(path)
-    return match, match_state(Events.of((match.home_team, match.away_team), events))
+    return match, match_state(Events.for_match(match, events))
 
 
 def test_delays_follow_match_time_and_skip_half_time(demo_file):

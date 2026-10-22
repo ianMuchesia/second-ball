@@ -36,6 +36,11 @@ Size: about 1,450 events per match. 100 matches ≈ 30 MB Parquet, ≈ 340 MB JS
 
 ## Schema (short)
 
+- **Match** carries `home_strength` / `away_strength`: public pre-match ratings
+  (0-1), like a published league rating. They shape how the engine plays
+  (weaker sides lose the ball more under pressure; underdogs sit deeper and
+  counter) and let the analyser compare a match with similar fixtures.
+
 Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
 
 - **Coordinates:** metres on a 105 × 68 pitch, SPADL convention: each event is
@@ -90,9 +95,9 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
 - **Not real football.** Players have no individual skill, speed or stamina;
   the ball travels instantly along straight lines; there are no penalties,
   offsides, substitutions or injuries.
-- **Possession spread is too narrow.** Clubs range about 42–60% possession;
-  real leagues spread wider (see `docs/DATA_REALISM.md`). Shots per club are
-  now realistic on average, and the gap between clubs is at the top of the real range.
+- **Shots between clubs spread too wide.** The best club takes about 19 shots a
+  match and the weakest about 6 (real gap 6-9 shots); possession spread is
+  now realistic (see `docs/DATA_REALISM.md`).
 - **Match modes** (manage / protect / chase from 65', Ian's rules) change how
   teams play by score and minute; the modes themselves are engine-internal and
   never in the data.

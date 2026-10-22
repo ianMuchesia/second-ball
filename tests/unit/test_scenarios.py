@@ -74,12 +74,24 @@ def test_counters_go_behind_riversides_left_back(demo):
         for e in demo.events
         if truth(demo, e).get("channel") and "scenario_beat" in truth(demo, e)
     ]
-    assert len(scripted) == 4  # 34', 50-60', 63', 88'
-    for e in scripted:
+    harbour = [e for e in scripted if e.team_id == "harbour_town"]
+    assert len(harbour) == 5  # 34', 50-60', 63', 85', 88'
+    for e in harbour:
         assert truth(demo, e)["channel"] == "behind_left_fullback"
         full_back = next(p for p in e.freeze_frame if p.player_id == lb_id)
         # Harbour's frame: Riverside's goal is at x = 105, so behind = larger x.
         assert e.end_x > full_back.x
+    # Riverside's one scripted break (82') goes in behind Harbour's back line
+    # (Harbour's players have generic roles, so: past every outfield player).
+    riverside = [e for e in scripted if e.team_id == "riverside_athletic"]
+    assert len(riverside) == 1
+    assert truth(demo, riverside[0])["channel"] == "behind_left_fullback"
+    outfield = [
+        p.x
+        for p in riverside[0].freeze_frame
+        if p.team_id == "harbour_town" and p.player_id != "harbour_town-1"
+    ]
+    assert riverside[0].end_x > max(outfield)
 
 
 def test_second_counter_is_a_chance_not_a_goal(demo):
@@ -154,3 +166,21 @@ def test_missed_beat_is_an_error():
 def test_red_card_beat_needs_a_role():
     with pytest.raises(ValidationError):
         Beat(id="x", minute=(63, 64), action="red_card_last_man", team="home")
+
+
+def test_late_open_spell_is_two_scripted_chances_not_goals(demo):
+    # Ian (2026-10-22): both teams create late on: Riverside ~82', Harbour ~85'.
+    for beat, team, (lo, hi) in (
+        ("counter_chance_82", "riverside_athletic", (82, 83)),
+        ("counter_chance_85", "harbour_town", (85, 86)),
+    ):
+        shots = [
+            e
+            for e in demo.events
+            if truth(demo, e).get("scenario_beat") == beat and e.type == "shot"
+        ]
+        assert len(shots) == 1
+        assert shots[0].team_id == team and shots[0].outcome == "fail"
+        assert lo <= shots[0].minute <= hi
+    key = expected_moments(DEMO, demo.match)
+    assert any(m["kind"] == "open_spell" for m in key["moments"])

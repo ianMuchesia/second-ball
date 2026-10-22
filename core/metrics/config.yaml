@@ -1,0 +1,30 @@
+# Control and chaos metrics (Phase 2b). Every value is TUNABLE, owner: Ian.
+# Scales were set from the distribution of 10-minute windows in free_simulation
+# matches (scripts/fit_metrics.py prints it); see DECISIONS.md.
+
+xt_version: 1
+
+control:
+  window_min: 10
+  weights:                     # control index = weighted mean of these shares
+    possession_time: 1.0
+    field_tilt: 1.0
+    xt_share: 1.0
+
+openness:
+  window_min: 10
+  threat_xt: 0.05              # a possession "creates threat": a shot, or the ball reaches xT > this
+  xg_scale: 0.2                # two-way threat at or above this = 1
+  switches_scale: 4            # threat switches at or above this = 1
+  fast_s: 6                    # median regain -> shot / box entry at or under this = 1
+  slow_s: 40                   # ... at or over this = 0
+  weights:
+    two_way_threat: 1.0
+    threat_switches: 1.0
+    transition_speed: 1.0
+  # Fixtures grouped by pre-match strength gap |home - away| for the baseline.
+  gap_buckets: [0.1, 0.3]      # < 0.1, 0.1-0.3, > 0.3
+  baseline_version: 1
+
+scrappiness:
+  short_possession_passes: 3   # possessions with fewer passes than this are short

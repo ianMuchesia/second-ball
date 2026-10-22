@@ -27,9 +27,14 @@ def pass_success(
     cross,
     restart,
     strength=0.5,
+    quality=None,
 ):
+    """`strength` is club quality where it applies to keeping the ball;
+    `quality` (default: strength) is technical quality under pressure."""
     m = cfg["pass_model"]
     strength_centre = m.get("strength_centre", 0.5)
+    q = cfg.get("quality", {})
+    technique = (strength if quality is None else quality) - strength_centre
     z = (
         m["intercept"]
         - m["per_metre"] * distance_m
@@ -42,6 +47,9 @@ def pass_success(
         + (m["restart_bonus"] if restart else 0.0)
         + m["per_strength"]
         * (strength - strength_centre)  # better than the league average
+        # Weaker teams lose more of their passes when pressed.
+        + q.get("pass_under_pressure", 0.0) * technique * passer_load
+        + q.get("receive_under_pressure", 0.0) * technique * receiver_load
     )
     return logistic(z)
 
