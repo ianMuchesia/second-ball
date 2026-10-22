@@ -15,6 +15,8 @@ from agents.llm.base import LLMResponse
 
 FAKE_MODEL = "fake-model"
 VALUES = re.compile(r"VALUES:\s*(\{.*?\})\s*$", re.DOTALL | re.MULTILINE)
+# Enough "translation" for the Localizer's English check to pass offline.
+SWAHILI = {"the": "", "and": "na", "from": "kutoka", "to": "hadi", "with": "na"}
 ERRORS = {
     "wrong_number": lambda line: re.sub(r"\d+(\.\d+)?", "97", line, count=1),
     "invented_player": lambda line: f"Okafor makes it happen. {line}",
@@ -64,7 +66,8 @@ class FakeProvider:
                 }
             )
         if "ROLE: LOCALIZER" in system:
-            return "[sw] " + prompt.split("TEXT:", 1)[-1].strip()
+            words = prompt.split("TEXT:", 1)[-1].split()
+            return "[sw] " + " ".join(SWAHILI.get(w.lower(), w) for w in words)
         line = self.echo_line(v)
         narrated = sum(1 for s, _ in self.calls if s and "ROLE: NARRATOR" in s)
         if narrated <= self.errors:

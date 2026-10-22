@@ -6,12 +6,16 @@
 - Every capitalised name must be a team or a player on the pitch.
 - Rejected outright: predictions ("will win"), and blaming one event on the
   weather.
+- Saying the wrong team leads (or trails) is rejected: the score decides.
+- A line too close to one of the style examples is rejected (copied).
 - Injuries and the referee are not rejected but raise the risk tier to high:
   a human must approve before the line airs.
 Returns a Verdict: passed, or the list of reasons (fed back to the Narrator).
+`untranslated` checks the Localizer's reply the same way: plain code.
 """
 
 import re
+from collections.abc import Sequence
 
 from agents.pipeline.models import Analysis, Verdict
 
@@ -58,6 +62,12 @@ COMMON_WORDS = """
     home away side sides team teams players player everyone nobody somebody
     """
 COMMON = set(COMMON_WORDS.split())
+LEADS = r"(?:'s)?\s+(?:are\s+|now\s+|still\s+)?(lead|leads|leading|ahead|in front)\b"
+TRAILS = r"(?:'s)?\s+(?:are\s+|now\s+|still\s+)?(trail|trails|trailing)\b"
+COPY_LIMIT = 0.8  # word overlap (Jaccard) with a style example that counts as a copy
+# Common English words that should not survive a translation; 2 or more means
+# the Localizer answered (partly) in English.
+ENGLISH_HINTS = {"the", "and", "behind", "from", "with", "their", "again", "is"}
 
 
 def numbers(text: str) -> list[tuple[float, int, bool]]:
@@ -120,7 +130,62 @@ def unknown_names(text: str, analysis: Analysis) -> list[str]:
     return out
 
 
-def verify(text: str, analysis: Analysis) -> Verdict:
+def score_mistakes(text: str, analysis: Analysis) -> list[str]:
+    """'X lead', 'X trailing', 'leading X' etc. checked against the score."""
+    ctx = analysis.task.context
+    home, away = ctx.score
+    leader = ctx.home if home > away else ctx.away if away > home else None
+    claims = []  # (team, leads?)
+    for team in (ctx.home, ctx.away):
+        other = ctx.away if team == ctx.home else ctx.home
+        name = re.escape(ctx.team_names[team])
+        if re.search(rf"\b{name}{LEADS}", text, re.IGNORECASE):
+            claims.append((team, True))
+        if re.search(rf"\b{name}{TRAILS}", text, re.IGNORECASE):
+            claims.append((team, False))
+        if re.search(rf"\bleading\s+{name}\b", text, re.IGNORECASE):
+            claims.append((other, True))
+        if re.search(rf"\btrailing\s+{name}\b", text, re.IGNORECASE):
+            claims.append((other, False))
+    score = f"{ctx.team_names[ctx.home]} {home}-{away} {ctx.team_names[ctx.away]}"
+    return [
+        f"wrong about the score: it is {score}, so {ctx.team_names[team]} "
+        f"{'do not lead' if leads else 'are not behind'}"
+        for team, leads in claims
+        if (leader == team) != leads
+    ]
+
+
+def words_of(text: str) -> set[str]:
+    return {w.lower() for w in WORD.findall(text)}
+
+
+def copied(text: str, examples: Sequence[str]) -> bool:
+    mine = words_of(text)
+    for line in examples:
+        theirs = words_of(line)
+        if mine and len(mine & theirs) / len(mine | theirs) > COPY_LIMIT:
+            return True
+    return False
+
+
+def untranslated(translation: str, english: str) -> str | None:
+    """Why a translation is not usable, or None. Numbers are checked too."""
+    if not translation:
+        return "empty reply"
+    if translation.strip().lower() == english.strip().lower():
+        return "the reply is the English line, not a translation"
+    if len(words_of(translation) & ENGLISH_HINTS) >= 2:
+        return "the reply is still partly English"
+    if sorted(x for x, _, _ in numbers(translation)) != sorted(
+        x for x, _, _ in numbers(english)
+    ):
+        return "the numbers changed; keep every number exactly as written"
+    return None
+
+
+def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdict:
+    """`examples`: the Narrator's style examples, which a line must not copy."""
     reasons = []
     allowed = allowed_numbers(analysis)
     for x, decimals, percent in numbers(text):
@@ -132,6 +197,9 @@ def verify(text: str, analysis: Analysis) -> Verdict:
             )
     for name in unknown_names(text, analysis):
         reasons.append(f"'{name}' is not a team or a player on the pitch")
+    reasons += score_mistakes(text, analysis)
+    if copied(text, examples):
+        reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):
         reasons.append("no predictions: describe what happened, not what will happen")
     if WEATHER_CAUSE.search(text):

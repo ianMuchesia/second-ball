@@ -238,3 +238,84 @@ def test_deadlines_scale_with_replay_speed():
     p = Producer(speed=10)
     (aired,) = p.offer(narrative("a"), moment_t=100, importance=0.9, now=170)
     assert aired.overlay_id == "a"
+
+
+# The score is Riverside 0-1 Harbour in CONTEXT.
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Riverside lead 0-1.",
+        "Riverside grab control while leading Harbour 0-1.",
+        "Harbour are trailing now.",
+    ],
+)
+def test_saying_the_wrong_team_leads_is_rejected(line):
+    verdict = verify(line, analysis())
+    assert not verdict.passed and "wrong about the score" in verdict.reasons[0]
+
+
+@pytest.mark.parametrize(
+    "line", ["Harbour lead 0-1.", "Riverside trail 0-1.", "Harbour's lead holds."]
+)
+def test_saying_the_right_team_leads_passes(line):
+    assert verify(line, analysis()).passed
+
+
+def test_prompt_says_who_is_leading_and_who_the_red_card_helps():
+    task = TASK.model_copy(
+        update={"context": CONTEXT.model_copy(update={"sent_off": {R: 1}})}
+    )
+    block = prompts.values_block(task, values_of(task))
+    assert '"Riverside": "trailing, a player down"' in block
+    assert '"Harbour": "leading"' in block
+    assert '"event": "Riverside had a player sent off"' in block
+    assert '"good_for": "Harbour"' in block
+    assert '"numbers_are_for": "Riverside"' in block
+
+
+def test_copying_a_style_example_is_rejected():
+    example = "Red card for Riverside! Their last man walks while trailing 0-1."
+    copy = verify(example.replace("walks", "goes"), analysis(), [example])
+    assert not copy.passed and "style example" in copy.reasons[0]
+    assert verify("Riverside are a man down at 0-1.", analysis(), [example]).passed
+
+
+def test_style_examples_are_labelled_do_not_copy():
+    assert "DO NOT COPY" in prompts.narrator_system("casual")
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Riverside's control went from 0.71 to 0.81.",  # the English line itself
+        "Udhibiti wa Riverside went from 0.71 and 0.81.",  # partly English
+    ],
+)
+def test_localizer_retries_english_then_drops_it(reply):
+    replies = []
+
+    def script(prompt, system):
+        if "ROLE: LOCALIZER" in system:
+            replies.append(prompt)
+            return reply
+        if "ANALYST" in system:
+            return FakeProvider(None).answer(prompt, system)
+        return "Riverside's control went from 0.71 to 0.81."
+
+    out = run(llm(script=script))
+    assert set(out.overlay.text) == {"en"}
+    assert len(replies) == 2 and "rejected" in replies[1]
+
+
+def test_localizer_keeps_a_good_retry():
+    def script(prompt, system):
+        if "ROLE: LOCALIZER" in system:
+            if "rejected" in prompt:
+                return "Udhibiti wa Riverside ulipanda kutoka 0.71 hadi 0.81."
+            return "Riverside's control went from 0.71 to 0.81."
+        if "ANALYST" in system:
+            return FakeProvider(None).answer(prompt, system)
+        return "Riverside's control went from 0.71 to 0.81."
+
+    out = run(llm(script=script))
+    assert out.overlay.text["sw"].startswith("Udhibiti")

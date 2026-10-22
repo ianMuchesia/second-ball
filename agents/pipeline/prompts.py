@@ -4,7 +4,7 @@ code (the VALUES block); the model only chooses words."""
 import json
 
 from agents.narrator import examples
-from agents.pipeline.models import Analysis, NarrationTask
+from agents.pipeline.models import Analysis, MatchContext, NarrationTask
 
 KIND_WORDS = {
     "goal": "goal",
@@ -31,8 +31,10 @@ NARRATOR = """ROLE: NARRATOR
 You write ONE on-screen line (max 25 words) about a football moment for the
 {persona} viewer. {style}
 Rules: quote only numbers from VALUES (you may round them); name only the teams
-and players listed; no predictions; do not blame one event on the weather; no
-injury or referee talk."""
+and players listed; "standing" says who is leading, "good_for" who the
+moment helps and "numbers_are_for" whose numbers they are, so never say
+otherwise; no predictions; do not blame one event
+on the weather; no injury or referee talk."""
 
 STYLE = {
     "casual": "Casual fan: short, a little emotion, plain words, no jargon.",
@@ -41,22 +43,53 @@ STYLE = {
 
 LOCALIZER = """ROLE: LOCALIZER
 Translate the line into {language}. Keep every number exactly as written and
-keep team and player names unchanged. Reply with the translation only."""
+keep team and player names unchanged. Use football meanings: "clinical" means
+accurate and deadly in front of goal, never medical. Reply with the
+translation only."""
+
+# What happened, in words code chooses, so a model cannot get the sides wrong.
+EVENT = {
+    "goal": "{team} scored",
+    "red_card_impact": "{team} had a player sent off",
+}
+# Who the moment is good for: the team itself, or its opponent.
+GOOD_FOR_OPPONENT = {"red_card_impact"}
 
 LANGUAGE = {"sw": "Swahili"}
 
 
+def standing(ctx: MatchContext, team: str) -> str:
+    """'leading', 'trailing' or 'level', plus 'a player down' (or more)."""
+    home, away = ctx.score
+    mine, theirs = (home, away) if team == ctx.home else (away, home)
+    words = "leading" if mine > theirs else "trailing" if mine < theirs else "level"
+    other = ctx.away if team == ctx.home else ctx.home
+    down = ctx.sent_off.get(team, 0) - ctx.sent_off.get(other, 0)
+    if down > 0:
+        words += ", a player down" if down == 1 else f", {down} players down"
+    return words
+
+
 def values_block(task: NarrationTask, values: dict[str, float]) -> str:
     ctx = task.context
+    team = task.moment.team
+    name = ctx.team_names.get(team or "", None)
     block = {
         "kind": task.moment.kind,
-        "team": ctx.team_names.get(task.moment.team or "", None),
+        "team": name,
         "minute": task.moment.clock.minute,
         "score": f"{ctx.team_names[ctx.home]} {ctx.score[0]}-{ctx.score[1]} "
         f"{ctx.team_names[ctx.away]}",
+        "standing": {ctx.team_names[t]: standing(ctx, t) for t in (ctx.home, ctx.away)},
         "numbers": {k: round(v, 2) for k, v in values.items()},
+        "numbers_are_for": name or "the match",
         "players_on_pitch": sorted(ctx.players.values()),
     }
+    if team and task.moment.kind in EVENT:
+        other = ctx.away if team == ctx.home else ctx.home
+        block["event"] = EVENT[task.moment.kind].format(team=name)
+        good = other if task.moment.kind in GOOD_FOR_OPPONENT else team
+        block["good_for"] = ctx.team_names[good]
     return "VALUES: " + json.dumps(block)
 
 
@@ -67,7 +100,10 @@ def analyst_prompt(task: NarrationTask, values: dict[str, float]) -> str:
 def narrator_system(persona: str) -> str:
     shots = examples(persona)
     tail = (
-        ("\nExamples of the voice:\n" + "\n".join(f"- {x}" for x in shots))
+        (
+            "\nSTYLE EXAMPLES ONLY - DO NOT COPY PHRASING OR NUMBERS FROM THESE "
+            "EXAMPLES (they are other moments):\n" + "\n".join(f"- {x}" for x in shots)
+        )
         if shots
         else ""
     )

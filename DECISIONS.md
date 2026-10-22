@@ -370,3 +370,24 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
 - `make narrate` / scripts/narrate_demo.py: demo moments with importance >= 0.9
   through the real pipeline. First run: 3 moments x 2 personas, 18 calls,
   every line passed first try, $0.0033, 1 min 46 s at 10 requests a minute.
+
+## 2026-10-22: who is winning, copies, untranslated Swahili (advisor's 3 fixes)
+
+- Prompt VALUES now carry code-made words: "standing" per team (leading /
+  trailing / level, "a player down"), "event" ("Riverside had a player sent
+  off"), "good_for" (red card helps the opponent; a goal helps the scorer)
+  and "numbers_are_for" (whose metrics). Before, the model read the red card
+  as good for Riverside and gave Riverside's control numbers to Harbour.
+- Verifier rejects a line that says the wrong team leads or trails ("X
+  lead", "X trailing", "leading X"), checked against the score.
+- Verifier rejects a line too close to a style example (word overlap,
+  Jaccard > 0.8); the examples are labelled "STYLE EXAMPLES ONLY - DO NOT
+  COPY". The gold test checks Ian's lines without this check (they are the
+  examples).
+- Localizer: a reply that is the English line, has 2+ common English words
+  (the, and, behind, from, with, their, again, is) or changes a number gets
+  one retry with the reason, then the language is dropped (English airs).
+  The prompt says "clinical" is the football sense (it came back as
+  "kimatibabu", medical).
+- Real run after the fixes: all lines right about who leads and who the red
+  card helps; one invented number (0.45 = 1.73 - 1.28) caught and retried.

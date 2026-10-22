@@ -29,6 +29,7 @@ class MatchContext(Part):
     score: tuple[int, int]  # (home, away)
     minute: int
     players: dict[str, str] = Field(default_factory=dict)  # on the pitch: id -> name
+    sent_off: dict[str, int] = Field(default_factory=dict)  # team_id -> red cards
 
 
 class NarrationTask(Part):

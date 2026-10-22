@@ -9,6 +9,7 @@ the Verifier sent lines back, then the cost.
 
 import argparse
 import asyncio
+from collections import Counter
 from pathlib import Path
 
 from agents.llm import from_env
@@ -22,9 +23,11 @@ TEAM_NAMES = {"riverside_athletic": "Riverside", "harbour_town": "Harbour"}
 
 
 def context_at(data: MatchData, moment: Moment) -> MatchContext:
-    """What a broadcaster knows at the moment: score up to its last evidence event."""
+    """What a broadcaster knows at the moment: score and red cards up to its
+    last evidence event."""
     n = max(data.by_id[i] for i in moment.evidence_event_ids) + 1
-    s = score(data.events.upto(n))
+    so_far = data.events.upto(n)
+    s = score(so_far)
     m = data.match
     return MatchContext(
         match_id=m.match_id,
@@ -36,6 +39,9 @@ def context_at(data: MatchData, moment: Moment) -> MatchContext:
         },
         score=(s.home, s.away),
         minute=moment.clock.minute,
+        sent_off=dict(
+            Counter(e.team_id for e in so_far.items if e.outcome == "red_card")
+        ),
     )
 
 

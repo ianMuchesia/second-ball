@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from agent_framework import Agent, Executor, WorkflowBuilder, WorkflowContext, handler
 
 from agents.llm import LLMClient
+from agents.narrator import examples
 from agents.pipeline import prompts
 from agents.pipeline.client import AdapterChatClient
 from agents.pipeline.models import (
@@ -26,11 +27,12 @@ from agents.pipeline.models import (
     Retry,
     Verdict,
 )
-from agents.pipeline.verifier import numbers, verify
+from agents.pipeline.verifier import untranslated, verify
 from core.contracts import Insight, Overlay
 from core.contracts.overlay import OverlayTime
 
 MAX_ATTEMPTS = 3  # the first line + 2 retries
+LOCALIZER_ATTEMPTS = 2  # a translation + 1 retry
 DURATION_MS = 6000
 
 
@@ -126,7 +128,9 @@ class VerifierExecutor(Executor):
 
     @handler
     async def check(self, draft: Draft, ctx: WorkflowContext[Retry | Approved]) -> None:
-        verdict = verify(draft.text, draft.analysis)
+        verdict = verify(
+            draft.text, draft.analysis, examples(draft.analysis.task.persona)
+        )
         history = [*draft.history, verdict]
         if verdict.passed:
             await ctx.send_message(
@@ -163,8 +167,9 @@ class VerifierExecutor(Executor):
 
 
 class LocalizerExecutor(Executor):
-    """Translates the approved line; a translation that changes the numbers is
-    dropped (English is always kept)."""
+    """Translates the approved line, checked by code (numbers unchanged, not
+    still English); one retry with the reason, then the language is dropped
+    (English always airs)."""
 
     def __init__(self, llm: LLMClient):
         super().__init__(id="localizer")
@@ -176,7 +181,6 @@ class LocalizerExecutor(Executor):
     ) -> None:
         task = approved.analysis.task
         text = {"en": approved.text}
-        english = sorted(x for x, _, _ in numbers(approved.text))
         for lang in task.languages:
             agent = Agent(
                 client=AdapterChatClient(self.llm),
@@ -185,9 +189,14 @@ class LocalizerExecutor(Executor):
                 ),
                 name=f"localizer_{lang}",
             )
-            reply = (await agent.run(f"TEXT: {approved.text}")).text.strip()
-            if reply and sorted(x for x, _, _ in numbers(reply)) == english:
-                text[lang] = reply
+            ask = f"TEXT: {approved.text}"
+            for _ in range(LOCALIZER_ATTEMPTS):
+                reply = (await agent.run(ask)).text.strip()
+                problem = untranslated(reply, approved.text)
+                if problem is None:
+                    text[lang] = reply
+                    break
+                ask = f"Your last reply was rejected: {problem}.\nTEXT: {approved.text}"
         await ctx.yield_output(
             Narration(
                 overlay=overlay(approved, text),
