@@ -26,9 +26,17 @@ from core.metrics.events import (
 )
 
 
-def value(v, evidence, checked=()):
+def value(v, evidence, checked=(), num=None, den=None):
+    """MetricValue, or None with no events to point at. Rates pass num/den."""
     ids = [e.event_id for e in evidence] or [e.event_id for e in checked]
-    return MetricValue(value=v, evidence_event_ids=ids) if ids else None
+    if not ids:
+        return None
+    return MetricValue(value=v, evidence_event_ids=ids, numerator=num, denominator=den)
+
+
+def rate(num, den, evidence, checked=()):
+    """num / den with both kept; None when den is 0."""
+    return value(num / den, evidence, checked, num, den) if den else None
 
 
 def window(ev: Events, lo: int):
@@ -37,7 +45,7 @@ def window(ev: Events, lo: int):
 
 def share(mine, theirs, checked):
     total = len(mine) + len(theirs)
-    return value(len(mine) / total, mine, checked) if total else None
+    return rate(len(mine), total, mine, checked)
 
 
 def possession_time(ev: Events, lo: int, team: str):
@@ -61,7 +69,7 @@ def possession_time(ev: Events, lo: int, team: str):
             credited.append(e)
     if total <= 0:
         return None
-    return value(mine / total, credited, window(ev, lo))
+    return rate(mine, total, credited, window(ev, lo))
 
 
 def possession_passes(ev: Events, lo: int, team: str):
@@ -79,7 +87,7 @@ def passes_per_possession(ev: Events, lo: int, team: str):
         return None
     passes = [e for e in events if e.type in PASSES and e.team_id == team]
     starts = [e for e in events if e.possession_id in owned]
-    return value(len(passes) / len(owned), passes, starts)
+    return rate(len(passes), len(owned), passes, starts)
 
 
 def shots(ev: Events, lo: int, team: str):
@@ -118,7 +126,7 @@ def ppda(ev: Events, lo: int, team: str):
     ]
     if not actions:
         return None
-    return value(len(passes) / len(actions), passes + actions)
+    return rate(len(passes), len(actions), passes + actions)
 
 
 def possession_changes_per_min(ev: Events, lo: int, team: None = None):
@@ -138,7 +146,7 @@ def possession_changes_per_min(ev: Events, lo: int, team: None = None):
         prev_pid, prev_owner = e.possession_id, owner
     if minutes <= 0:
         return None
-    return value(len(changes) / minutes, changes, events)
+    return rate(len(changes), minutes, changes, events)
 
 
 def field_tilt(ev: Events, lo: int, team: str):
