@@ -1,4 +1,4 @@
-# Narrator few-shot examples (Ian's lines, picked and trimmed to 25 words).
+# Narrator few-shot examples: Ian's lines (second version), at most 25 words.
 # One casual-fan line and one analyst line per moment. Numbers in a line must
 # come from that moment's values: tests/unit/test_narrator_examples.py runs
 # every line through the Verifier against the real demo moment. These are the
@@ -13,15 +13,15 @@ examples:
   - moment: counter_goal_34
     kind: goal
     minute: 34
-    casual: "One pass in behind the left-back and Harbour bury the counter. 0-1!"
-    analyst: "When you leave the space behind your left-back open, you get punished: that one chance takes Harbour's xG from 0.16 to 0.61."
+    casual: "Lightning from Harbour! One pass behind Riverside's left-back on the counter, and Harbour lead 0-1!"
+    analyst: "Harbour counter into the space behind Riverside's left-back, pushing their xG from 0.16 to 0.61 with that single chance."
   - moment: red_card_63
     kind: red_card_impact
     minute: 63
-    casual: "Red card! The last man walks, and Riverside's mountain just got steeper."
-    analyst: "Harbour sit off: pressure on the ball halves from 0.52 to 0.25, and Riverside's control climbs to 0.80. Possession Harbour are happy to give."
+    casual: "Red card for Riverside! Their last man walks while trailing 0-1, leaving them down to ten men!"
+    analyst: "Riverside lose their left centre-back; Harbour halve ball pressure from 0.52 to 0.25, raising Riverside's control to 0.80 and defence-midfield gap to 13.8 m."
   - moment: counter_goal_88
     kind: goal
     minute: 88
-    casual: "Twice the trap is sprung! Down that same left side again, and it's 0-2."
-    analyst: "Same space, same result: another counter behind the left-back, and Harbour's xG climbs from 1.28 to 1.73. Riverside never closed that gap."
+    casual: "Harbour strike on the break again! Right behind Riverside's left-back once more to make it 0-2!"
+    analyst: "Another sharp counter behind Riverside's left-back lifts Harbour's xG from 1.28 to 1.73 as that open channel is punished again."

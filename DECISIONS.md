@@ -353,7 +353,9 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
 
 ## 2026-10-22: real model (Gemini) and Ian's narrator lines
 
-- Narrator examples: Ian's six lines (drafted with Gemini, picked and trimmed
+- Narrator examples: Ian's six lines (second version, his own pick; "lightning"
+  added to the Verifier's common words so his 34' opener is not taken for a
+  name). Earlier draft: drafted with Gemini, picked and trimmed
   to the 25-word limit by the agent). They are gold items: a test runs each
   through the Verifier against the real demo moment.
 - Gemini rate limits are per project, per minute and per day (numbers in AI

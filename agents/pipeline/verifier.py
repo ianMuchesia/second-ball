@@ -54,7 +54,7 @@ COMMON_WORDS = """
     corner free kick break breaks attack attacks defence defense keeper winger
     full fullback full-back striker midfield centre center left right wide deep high
     big huge great brilliant superb lovely clinical quick fast sharp clever simple
-    unbelievable incredible remarkable another familiar same pattern again
+    unbelievable incredible remarkable another familiar same pattern again lightning
     home away side sides team teams players player everyone nobody somebody
     """
 COMMON = set(COMMON_WORDS.split())
