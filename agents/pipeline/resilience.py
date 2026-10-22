@@ -6,7 +6,8 @@ rate limit (429) or a server/network error gets one retry after a pause
 answer, `ask` returns None and the caller falls back to code: a code-made
 Insight, the code template line, or no translation (English always airs).
 BudgetExceeded trips the kill switch (LLMClient.killed): no model calls for
-the rest of the run, templates only. Never an empty overlay.
+the rest of the run, templates only; so does a quota that is gone for hours
+(e.g. the free tier's 500 requests a day). Never an empty overlay.
 
 The free-tier request limit is respected below this layer: GeminiProvider
 paces requests to GEMINI_RPM and its SDK retries 429s first.
@@ -74,6 +75,11 @@ async def ask(llm: LLMClient, agent, prompt: str, role: str, policy: Policy):
             except TimeoutError:
                 span.set_attributes({"outcome": "timeout"})
             except ProviderError as e:
+                if e.exhausted:
+                    llm.killed = True  # same as the budget: templates from now on
+                    span.set_attributes({"outcome": "quota_exhausted", "error": str(e)})
+                    log.warning("model quota exhausted, templates only: %s", e)
+                    return None
                 span.set_attributes(
                     {
                         "outcome": "timeout" if e.status == 408 else "error",

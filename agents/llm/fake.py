@@ -8,7 +8,8 @@ Verifier, the retries and the fallback.
 Failure injection: `failures` = {role: [mode, ...]}, consumed one per call of
 that role ("analyst", "narrator", "localizer", "recap"): "timeout" (answers
 after `slow_s`), "rate_limit" (429), "server_error" (503), "bad_request"
-(400, not retryable), "malformed" (an unusable answer).
+(400, not retryable), "quota" (429 for hours: daily cap), "malformed" (an
+unusable answer).
 A `script` (list of strings, or a function of (prompt, system)) overrides it.
 """
 
@@ -73,6 +74,10 @@ class FakeProvider:
                 time.sleep(timeout_s)  # the request gives up, like an HTTP timeout
                 raise ProviderError("fake timeout", retryable=True, status=408)
             time.sleep(self.slow_s)
+        elif mode == "quota":
+            raise ProviderError(
+                "fake 429: retry in 10h", retryable=False, status=429, exhausted=True
+            )
         elif mode in FAILURES:
             status, retryable = FAILURES[mode]
             raise ProviderError(f"fake {status}", retryable=retryable, status=status)

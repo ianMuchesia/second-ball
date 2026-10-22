@@ -1,3 +1,4 @@
+import re
 import threading
 import time
 
@@ -17,6 +18,19 @@ from agents.llm.base import RETRYABLE_STATUS, LLMResponse, ProviderError
 RETRY = types.HttpRetryOptions(
     attempts=3, initial_delay=2.0, max_delay=10.0, http_status_codes=[429, 503]
 )
+
+
+# A 429 that says "retry in 10h11m" is the daily cap, not a burst: no retry.
+EXHAUSTED_AFTER_S = 120.0
+RETRY_IN = re.compile(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
+
+
+def retry_after_s(message: str) -> float | None:
+    m = RETRY_IN.search(message)
+    if not m or not any(m.groups()):
+        return None
+    h, mins, s = (float(x) if x else 0.0 for x in m.groups())
+    return h * 3600 + mins * 60 + s
 
 
 class GeminiProvider:
@@ -82,10 +96,13 @@ class GeminiProvider:
                 ),
             )
         except errors.APIError as e:  # after the SDK's own retries
+            wait = retry_after_s(str(e))
+            exhausted = e.code == 429 and wait is not None and wait > EXHAUSTED_AFTER_S
             raise ProviderError(
                 f"gemini {e.code}: {e.message}",
-                retryable=e.code in RETRYABLE_STATUS,
+                retryable=e.code in RETRYABLE_STATUS and not exhausted,
                 status=e.code,
+                exhausted=exhausted,
             ) from e
         except (httpx.TimeoutException, httpx.TransportError) as e:
             raise ProviderError(f"gemini network: {e}", retryable=True) from e

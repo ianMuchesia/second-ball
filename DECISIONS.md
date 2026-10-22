@@ -499,3 +499,8 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   wait does not count. asyncio's guard stays as a backstop (+90 s). Limits
   raised to 20 s (recap 25 s): on the free tier a request took 19 s when
   Google answered 429 and the SDK waited. A failed call is not charged.
+- A 429 whose "retry in" is over 2 minutes (the free tier's daily cap: 500
+  requests/day for gemini-3.5-flash-lite) is not retried: it trips the kill
+  switch, templates for the rest of the run. Proven live on 2026-10-22: the
+  demo through Kafka at 60x with the quota gone aired every stat card, the
+  narrative templates and all four recaps; no empty overlay, no crash.

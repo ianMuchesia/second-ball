@@ -169,3 +169,19 @@ def test_one_trace_per_moment_with_a_span_per_step():
     assert verdicts[0].attributes["passed"] is False
     assert "not in the values" in verdicts[0].attributes["reasons"][0]
     assert root.attributes["llm.calls"] >= 4
+
+
+def test_a_daily_quota_switches_to_templates_for_the_rest_of_the_run():
+    llm = client(failures={"analyst": ["quota"]})
+    out = run(llm)
+    assert out.fallback and llm.killed
+    calls = len(llm.provider.calls)
+    assert run(llm).fallback and len(llm.provider.calls) == calls  # no more calls
+
+
+def test_gemini_reads_how_long_google_says_to_wait():
+    from agents.llm.gemini import retry_after_s
+
+    assert retry_after_s("Please retry in 10h11m26.02s.") == 36686.02
+    assert retry_after_s("Please retry in 3.5s.") == 3.5
+    assert retry_after_s("rate limited") is None

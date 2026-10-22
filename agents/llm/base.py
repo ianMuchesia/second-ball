@@ -12,12 +12,22 @@ class LLMResponse:
 
 class ProviderError(Exception):
     """A model call failed. retryable: worth trying again after a pause (rate
-    limit, server error, network); not: a bad request, an auth error."""
+    limit, server error, network); not: a bad request, an auth error.
+    exhausted: the quota is gone for a long time (e.g. the free tier's daily
+    cap): stop calling the model for this run."""
 
-    def __init__(self, message: str, *, retryable: bool, status: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool,
+        status: int | None = None,
+        exhausted: bool = False,
+    ):
         super().__init__(message)
         self.retryable = retryable
         self.status = status
+        self.exhausted = exhausted
 
 
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
