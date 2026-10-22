@@ -18,13 +18,13 @@ HOME, AWAY = "#2a78d6", "#eb6834"
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 PANELS = [
-    ("possession_time_last_10m", "Possession (time), last 10 min", "share", True),
-    ("field_tilt_last_10m", "Field tilt, last 10 min", "share", True),
+    ("control_index_last_10m", "Control index, last 10 min", "index 0-1", True),
+    ("openness_index_last_10m", "Openness index, last 10 min", "index 0-1", False),
     ("xg", "xG, cumulative", "xG", False),
     ("ppda_last_15m", "PPDA, last 15 min (higher = pressing less)", "passes", False),
     (
         "possession_changes_per_min_last_10m",
-        "Possession changes per minute, last 10 min",
+        "Possession changes per minute, last 10 min (scrappiness)",
         "per min",
         False,
     ),
@@ -73,6 +73,21 @@ def main(argv=None):
             )
         if half_line:
             ax.axhline(0.5, color=MUTED, lw=0.8, ls=":")
+        if metric == "openness_index_last_10m":
+            # "Usual for this fixture" = openness - openness_vs_expected.
+            now = dict(series[metric]["match"])
+            vs = series["openness_vs_expected_last_10m"]["match"]
+            usual = [(m, now[m] - v) for m, v in vs if m in now]
+            if usual:
+                ax.axhline(usual[-1][1], color=MUTED, lw=1, ls=":")
+                ax.annotate(
+                    "usual for this strength gap",
+                    (0, usual[-1][1]),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    color=MUTED,
+                    fontsize=8,
+                )
         for minute, kind, owner, clock in markers:
             ls = "-" if kind == "goal" else "--"
             ax.axvline(minute, color=colour.get(owner, MUTED), lw=1, ls=ls, alpha=0.8)

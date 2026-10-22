@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from core.contracts import MetricValue
-from core.metrics import basic
+from core.metrics import basic, chaos
 from core.metrics.events import Events
 
 Grain = Literal["match", "team", "player", "window"]
@@ -29,8 +29,10 @@ class Metric:
     grain: Grain
     unit: str
     frame: Frame
+    # Personas it is shown to; analyst-only metrics have no casual name.
     display_name: dict[Persona, str]
     fn: Callable[..., MetricValue | None]
+    windows: tuple[int | None, ...] = WINDOWS
 
     @property
     def formula(self) -> str:
@@ -130,16 +132,13 @@ METRICS: dict[str, Metric] = {
             grain="match",
             unit="per minute",
             frame="SPADL",
-            display_name={
-                "analyst": "Possession changes / min",
-                "casual": "How often the ball swaps sides",
-            },
+            display_name={"analyst": "Possession changes / min"},
             fn=basic.possession_changes_per_min,
         ),
         Metric(
             name="field_tilt",
             definition=(
-                "Share of all final-third passes (each team in its own attacking "
+                "Share of all final-third touches (each team in its own attacking "
                 "third) made by the team."
             ),
             grain="team",
@@ -150,6 +149,129 @@ METRICS: dict[str, Metric] = {
                 "casual": "Who is camped in whose half",
             },
             fn=basic.field_tilt,
+        ),
+        Metric(
+            name="xt_share",
+            definition=(
+                "Share of all expected threat (xT) added by successful passes and "
+                "carries that the team added."
+            ),
+            grain="team",
+            unit="share 0-1",
+            frame="SPADL",
+            display_name={"analyst": "xT share", "casual": "Who is creating danger"},
+            fn=chaos.xt_share,
+            windows=(None, 10),
+        ),
+        Metric(
+            name="control_index",
+            definition=(
+                "Mean of possession (time), field tilt and xT share over the last "
+                "10 minutes: how much the team is running the match."
+            ),
+            grain="team",
+            unit="index 0-1",
+            frame="SPADL",
+            display_name={"analyst": "Control index", "casual": "Who is in control"},
+            fn=chaos.control_index,
+            windows=(10,),
+        ),
+        Metric(
+            name="two_way_threat",
+            definition="The smaller of the two teams' xG in the window.",
+            grain="match",
+            unit="goals",
+            frame="SPADL",
+            display_name={
+                "analyst": "Two-way threat (min xG)",
+                "casual": "Both teams creating chances",
+            },
+            fn=chaos.two_way_threat,
+            windows=(10,),
+        ),
+        Metric(
+            name="threat_switches",
+            definition=(
+                "Times the team creating threat (a shot, or the ball reaching high "
+                "xT) changes sides."
+            ),
+            grain="match",
+            unit="count",
+            frame="SPADL",
+            display_name={
+                "analyst": "Threat switches",
+                "casual": "How often the danger switches ends",
+            },
+            fn=chaos.threat_switches,
+            windows=(10,),
+        ),
+        Metric(
+            name="transition_speed",
+            definition=(
+                "Median seconds from winning the ball in open play to a shot or "
+                "getting it into the box."
+            ),
+            grain="match",
+            unit="seconds",
+            frame="SPADL",
+            display_name={
+                "analyst": "Transition speed (regain to shot/box)",
+                "casual": "How fast they attack after winning it",
+            },
+            fn=chaos.transition_speed,
+            windows=(10,),
+        ),
+        Metric(
+            name="openness_index",
+            definition=(
+                "Mean of two-way threat, threat switches and transition speed, each "
+                "scaled 0-1: how end-to-end the match is."
+            ),
+            grain="match",
+            unit="index 0-1",
+            frame="SPADL",
+            display_name={
+                "analyst": "Openness index",
+                "casual": "How end-to-end it is",
+            },
+            fn=chaos.openness_index,
+            windows=(10,),
+        ),
+        Metric(
+            name="openness_vs_expected",
+            definition=(
+                "Openness minus the usual openness of fixtures with the same "
+                "pre-match strength gap (0 = as usual)."
+            ),
+            grain="match",
+            unit="index difference",
+            frame="SPADL",
+            display_name={
+                "analyst": "Openness vs expected",
+                "casual": "More or less open than usual for this fixture",
+            },
+            fn=chaos.openness_vs_expected,
+            windows=(10,),
+        ),
+        Metric(
+            name="short_possessions",
+            definition="Share of possessions with fewer than 3 passes.",
+            grain="match",
+            unit="share 0-1",
+            frame="SPADL",
+            display_name={"analyst": "Short possessions (<3 passes)"},
+            fn=chaos.short_possessions,
+            windows=(None, 10),
+        ),
+        Metric(
+            name="loose_balls",
+            definition="Times the ball got away from a player (bad touches), per minute.",
+            grain="match",
+            unit="per minute",
+            frame="SPADL",
+            display_name={"analyst": "Loose balls / min"},
+            fn=chaos.loose_balls,
+            windows=(None, 10),
         ),
     ]
 }
@@ -168,6 +290,8 @@ def compute_all(events: Events) -> dict[str, dict[str, MetricValue]]:
         if lo is None:
             continue
         for m in METRICS.values():
+            if minutes not in m.windows:
+                continue
             owners = [MATCH_KEY] if m.grain == "match" else list(events.teams)
             for owner in owners:
                 v = m.fn(events, lo, None if owner == MATCH_KEY else owner)

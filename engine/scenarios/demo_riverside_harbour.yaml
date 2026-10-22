@@ -30,6 +30,19 @@ beats:
     action: block_drop
     team: away
     extra_drop_m: 8         # on top of Harbour's late_lead_block_drop. TUNABLE
+  # Open, end-to-end spell late on (Ian, 2026-10-22): both teams create.
+  - id: counter_chance_82
+    minute: [82, 83]
+    action: counter_chance
+    team: home              # Riverside, chasing with 10, break behind Harbour's left-back
+    behind: left
+    min_xg: 0.3             # TUNABLE
+  - id: counter_chance_85
+    minute: [85, 86]
+    action: counter_chance
+    team: away
+    behind: left
+    min_xg: 0.3             # TUNABLE
   - id: counter_goal_88
     minute: [88, 89]
     action: counter_goal
@@ -52,6 +65,9 @@ expected_moments:
   - {kind: chaos_rising, team: null, minute: [63, 80]}
   - {kind: block_drop, team: away, minute: [80, 88]}
   - {kind: pressure_spike, team: home, minute: [80, 88]}
+  - {kind: chance, team: home, minute: [82, 83], note: scripted; Riverside break while chasing}
+  - {kind: counter_behind_fullback, team: away, minute: [85, 86], note: scripted}
+  - {kind: open_spell, team: null, minute: [80, 89], note: both teams creating}
   - {kind: goal, team: away, minute: [88, 89]}
   - {kind: counter_behind_fullback, team: away, minute: [88, 89]}
   - {kind: repeated_pattern, team: away, minute: [88, 89], note: again behind the left-back}

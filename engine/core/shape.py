@@ -39,6 +39,8 @@ class TeamState:
     calm_since: float | None = None
     overrides: dict = field(default_factory=dict)  # "protect" / "chase" -> table
     red_table: dict | None = None
+    # Underdog caution 0-1 from the pre-match strength gap (engine-internal).
+    caution: float = 0.0
 
     @classmethod
     def start(cls, side, profile):
@@ -163,6 +165,8 @@ def anchors(team, ball, phase, block_height, cfg, push=0.0):
             (r["forwards_wanted"] - forwards) / (r["forwards_wanted"] - 2), 0.0, 1.0
         )
         runs = r["share"] * ramp * need
+        # Underdogs commit fewer players forward.
+        runs *= 1.0 - team.caution * cfg.get("underdog", {}).get("runs_cut", 0.0)
 
     spots = {team.keeper: (keeper_x, GOAL_Y + 0.15 * (by - GOAL_Y))}
     for player, role in team.roles.items():

@@ -29,7 +29,8 @@ How hard the ball carrier is being pressed. Proximity only.
 - **One opponent within 2 m is enough for `under_pressure`**: a single close
   opponent must give pressure ≥ 0.5. (Ian, 2026-10-20)
 - An opponent **in front** of the carrier or **goal-side** of the carrier
-  counts **double** (weight × 2). **TUNABLE** (owner: Ian)
+  (between the carrier and the goal he is attacking) counts **double**
+  (weight × 2); both at once is still × 2 (Ian, 2026-10-22). **TUNABLE** (owner: Ian)
   - **"In front" = in front of where the carrier is facing.** A defender
     facing their own keeper with a striker pressing from upfield: the striker
     is *behind*. A defender facing upfield with the same striker pressing: the
@@ -132,11 +133,37 @@ Attackers vs defenders around the ball, e.g. 3v2 or 3v1. (Ian, 2026-10-20)
 - **Count who can still recover.** After a 3v2 is beaten, another defender may
   come across, so defenders left between the ball and goal matter.
 
-## Open questions (Ian to decide before Phase 2)
+## Answers (Ian, 2026-10-22)
 
-1. **Pressure between 2 m and 5 m:** how fast does the weight fall off?
-2. **In front and goal-side at once:** does that opponent count ×2 or ×4?
-3. **High press:** how should code tell that a team is high-pressing?
-4. **Overload area:** what zone or distance, and how do we count defenders
-   who can still recover?
-5. **"Clearly offside":** by how many metres?
+All five questions are answered.
+
+1. **Pressure between 2 m and 5 m:** an opponent at 2 m is *really high*
+   pressure; at 5 m it is *a bit, low*, not nothing. Proposed curve to build
+   with (confirm when pressure is built): weight 1.0 within 2 m, falling in a
+   straight line to 0.2 at 5 m, 0 beyond 5 m. **TUNABLE**
+2. **Defender both in front of the carrier and goal-side** (between him and
+   the goal he is attacking): counts **x2**, not x4. It is one situation,
+   the defender blocking his way, so it is doubled once. **TUNABLE**
+3. **High press** = how a team behaves the moment it loses the ball:
+   - A high-pressing team **tries to win it straight back** instead of falling
+     deep; if it has not won it back within **3-5 seconds**, it drops deep.
+   - A team that does **not** high-press does not commit players up front: it
+     lets the opponent's defenders and goalkeeper play out from the back.
+   - Code: (a) after each turnover, count the pressing team's defensive
+     actions and opponents within 2 m of the carrier in the first 3-5 s
+     (counterpress); (b) when the opponent plays out from the back (goal kick,
+     keeper or defender on the ball in their own third), count pressing
+     players in that third. High both = high press. **TUNABLE**
+4. **Overload area** (agent's proposal, Ian: ok):
+   - Look at the ball's surroundings in a box that reaches **20 m towards the
+     defending goal and 10 m back**, the full width of the channel the ball
+     is in (left, centre or right third of the pitch width).
+   - Attackers = the attacking team's outfield players in that box.
+     Defenders = the defending team's outfield players in that box **plus any
+     defender within 10 m of it who is goal-side of the ball** (they can still
+     recover).
+   - Danger weight by place: central final third 1.0, wide final third 0.5,
+     middle third 0.3, own third 0.1.
+   - Overload = attackers minus defenders >= 1 (e.g. 3v2, 3v1).
+5. **"Clearly offside" = 1 metre or more** beyond the second-last defender.
+   **TUNABLE**

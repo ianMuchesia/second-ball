@@ -1,6 +1,12 @@
 {
   "additionalProperties": false,
   "properties": {
+    "away_strength": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Away Strength",
+      "type": "number"
+    },
     "away_team": {
       "minLength": 1,
       "title": "Away Team",
@@ -10,6 +16,12 @@
       "minLength": 1,
       "title": "Competition",
       "type": "string"
+    },
+    "home_strength": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Home Strength",
+      "type": "number"
     },
     "home_team": {
       "minLength": 1,
@@ -71,7 +83,9 @@
     "competition",
     "seed",
     "weather",
-    "mode"
+    "mode",
+    "home_strength",
+    "away_strength"
   ],
   "title": "Match",
   "type": "object"

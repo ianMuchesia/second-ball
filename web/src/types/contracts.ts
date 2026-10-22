@@ -19,8 +19,10 @@ export interface Insight {
   schema_version: 1;
 }
 export interface Match {
+  away_strength: number;
   away_team: string;
   competition: string;
+  home_strength: number;
   home_team: string;
   kickoff: string;
   match_id: string;

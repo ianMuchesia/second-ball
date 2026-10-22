@@ -23,8 +23,8 @@ def play(fixture):
     m = simulate_match(league[home], league[away], seed)
     goals = {home: 0, away: 0}
     passes = collections.Counter()  # (team, bucket, own|opp)
-    leads = []  # (t, team, lead) after each goal
-    for e in m.events:
+    leads = []  # (event index, team, lead) after each goal
+    for i, e in enumerate(m.events):
         for team, opp in ((home, away), (away, home)):
             lead = goals[team] - goals[opp]
             if e.minute < CFG["from_minute"]:
@@ -39,9 +39,10 @@ def play(fixture):
                 passes[(team, bucket, "own" if e.team_id == team else "opp")] += 1
         if e.type.startswith("shot") and e.outcome == "success":
             goals[e.team_id] += 1
-            t = e.minute * 60 + e.second
-            leads.append((t, home, goals[home] - goals[away]))
-            leads.append((t, away, goals[away] - goals[home]))
+            # Event order, not the clock: event times are whole seconds, so a
+            # switch and a goal in the same second would look simultaneous.
+            leads.append((i, home, goals[home] - goals[away]))
+            leads.append((i, away, goals[away] - goals[home]))
     return passes, m.mode_log, leads
 
 
@@ -111,8 +112,8 @@ def test_four_goal_leaders_never_manage_or_protect(season):
                 continue
             before = [
                 lead
-                for t, team, lead in leads
-                if t <= switch["t"] and team == switch["team"]
+                for i, team, lead in leads
+                if i < switch["events"] and team == switch["team"]
             ]
             assert not before or before[-1] < CFG["comfortable_margin"]
 

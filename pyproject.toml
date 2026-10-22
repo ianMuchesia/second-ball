@@ -21,7 +21,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["core", "engine", "agents", "evals", "stream", "scripts"]
-artifacts = ["engine/**/*.yaml", "evals/**/*.yaml"]
+artifacts = ["engine/**/*.yaml", "evals/**/*.yaml", "core/**/*.yaml", "core/metrics/artifacts/*.json"]
 
 [dependency-groups]
 dev = [
