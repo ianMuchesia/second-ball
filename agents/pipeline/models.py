@@ -29,6 +29,7 @@ class MatchContext(Part):
     score: tuple[int, int]  # (home, away)
     minute: int
     players: dict[str, str] = Field(default_factory=dict)  # on the pitch: id -> name
+    sent_off: dict[str, int] = Field(default_factory=dict)  # team_id -> red cards
 
 
 class NarrationTask(Part):
@@ -36,6 +37,9 @@ class NarrationTask(Part):
     context: MatchContext
     persona: Persona
     languages: list[str] = Field(default_factory=lambda: ["sw"])
+    # Code-made words about the moment (agents/pipeline/facts.py), e.g. a
+    # goal's build_up and exploited_zone.
+    facts: dict[str, str] = Field(default_factory=dict)
 
 
 class Analysis(Part):
@@ -55,6 +59,7 @@ class Verdict(Part):
     passed: bool
     reasons: list[str] = Field(default_factory=list)
     risk_tier: RiskTier = "low"  # high = a human must approve before airing
+    text: str = ""  # the draft this verdict is about (kept for evals)
 
 
 class Retry(Part):

@@ -119,7 +119,7 @@ def test_gemini_counts_thinking_tokens_as_output():
     provider = GeminiProvider(
         api_key=None, model=MODEL, client=SimpleNamespace(models=models)
     )
-    assert provider.count_tokens("hi", "be brief") == 42
+    assert provider.count_tokens("hi", "be brief") == 10  # bytes, counted locally
     response = provider.generate("hi", "be brief", max_output_tokens=64)
     assert (response.text, response.input_tokens, response.output_tokens) == (
         "hello",
@@ -127,3 +127,31 @@ def test_gemini_counts_thinking_tokens_as_output():
         15,
     )
     assert models.config.max_output_tokens == 64
+
+
+def test_gemini_paces_requests_under_the_per_minute_cap():
+    now, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    provider = GeminiProvider(
+        api_key=None,
+        model=MODEL,
+        client=SimpleNamespace(models=FakeGenaiModels()),
+        rpm=30,
+        clock=lambda: now[0],
+        sleep=sleep,
+    )
+    provider.generate("hi", None, max_output_tokens=8)
+    provider.generate("hi", None, max_output_tokens=8)  # 2 s gap at 30 a minute
+    now[0] += 5.0
+    provider.generate("hi", None, max_output_tokens=8)  # already far enough apart
+    assert slept == [2.0]
+
+
+def test_gemini_client_retries_rate_limit_errors():
+    from agents.llm.gemini import RETRY
+
+    assert 429 in RETRY.http_status_codes and RETRY.attempts > 1

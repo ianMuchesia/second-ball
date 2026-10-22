@@ -350,3 +350,62 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   from the English line is dropped; English always airs.
 - Narrator examples: placeholder file agents/narrator/examples.yaml; Ian
   writes the six lines.
+
+## 2026-10-22: real model (Gemini) and Ian's narrator lines
+
+- Narrator examples: Ian's six lines (second version, his own pick; "lightning"
+  added to the Verifier's common words so his 34' opener is not taken for a
+  name). Earlier draft: drafted with Gemini, picked and trimmed
+  to the 25-word limit by the agent). They are gold items: a test runs each
+  through the Verifier against the real demo moment.
+- Gemini rate limits are per project, per minute and per day (numbers in AI
+  Studio; https://ai.google.dev/gemini-api/docs/rate-limits). Over the limit
+  -> 429. Guards: our own pacing (GEMINI_RPM, default 10 a minute, safe on
+  the free tier) and SDK retries on 429/503 (4 tries, 2-30 s backoff; the
+  SDK does not retry by default).
+- Budget precheck token count is local (1 token per UTF-8 byte, about 3x the
+  real count on our prompts, so stricter) instead of the count_tokens API:
+  that call was a second request per model call (half the RPM cap) and took
+  about 6 s. The charge still uses the real usage from the answer.
+- `make narrate` / scripts/narrate_demo.py: demo moments with importance >= 0.9
+  through the real pipeline. First run: 3 moments x 2 personas, 18 calls,
+  every line passed first try, $0.0033, 1 min 46 s at 10 requests a minute.
+
+## 2026-10-22: who is winning, copies, untranslated Swahili (advisor's 3 fixes)
+
+- Prompt VALUES now carry code-made words: "standing" per team (leading /
+  trailing / level, "a player down"), "event" ("Riverside had a player sent
+  off"), "good_for" (red card helps the opponent; a goal helps the scorer)
+  and "numbers_are_for" (whose metrics). Before, the model read the red card
+  as good for Riverside and gave Riverside's control numbers to Harbour.
+- Verifier rejects a line that says the wrong team leads or trails ("X
+  lead", "X trailing", "leading X"), checked against the score.
+- Verifier rejects a line too close to a style example (word overlap,
+  Jaccard > 0.8); the examples are labelled "STYLE EXAMPLES ONLY - DO NOT
+  COPY". The gold test checks Ian's lines without this check (they are the
+  examples).
+- Localizer: a reply that is the English line, has 2+ common English words
+  (the, and, behind, from, with, their, again, is) or changes a number gets
+  one retry with the reason, then the language is dropped (English airs).
+  The prompt says "clinical" is the football sense (it came back as
+  "kimatibabu", medical).
+- Real run after the fixes: all lines right about who leads and who the red
+  card helps; one invented number (0.45 = 1.73 - 1.28) caught and retried.
+
+## 2026-10-22: goals linked to the counter pattern; soft predictions
+
+- agents/pipeline/facts.py: a goal "came from a counter behind the
+  full-back" only if the move that ended in it passes the detector's own
+  counter rule (core.moments, reused as is, not copied; core/ untouched).
+  Facts reach the prompt (build_up, exploited_zone, and "second counter goal
+  ... in this match"); the Verifier then requires the line to name the
+  counter and the side; the fallback names them too. Demo: both goals,
+  behind Riverside's left-back. 30 free matches: 3 of 90 goals (3%), so the
+  label is rare.
+- Verifier rejects soft predictions (seal it, secure the 0-2, game over, put
+  it beyond doubt, clinch the win ...); "make it 0-2" is allowed.
+- Verifier rejects one team's control/xG/threat/momentum given to the other
+  (pressure is left out: Harbour apply the pressure on Riverside's ball).
+- Leader check reads only clear forms ("Harbour lead", "Harbour are
+  trailing"), not a bare participle after a team that is an object, and not
+  "behind" (space). Verdicts keep the draft text, for evals and debugging.
