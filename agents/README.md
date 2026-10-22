@@ -28,3 +28,28 @@ Metric names and their meaning: `docs/metrics/REGISTRY.md`.
 `agents/llm/`: Gemini for development; Azure Foundry in production
 (gpt-5-mini Analyst, gpt-4.1-mini Narrator/Localizer, southafricanorth). Every
 paid call goes through `core/budget.py`.
+
+## Narration pipeline (Phase 3b-1)
+
+`agents/pipeline/`, on Microsoft Agent Framework (`agent-framework-core`):
+
+```
+Moment -> Analyst -> Narrator -> Verifier -+-> Localizer -> Overlay (pending) -> Producer
+                        ^                  |
+                        +---- Retry -------+  (max 2 retries, then a template sentence)
+```
+
+- **Numbers come from code.** `Analysis.values` = the Moment's before/after
+  metrics; models only choose words. The fallback sentence uses those values only.
+- **Verifier (code):** every number must match a value (with the line's
+  rounding, or as a %) or the match context (score, minutes, shirts, players
+  on the pitch); every capitalised name must be a team or a player on the
+  pitch; predictions and blaming one event on the weather are rejected;
+  injury/referee talk raises the risk tier (a human approves before it airs).
+- **Producer (code):** stat cards air at once; a narrative must air within
+  8 s of its moment (viewer seconds: x replay speed in match time) or it
+  expires; one narrative per 45 s, most important first.
+- **Models:** each agent calls a model through `agents/llm` (budget kill
+  switch). `LLM_PROVIDER=fake` is a free, deterministic model for tests, with
+  error injection (`FakeProvider(errors=1, error="wrong_number")`).
+- **Narrator voice:** `agents/narrator/examples.yaml` (Ian's lines).

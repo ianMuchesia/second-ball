@@ -42,6 +42,7 @@ MAPPING = {
     "chance": {"big_chance"},
     "block_drop": {"shape_change"},
     "counter_behind_fullback": {"big_chance", "repeated_pattern"},
+    "counter_threat_rising": {"big_chance", "repeated_pattern"},
 }
 
 

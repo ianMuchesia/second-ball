@@ -4,6 +4,7 @@ import uuid
 
 from dotenv import load_dotenv
 
+from agents.llm.fake import FakeProvider
 from agents.llm.foundry import FoundryProvider
 from agents.llm.gemini import GeminiProvider
 from agents.llm.prices import PRICES
@@ -53,9 +54,11 @@ def from_env(env=None):
             api_key=env.get("FOUNDRY_API_KEY"),
             model=env.get("FOUNDRY_MODEL"),
         )
+    elif provider_name == "fake":
+        provider = FakeProvider()  # tests and offline runs: free, no network
     else:
         raise ValueError(
-            f"unknown LLM_PROVIDER {provider_name!r}; use 'gemini' or 'foundry'"
+            f"unknown LLM_PROVIDER {provider_name!r}; use 'gemini', 'foundry' or 'fake'"
         )
 
     if not env.get("MAX_RUN_USD"):

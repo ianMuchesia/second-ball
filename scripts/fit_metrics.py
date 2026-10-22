@@ -64,6 +64,7 @@ def windows(match, events, minutes=WINDOW):
                     "two_way": chaos.two_way_threat(ev, lo),
                     "switches": chaos.threat_switches(ev, lo),
                     "speed": chaos.transition_speed(ev, lo),
+                    "control": {t: chaos.control_index(ev, lo, t) for t in ev.teams},
                 }
             )
             nxt += 60
@@ -154,6 +155,49 @@ def fit_baseline(report_only):
     path.write_text(json.dumps(out, indent=1) + "\n")
     print(json.dumps(out["buckets"], indent=1))
     print(f"baseline -> {path.relative_to(ROOT)}")
+    fit_control_baseline(played, per_match, out["trained_on"])
+
+
+def fit_control_baseline(played, per_match, trained_on):
+    """Expected control index (10-min windows) by the team's pre-match
+    strength minus its opponent's: what is normal for this kind of fixture."""
+    buckets = {}
+    for (match, _), ws in zip(played, per_match, strict=True):
+        s = {match.home_team: match.home_strength, match.away_team: match.away_strength}
+        for team, opp in (
+            (match.home_team, match.away_team),
+            (match.away_team, match.home_team),
+        ):
+            name = chaos.signed_gap_bucket(s[team] - s[opp])
+            vals = [
+                w["control"][team].value for w in ws if w["control"][team] is not None
+            ]
+            buckets.setdefault(name, []).extend(vals)
+    c = chaos.config()["control"]
+    out = {
+        "version": c["baseline_version"],
+        "metric": "control_index (rolling 10 min, one window per minute from 10')",
+        "bucket": "team strength minus opponent strength",
+        "trained_on": trained_on,
+        "buckets": {
+            name: {
+                "windows": len(v),
+                "mean": round(statistics.fmean(v), 4),
+                "sd": round(statistics.pstdev(v), 4),
+            }
+            for name, v in sorted(buckets.items())
+        },
+    }
+    path = (
+        ROOT
+        / "core"
+        / "metrics"
+        / "artifacts"
+        / f"control_baseline_v{out['version']}.json"
+    )
+    path.write_text(json.dumps(out, indent=1) + "\n")
+    print(json.dumps(out["buckets"], indent=1))
+    print(f"control baseline -> {path.relative_to(ROOT)}")
 
 
 def main(argv=None):

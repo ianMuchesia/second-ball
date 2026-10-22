@@ -23,7 +23,10 @@ big_chance:
 
 control_shift:
   window_min: 10               # consecutive 10-minute windows
-  min_change: 0.20             # 20 points of the 0-1 control index
+  min_change: 0.20             # 20 points of the 0-1 control index (from 20')
+  vs_expected_from_min: 15     # and from 15': control clearly above the usual for this fixture
+  min_z: 1.0                   # ... by at least this many spreads (sd) of the fixture baseline
+  release_z: 0.5               # hysteresis: stays "on" until below this (no re-firing at the line)
 
 pressure_spike:
   recent_min: 5
@@ -44,6 +47,12 @@ shape_change:
   back_line_players: 1.0       # average back-line size changes by a whole player
   block_drop_m: 8.0            # or the back line sits this much deeper / higher
   ball_x: [35.0, 70.0]         # compared only with the ball in the attacker's middle third
+  release_share: 0.5           # hysteresis: "on" until the change falls below half the thresholds
+  drift:                       # gradual block drop / step up (CUSUM on back-line depth)
+    reference_min: 10          # minutes of the team's own history before the last recent_min
+    recent_min: 10
+    slack_m: 2.0               # per-minute drift smaller than this is ignored
+    threshold_m: 25.0          # fires when the summed drift passes this (metre-minutes)
 
 openness_spike:
   above_usual: 0.25            # openness at least this far above the usual for the fixture

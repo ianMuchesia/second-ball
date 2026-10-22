@@ -303,3 +303,50 @@ Phase 3a: moments + MCP server (2026-10-22, Ian).
   pressure_spike -> same name.
 - Homework note: in the demo, 88' is Harbour's second counter goal (0-2), not
   an equaliser.
+
+Phase 3b-1 A: answer key and detector (2026-10-22, Ian via the advisor).
+- Answer key: "Riverside lose control after the red card" was wrong (control
+  rose 0.71 -> 0.80: a 10-man side chasing often has more of the ball; the
+  danger changes, not possession). Replaced by counter_threat_rising (Harbour,
+  63-80') -> detector kinds big_chance / repeated_pattern. Block drop window
+  80-88' -> 65-85' (gradual from the 65' game-state rule). 88' noted as
+  Harbour's 2nd counter goal behind the left-back, final 0-2.
+- Control: no control moment before 10'. From 15', control_shift also fires
+  when a team's control (last 10 min) is >= 1 sd above the usual for its
+  fixture (new artifact control_baseline_v1.json: control by team strength
+  minus opponent strength, same 500 free matches as the openness baseline).
+  Riverside's usual in the demo fixture: 0.70; fired at 24' (0.84).
+- Block drop: two-sided CUSUM on each team's per-minute back-line depth (ball
+  in the middle third) against its own earlier average; fires once per
+  direction until the drift is gone. Demo: Harbour's drop confirmed at 75'.
+- Hysteresis (like Ian's game-state rule): a control-vs-fixture moment stays
+  "on" until control falls below 0.5 sd above usual; a window shape change
+  until the change falls below half its thresholds. Without it, a value
+  hovering at the line re-fired every 3 minutes (one free match hit 1.0
+  moments per minute and failed the spam test).
+- Eval after the fixes: demo recall 19/19 (Wilson 83-100%), precision 19/44
+  = 43% (the key lists the story's big moments only); free matches 64 moments
+  per match.
+
+Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
+- Framework: Microsoft Agent Framework, `agent-framework-core` 1.22 (the core
+  package, not the full bundle of integrations). New dependency, why: the
+  brief scores Microsoft agent technology; agents + a typed workflow with a
+  retry edge. Models sit behind our adapter (AdapterChatClient), so every
+  call still passes core/budget.py.
+- New LLM provider "fake" (price 0, still charged through the budget):
+  deterministic, with error injection for tests.
+- Verifier is code. Agent's choices, for Ian to review: numbers match with
+  the line's own rounding (0.7 or 71% for 0.712); allowed context numbers =
+  score, current and moment minute, shirt numbers and player counts on the
+  pitch; any capitalised word that is not a team, a player on the pitch or in
+  a list of common words counts as a name (sentence starts included: the
+  Verifier would rather retry than air an invented player);
+  injury/referee words -> risk tier high (needs a human), not a rejection.
+- Producer times are match seconds; Ian/advisor's 8 s freshness and 45 s gap
+  are viewer seconds, so both scale with replay speed (x10 at 10x).
+- Localizer: target language Swahili ("sw") by default (agent's assumption
+  for a Nairobi audience; Ian to confirm). A translation whose numbers differ
+  from the English line is dropped; English always airs.
+- Narrator examples: placeholder file agents/narrator/examples.yaml; Ian
+  writes the six lines.

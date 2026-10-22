@@ -91,13 +91,21 @@ class MomentDetector:
         self.pattern_at: dict = {}  # (defending team, side) -> last pattern moment
         self.player_counts: Counter = Counter()  # (player, "passes"/"shots")
         self.active: set[tuple[str, str | None]] = set()  # conditions now true
+        # Block-drift CUSUM per (team, "deeper"/"higher"); per-minute depths.
+        self.depths: dict[str, list[float]] = {}
+        self.drift: dict[tuple[str, str], float] = {}
+        self.drift_fired: set[tuple[str, str]] = set()
 
-    def edge(self, kind: str, team: str | None, now_true: bool) -> bool:
+    def edge(
+        self, kind: str, team: str | None, now_true: bool, still: bool | None = None
+    ) -> bool:
         """True only when a condition becomes true (a spike fires once when
-        it starts, not again every few minutes while it lasts)."""
+        it starts, not again every few minutes while it lasts). With `still`
+        (hysteresis), an active condition stays active until `still` is false,
+        so a value hovering at the threshold does not fire again and again."""
         key = (kind, team)
         was = key in self.active
-        if now_true:
+        if now_true or (was and still):
             self.active.add(key)
         else:
             self.active.discard(key)
@@ -296,8 +304,10 @@ class MomentDetector:
         yield from self.red_card_impacts(ev, t)
         for team in ev.teams:
             yield self.control_shift(ev, i, t, team)
+            yield self.control_vs_expected(ev, i, t, team)
             yield self.pressure_spike(ev, i, t, team)
             yield self.shape_change(ev, i, t, team)
+            yield self.block_drift(ev, i, t, team)
         yield self.momentum_swing(ev, i, t)
         yield self.openness_spike(ev, i, t)
 
@@ -327,6 +337,78 @@ class MomentDetector:
             b.evidence_event_ids[-20:],
             now=t,
         )
+
+    def control_vs_expected(self, ev, i, t, team):
+        """From 15': the team's control (last 10 min) is clearly above what is
+        usual for this fixture (min_z spreads above the baseline for its
+        pre-match strength gap). Fires once while it lasts."""
+        c = config()["control_shift"]
+        if t < c["vs_expected_from_min"] * 60 or ev.strengths is None:
+            return None
+        view, lo = span(ev, t - c["window_min"] * 60, t)
+        now = chaos.control_index(view, lo, team) if lo < len(view.items) else None
+        s = dict(zip(ev.teams, ev.strengths, strict=True))
+        usual = chaos.control_baseline()["buckets"][
+            chaos.signed_gap_bucket(s[team] - s[ev.opponent(team)])
+        ]
+        z = None if now is None else (now.value - usual["mean"]) / usual["sd"]
+        above = z is not None and z >= c["min_z"]
+        still = z is not None and z >= c["release_z"]
+        if not self.edge("control_vs_expected", team, above, still):
+            return None
+        expected = mv(usual["mean"], now.evidence_event_ids[-20:])
+        return self.fire(
+            ev,
+            "control_shift",
+            team,
+            i,
+            {"control_index_usual_for_fixture": expected},
+            {"control_index": now},
+            now.evidence_event_ids[-20:],
+            now=t,
+        )
+
+    def block_drift(self, ev, i, t, team):
+        """A gradual block drop (or step up): two-sided CUSUM on the team's
+        per-minute back-line depth while defending (ball in the middle third),
+        against its own average from before the last 10 minutes. Fires once
+        per direction until the drift has gone (sum back to 0)."""
+        c = config()["shape_change"]["drift"]
+        line = self.back_line(ev, bisect_right(ev.elapsed, t - 60), i + 1, team)
+        if line is None:
+            return None
+        depths = self.depths.setdefault(team, [])
+        depths.append(line[1])
+        ref_n = len(depths) - c["recent_min"]
+        if ref_n < c["reference_min"]:
+            return None
+        ref = sum(depths[:ref_n]) / ref_n
+        x = line[1]
+        for direction, step in (("deeper", x - ref), ("higher", ref - x)):
+            key = (team, direction)
+            self.drift[key] = max(0.0, self.drift.get(key, 0.0) + step - c["slack_m"])
+            if self.drift[key] == 0.0:
+                self.drift_fired.discard(key)
+            if self.drift[key] > c["threshold_m"] and key not in self.drift_fired:
+                moment = self.fire(
+                    ev,
+                    "shape_change",
+                    team,
+                    i,
+                    {"back_line_depth_x": mv(ref, line[2][-20:])},
+                    {
+                        "back_line_depth_x": mv(x, line[2][-20:]),
+                        f"block_drift_{direction}_m": mv(
+                            self.drift[key], line[2][-20:]
+                        ),
+                    },
+                    line[2][-20:],
+                    now=t,
+                )
+                if moment is not None:  # not lost to a cooldown
+                    self.drift_fired.add(key)
+                return moment
+        return None
 
     def pressure_spike(self, ev, i, t, team):
         c = config()["pressure_spike"]
@@ -386,15 +468,18 @@ class MomentDetector:
         mid = bisect_right(ev.elapsed, t - recent)
         hi = bisect_right(ev.elapsed, t)
         a, b = self.back_line(ev, lo_a, mid, team), self.back_line(ev, mid, hi, team)
-        changed = (
-            a is not None
-            and b is not None
-            and (
-                abs(b[0] - a[0]) >= c["back_line_players"]
-                or abs(b[1] - a[1]) >= c["block_drop_m"]
+
+        def moved(share):
+            return (
+                a is not None
+                and b is not None
+                and (
+                    abs(b[0] - a[0]) >= share * c["back_line_players"]
+                    or abs(b[1] - a[1]) >= share * c["block_drop_m"]
+                )
             )
-        )
-        if not self.edge("shape_change", team, changed):
+
+        if not self.edge("shape_change", team, moved(1.0), moved(c["release_share"])):
             return None
         return self.fire(
             ev,

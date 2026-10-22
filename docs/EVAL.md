@@ -10,19 +10,19 @@ The demo is **scripted** (Riverside v Harbour, `demo_riverside_harbour`). Answer
 matched to detector kinds with Ian's mapping (DECISIONS.md, 2026-10-22); the
 minute may be off by 1.
 
-- **Recall:** 15 of 19 expected moments found =
-  **79%** (Wilson 95%: 57% - 91%).
-- **Precision** (detections of kinds the answer key covers): 15 of
-  40 match an expected moment = **38%**
-  (Wilson 95%: 24% - 53%). The answer key lists the story's
+- **Recall:** 19 of 19 expected moments found =
+  **100%** (Wilson 95%: 83% - 100%).
+- **Precision** (detections of kinds the answer key covers): 19 of
+  44 match an expected moment = **43%**
+  (Wilson 95%: 30% - 58%). The answer key lists the story's
   big moments only, so a detection outside it is not necessarily wrong.
-- Detected in the demo: 65 moments
-  (bad_situation 18, repeated_pattern 12, shape_change 9, pressure_spike 5, openness_spike 5, player_milestone 4, big_chance 4, goal 2, control_shift 2, overload 2, momentum_swing 1, red_card_impact 1).
+- Detected in the demo: 69 moments
+  (bad_situation 18, repeated_pattern 12, shape_change 11, pressure_spike 5, openness_spike 5, control_shift 4, player_milestone 4, big_chance 4, goal 2, overload 2, momentum_swing 1, red_card_impact 1).
 
 | Expected kind | Team | Minutes | Detector kind(s) | Result |
 |---|---|---|---|---|
-| control_rising | riverside_athletic | 0-30 | control_shift | **missed** |
-| field_tilt | riverside_athletic | 0-30 | control_shift | **missed** |
+| control_rising | riverside_athletic | 0-30 | control_shift | found |
+| field_tilt | riverside_athletic | 0-30 | control_shift | found |
 | goal | harbour_town | 34-35 | goal | found |
 | counter_behind_fullback | harbour_town | 34-35 | big_chance, repeated_pattern | found |
 | counter_behind_fullback | harbour_town | 50-60 | big_chance, repeated_pattern | found |
@@ -30,9 +30,9 @@ minute may be off by 1.
 | counter_behind_fullback | harbour_town | 63-64 | big_chance, repeated_pattern | found |
 | red_card_impact | riverside_athletic | 63-70 | red_card_impact | found |
 | shape_change | riverside_athletic | 63-70 | shape_change | found |
-| control_drop | riverside_athletic | 63-80 | control_shift | **missed** |
+| counter_threat_rising | harbour_town | 63-80 | big_chance, repeated_pattern | found |
 | chaos_rising | match | 63-80 | openness_spike | found |
-| block_drop | harbour_town | 80-88 | shape_change | **missed** |
+| block_drop | harbour_town | 65-85 | shape_change | found |
 | pressure_spike | riverside_athletic | 80-88 | pressure_spike | found |
 | chance | riverside_athletic | 82-83 | big_chance | found |
 | counter_behind_fullback | harbour_town | 85-86 | big_chance, repeated_pattern | found |
@@ -43,8 +43,8 @@ minute may be off by 1.
 
 ## Spam check: 50 free matches
 
-Moments per match: mean **60.1**, min 35,
-max 84 (about 0.63 per minute).
+Moments per match: mean **64.3**, min 38,
+max 88 (about 0.68 per minute).
 
 | Kind | Mean per match | Max in a match |
 |---|---|---|
@@ -53,9 +53,9 @@ max 84 (about 0.63 per minute).
 | big_chance | 0.7 | 3 |
 | momentum_swing | 2.1 | 5 |
 | repeated_pattern | 7.4 | 18 |
-| control_shift | 6.5 | 12 |
+| control_shift | 8.7 | 14 |
 | pressure_spike | 5.1 | 13 |
-| shape_change | 5.9 | 13 |
+| shape_change | 8.0 | 13 |
 | openness_spike | 2.9 | 8 |
 | overload | 9.9 | 25 |
 | bad_situation | 12.1 | 18 |

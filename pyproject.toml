@@ -3,6 +3,7 @@ name = "second-ball"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "agent-framework-core>=1.22,<2",
     "confluent-kafka>=2.6",
     "google-genai>=2.31.0",
     "mcp>=2.3,<3",
