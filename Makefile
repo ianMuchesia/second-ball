@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay
+.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp
 
 help:
 	@echo "Targets:"
@@ -15,6 +15,8 @@ help:
 	@echo "  realism-reference  re-download the real reference bands"
 	@echo "  replay  MATCH=demo|<file.jsonl> SPEED=1|10|60: replay into Kafka, interpret,"
 	@echo "          timeline CSV + PNG -> docs/timelines/ (needs make up)"
+	@echo "  eval-moments  moment detector vs the demo's answer key + 50 free matches -> docs/EVAL.md"
+	@echo "  mcp     football MCP server (stdio) over demo/match.jsonl"
 
 up:
 	docker compose up -d
@@ -63,3 +65,10 @@ replay:
 		uv run python -m stream.replayer $(MATCH_FILE) --speed $(SPEED) \
 			--wait-for-group interpreter && wait $$pid
 	uv run python -m scripts.timeline $(TIMELINE)
+
+eval-moments:
+	uv run python -m evals.moments.report
+
+mcp:
+	@test -f demo/match.jsonl || $(MAKE) demo
+	uv run python -m agents.mcp_server --match-file demo/match.jsonl
