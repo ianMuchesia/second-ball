@@ -91,7 +91,10 @@ def test_latency_under_one_second_at_60x(demo_file, topic, database_url):
     sender.join()
     c.close()
     lat = sorted(interp.latencies_s)
+    print(f"60x latency: p50 {lat[len(lat) // 2]:.3f}s, max {lat[-1]:.3f}s")
     assert len(lat) == len(read(demo_file)[1])
     assert lat[-1] < 1.0, f"max latency {lat[-1]:.3f}s"
+    # Postgres gets the state about once a second, not once per event.
+    assert interp.saves < len(lat) / 10
     assert store.load_state(match.match_id) == want
     store.close()

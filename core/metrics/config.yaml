@@ -28,3 +28,82 @@ openness:
 
 scrappiness:
   short_possession_passes: 3   # possessions with fewer passes than this are short
+
+# ---- Phase 2c. Ian's spec: docs/metrics/pressure_risk_options.md ----------------
+
+pressure:
+  close_m: 2.0                 # full weight within this
+  reach_m: 5.0                 # nothing beyond this
+  weight_at_reach: 0.2         # weight falls in a straight line to this at reach_m
+  blocking_factor: 2.0         # in front of where he faces OR goal-side (x2, not x4)
+  in_front_deg: 90             # within this angle of his facing = "in front"
+  full: 2.0                    # pressure = min(1, sum of weights / full); one close opponent = 0.5
+  under_pressure: 0.5
+
+risk:
+  scale_m: 40.0                # risk = exp(-(distance to own goal / scale)^2): ~0.66 at the box corner
+  final_third_x: 70.0          # in the final third, when the attack has the upper hand: ~0
+  upper_hand_risk: 0.0
+
+upper_hand:                    # Ian, 2026-10-21
+  final_third_x: 70.0
+  min_touches: 10
+  min_shots: 2
+  pressure_share: 0.5          # >= half of the defenders' own-third touches under pressure
+  strong_xg: 0.5
+  windows: [5, 10, 15, 20, 30]
+  checkpoint_min: 10           # fixed blocks 0-10, 10-20, ...
+
+options:
+  lane_clear_m: 2.0            # no opponent within this of the straight passing lane
+  offside_m: 1.0               # "clearly offside" beyond the second-last defender
+
+facing_own_goal_deg: [120, 240]
+
+bad_situation:
+  risk: 0.6
+  pressure: 0.5
+  options: 0
+
+lines:
+  max_lines: 3                 # defending outfielders clustered by x into up to 3 lines
+
+overload:                      # Ian-approved proposal, 2026-10-22
+  ahead_m: 20.0                # towards the defending goal
+  behind_m: 10.0
+  recover_m: 10.0              # defenders this close to the box and goal-side can still recover
+  danger:
+    central_final_third: 1.0
+    wide_final_third: 0.5
+    middle_third: 0.3
+    own_third: 0.1
+
+pressing:
+  final_third_x: 70.0          # the pressing team's attacking third
+  high_turnover_m: 40.0        # regains within this of the opponent's goal
+  counterpress_s: 5.0
+
+rhythm:
+  momentum_half_life_s: 180
+
+threat:
+  big_chance_xg: 0.3
+
+pass_difficulty:               # Ian, 2026-10-22. Weights sum to 100.
+  weights:
+    passer_pressure: 25
+    lines_broken: 25
+    zone: 15
+    receiver_pressure: 15
+    distance: 15
+    forwardness: 5
+  distance_full_m: 50.0        # distance_norm = min(1, length / this)
+  zone:                        # by where the pass starts (passer's frame)
+    own_third: 0.0
+    middle_third: 0.3
+    final_third: 0.7
+    box: 1.0
+
+speeds:
+  name_tag_shot_kmh: 100
+  name_tag_pass_m: 40

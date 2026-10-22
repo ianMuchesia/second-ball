@@ -175,3 +175,11 @@ def test_metrics_are_pure(name):
     team = None if m.grain == "match" else H
     assert m.compute(e, team) == m.compute(e, team)
     assert len(e.items) == len(MATCH_A)
+
+
+def test_rates_carry_numerator_and_denominator():
+    # Possession (passes): home 4 of 6 passes.
+    v = get("possession_passes").compute(events(), H)
+    assert (v.numerator, v.denominator) == (4, 6)
+    # Counts are not rates.
+    assert get("shots").compute(events(), H).denominator is None

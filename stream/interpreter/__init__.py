@@ -19,12 +19,21 @@ from stream import kafka
 from stream.interpreter.store import Store
 from stream.interpreter.timeline import write_timeline
 
+# The live MatchState updates on every event; the copy in Postgres (for
+# readers, not for correctness: a restart rebuilds from the stored events) is
+# written at most this often, and always at MatchEnd. A full-time state is
+# ~1 MB, too much to write 16 times a second at 60x.
+SAVE_EVERY_S = 1.0
+
 
 class Interpreter:
     def __init__(self, store: Store):
         self.store = store
         self.matches: dict[str, Events] = {}
         self.latencies_s: list[float] = []
+        self.latest: dict[str, MatchState] = {}  # live state, per match
+        self.saved_at: dict[str, float] = {}  # monotonic time of the last save
+        self.saves = 0
         for match, events in store.load():
             self.matches[match.match_id] = Events.for_match(match, events)
 
@@ -41,8 +50,16 @@ class Interpreter:
         events = self.matches[event.match_id]
         events.append(event)
         state = match_state(events)
-        self.store.save_state(event.match_id, state)
+        self.latest[event.match_id] = state
+        if time.monotonic() - self.saved_at.get(event.match_id, -1e9) >= SAVE_EVERY_S:
+            self.save(event.match_id)
         return state
+
+    def save(self, match_id: str) -> None:
+        if match_id in self.latest:
+            self.store.save_state(match_id, self.latest[match_id])
+            self.saved_at[match_id] = time.monotonic()
+            self.saves += 1
 
     def handle(self, msg) -> tuple[bytes, str]:
         contract = kafka.header(msg, "contract")
@@ -56,6 +73,8 @@ class Interpreter:
             sent = int(kafka.header(msg, kafka.SENT_AT))
             self.latencies_s.append((time.time_ns() - sent) / 1e9)
         match_id = msg.key().decode()
+        if contract == kafka.END:
+            self.save(match_id)  # the final state is always in Postgres
         return contract, match_id
 
 

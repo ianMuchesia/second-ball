@@ -362,6 +362,17 @@
     "MetricValue": {
       "additionalProperties": false,
       "properties": {
+        "denominator": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "evidence_event_ids": {
           "items": {
             "minLength": 1,
@@ -369,6 +380,17 @@
           },
           "minItems": 1,
           "type": "array"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "value": {
           "type": "number"

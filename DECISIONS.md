@@ -240,3 +240,43 @@ Phase 2b: control and chaos metrics (2026-10-21, Ian via the advisor's prompt).
 - Test changes: field-tilt test now checks touches (definition changed by the
   spec, value unchanged, evidence check added); the registry test allows
   analyst-only metrics (scrappiness has no casual name, per the spec).
+
+Phase 2c: remaining metrics (2026-10-22, Ian via the advisor's prompt).
+- Contract: MetricValue gets optional numerator/denominator; every rate
+  fills them (for Wilson intervals later).
+- Overload: Ian chose his own approved version (box 20 m ahead / 10 m back in
+  the ball's lane, recovering defenders count, danger by place), not the
+  prompt's 15 m circle.
+- Pass difficulty weights (Ian, 2026-10-22): passer pressure 25, lines broken
+  25, zone 15, receiver pressure 15, distance 15, forwardness 5. Zone is Ian's
+  addition ("near their box passing is much harder"). See
+  docs/metrics/pass_difficulty.md.
+- Pressure (Ian's answers): weight 1 within 2 m, straight line to 0.2 at
+  5 m; x2 in front of where he faces OR goal-side (x > his x), x2 once even
+  when both; pressure = min(1, sum / 2), so one close opponent = 0.5.
+- Agent's readings of the spec, for Ian to review:
+  - Risk = exp(-(distance to own goal / 40 m)^2): ~0.66 at the box corner,
+    0.18 at halfway; in the final third ~0 when the team has the upper hand
+    (last 10 min), no outfield defender is goal-side, or it has an overload.
+  - The keeper is not in the feed: "keeper" = the player nearest his own goal.
+  - Upper hand without any defender touches in their own third = no
+    "constant pressure" shown = no upper hand. Value 0 / 1 / 2 (strong).
+  - Lines: defenders' outfield x split at the largest gaps into up to 3 lines.
+  - "Pressures" (no pressure events in the feed) = opponent touches in their
+    own third made under pressure.
+  - Counter-press regain: timed from the ball lost to the tackle or
+    interception that won it back (not the next touch).
+- On the demo: seconds between actions is flat at 3 s (the engine stamps
+  whole seconds); name tags fire often for direct teams (40 m passes are
+  common); both are dials for Ian.
+- Display names never judge: Ian's rule name stays `bad_situation` in code;
+  on screen it is "Danger on the ball".
+- Flaky CI fix: test_latency_under_one_second_at_60x failed once on GitHub
+  (max 1.135 s) on the 2b merge and passed on a rerun of the same commit.
+  Cause: the interpreter wrote the full MatchState (~1 MB at full time) to
+  Postgres after every event. The live state still updates per event; the
+  Postgres copy is now saved at most once a second and always at MatchEnd
+  (a restart rebuilds from stored events, so correctness is unchanged).
+  Pinned to one CPU core: max latency 0.331 s per-event saving -> 0.132 s
+  throttled. Limit unchanged (every event < 1 s); the test also checks that
+  saves are throttled.

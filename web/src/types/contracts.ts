@@ -113,10 +113,12 @@ export interface Clock {
   second: number;
 }
 export interface MetricValue {
+  denominator?: number | null;
   /**
    * @minItems 1
    */
   evidence_event_ids: [string, ...string[]];
+  numerator?: number | null;
   value: number;
 }
 export interface Score {

@@ -38,3 +38,7 @@ class Clock(Part):
 class MetricValue(Part):
     value: float
     evidence_event_ids: EvidenceEventIds
+    # For rates (value = numerator / denominator): the raw counts, so intervals
+    # (e.g. Wilson) can be computed later. None for non-rates.
+    numerator: float | None = None
+    denominator: float | None = None

@@ -19,7 +19,7 @@ import yaml
 
 from core.contracts import MetricValue
 from core.metrics import basic, xt
-from core.metrics.basic import value, window
+from core.metrics.basic import rate, value, window
 from core.metrics.events import (
     DEFENSIVE_ACTIONS,
     LOOSE_BALLS,
@@ -71,8 +71,8 @@ def xt_share(ev: Events, lo: int, team: str):
     if total <= 0:
         return None
     mine = [(e, a) for e, a in gains if e.team_id == team]
-    return value(
-        sum(a for _, a in mine) / total, [e for e, _ in mine], [e for e, _ in gains]
+    return rate(
+        sum(a for _, a in mine), total, [e for e, _ in mine], [e for e, _ in gains]
     )
 
 
@@ -253,7 +253,7 @@ def short_possessions(ev: Events, lo: int, team: None = None):
         for _, owner, events in poss
         if sum(e.type in PASSES and e.team_id == owner for e in events) < n
     ]
-    return value(len(short) / len(poss), short, [p[2][0] for p in poss])
+    return rate(len(short), len(poss), short, [p[2][0] for p in poss])
 
 
 def loose_balls(ev: Events, lo: int, team: None = None):
@@ -263,4 +263,4 @@ def loose_balls(ev: Events, lo: int, team: None = None):
     if minutes <= 0:
         return None
     loose = [e for e in items if e.type in LOOSE_BALLS]
-    return value(len(loose) / minutes, loose, items)
+    return rate(len(loose), minutes, loose, items)

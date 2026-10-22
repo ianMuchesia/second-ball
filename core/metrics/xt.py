@@ -16,7 +16,7 @@ versioned artifact in core/metrics/artifacts/.
 
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 
@@ -42,6 +42,8 @@ class XTGrid:
     values: tuple[tuple[float, ...], ...]  # [i][j], i along x
     version: int
     trained_on: dict
+    # event_id -> xT added (events never change, so each is computed once).
+    memo: dict = field(default_factory=dict, compare=False, repr=False)
 
     def at(self, x: float, y: float) -> float:
         i, j = cell(x, y)
@@ -49,9 +51,14 @@ class XTGrid:
 
     def added(self, e: MatchEvent) -> float | None:
         """xT added by a successful move; None for anything else."""
-        if e.type not in MOVES or e.outcome != "success":
-            return None
-        return self.at(e.end_x, e.end_y) - self.at(e.start_x, e.start_y)
+        if e.event_id not in self.memo:
+            moved = e.type in MOVES and e.outcome == "success"
+            self.memo[e.event_id] = (
+                self.at(e.end_x, e.end_y) - self.at(e.start_x, e.start_y)
+                if moved
+                else None
+            )
+        return self.memo[e.event_id]
 
 
 def fit(matches: Iterable[Iterable[MatchEvent]], tol=1e-7, max_iter=200):
