@@ -155,3 +155,45 @@ def test_gemini_client_retries_rate_limit_errors():
     from agents.llm.gemini import RETRY
 
     assert 429 in RETRY.http_status_codes and RETRY.attempts > 1
+
+
+def test_concurrent_calls_cannot_interleave_precheck_and_charge():
+    import threading
+
+    from agents.llm.fake import FakeProvider
+    from core.budget import Budget
+
+    budget = Budget(
+        usd_limit=1.0,
+        token_limit=10_000_000,
+        run_id="t",
+        prices=PRICES,
+        kes_rate=130,
+        kes_rate_date="2026-09-29",
+    )
+    client = LLMClient(
+        FakeProvider(failures={"other": ["timeout"] * 4}, slow_s=0.05), budget
+    )
+    errors = []
+
+    def call():
+        try:
+            client.complete("hi", max_output_tokens=8)
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=call) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == [] and len(budget.ledger) == 8
+
+
+def test_gemini_request_gets_its_own_timeout():
+    models = FakeGenaiModels()
+    provider = GeminiProvider(
+        api_key=None, model=MODEL, client=SimpleNamespace(models=models)
+    )
+    provider.generate("hi", None, max_output_tokens=8, timeout_s=12)
+    assert models.config.http_options.timeout == 12_000

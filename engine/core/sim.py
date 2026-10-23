@@ -18,6 +18,7 @@ from pathlib import Path
 import yaml
 
 from core.contracts import Match, MatchEvent
+from engine.core.lineup import lineup
 from engine.core.models import fatigue, pass_success, pressure_load, xg
 from engine.core.pitch import (
     GOAL_Y,
@@ -86,6 +87,7 @@ def simulate_match(
         mode="scenario" if scenario else "free_simulation",
         home_strength=home.strength,
         away_strength=away.strength,
+        lineups=[*lineup(home), *lineup(away)],
     )
     sim = _Sim(match, home, away, cfg, load_weather()[weather], scenario)
     events = sim.run()
@@ -1074,6 +1076,24 @@ class _Sim:
                 return beat
         return None
 
+    def caught_upfield(self, frame, victim, defender):
+        """A true last-man foul: the high line is caught upfield, so no other
+        outfield defender is goal-side of the ball (only the keeper). Fixed
+        offsets, no random draws: the rest of the match is unchanged."""
+        bx, _ = own(victim, *self.ball)
+        keeper = self.teams[victim].keeper
+        mates = sorted(
+            pl
+            for (s, pl) in frame.positions
+            if s == victim and pl not in (keeper, defender)
+        )
+        for i, pl in enumerate(mates):
+            x, y = own(victim, *frame.positions[(victim, pl)])
+            if x <= bx:
+                frame.positions[(victim, pl)] = own(
+                    victim, min(bx + 3.0 + 1.5 * i, LENGTH - 1.0), y
+                )
+
     def play_beat(self, beat):
         """Script: the victim attacks down `behind` with the full-back high, loses
         the ball, and the other team counters into the channel behind that
@@ -1147,6 +1167,7 @@ class _Sim:
                     outfield_only=True,
                     keeper=self.teams[victim].keeper,
                 )
+            self.caught_upfield(frame, victim, defender)
             self.challenge(frame, defender, card="red_card", last_man=True, **tag)
             return
 

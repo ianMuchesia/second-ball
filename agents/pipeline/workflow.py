@@ -7,9 +7,15 @@
 Analyst, Narrator and Localizer are agents (a model behind our adapter);
 the Verifier is plain code. Numbers come from code (Analysis.values); the
 fallback sentence is built from those values only.
+
+Every model and MCP call goes through agents.pipeline.resilience (time budget,
+retry with backoff, then a code fallback; the budget kill switch), and every
+step is a span in the moment's trace (agents.telemetry). Whatever fails,
+`narrate` returns a Narration with an English line: never an empty overlay.
 """
 
 import json
+import logging
 from datetime import UTC, datetime
 
 from agent_framework import Agent, Executor, WorkflowBuilder, WorkflowContext, handler
@@ -27,13 +33,19 @@ from agents.pipeline.models import (
     Retry,
     Verdict,
 )
-from agents.pipeline.verifier import untranslated, verify
+from agents.pipeline.resilience import Policy, ask, call_tool
+from agents.pipeline.verifier import lock, unlock, untranslated, verify, wrong_numbers
+from agents.telemetry import step
 from core.contracts import Insight, Overlay
 from core.contracts.overlay import OverlayTime
+
+log = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3  # the first line + 2 retries
 LOCALIZER_ATTEMPTS = 2  # a translation + 1 retry
 DURATION_MS = 6000
+SEQUENCE_BEFORE = 6  # events before the moment's last evidence event, for the Analyst
+UNAVAILABLE = "the model gave no answer (timeout, error or kill switch)"
 
 
 def values_of(task: NarrationTask) -> dict[str, float]:
@@ -45,15 +57,18 @@ def values_of(task: NarrationTask) -> dict[str, float]:
     return out
 
 
-def parse_insight(text: str, task: NarrationTask) -> Insight:
-    """The Analyst's JSON; if it is not usable, a plain claim from code."""
+def parse_insight(text: str | None, task: NarrationTask) -> Insight:
+    """The Analyst's JSON; if it is missing or not usable, a plain claim from code."""
     try:
-        data = json.loads(text.strip().removeprefix("```json").removesuffix("```"))
+        raw = (text or "").strip().removeprefix("```json").removesuffix("```")
+        data = json.loads(raw)
         claim, mechanism = str(data["claim"]).strip(), str(data["mechanism"]).strip()
         confidence = min(1.0, max(0.0, float(data.get("confidence", 0.5))))
     except (ValueError, KeyError, TypeError):
         claim = f"{task.moment.kind.replace('_', ' ')}"
         mechanism, confidence = "See the numbers before and after.", 0.3
+    # A claim code knows (who was sent off and why) is code's, not the model's.
+    claim = task.facts.get("claim", claim)
     return Insight(
         claim=claim or "-",
         mechanism=mechanism or "-",
@@ -62,9 +77,21 @@ def parse_insight(text: str, task: NarrationTask) -> Insight:
     )
 
 
+def sequence_lines(seq: dict | None, task: NarrationTask) -> list[str]:
+    """The MCP sequence as short lines (no coordinates: nothing to misquote)."""
+    if not seq:
+        return []
+    names = task.context.team_names
+    return [
+        f"{names.get(e['team_id'], e['team_id'])} {e['type']} ({e['outcome']})"
+        for e in seq.get("events", [])
+    ]
+
+
 class AnalystExecutor(Executor):
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, policy: Policy, tools=None):
         super().__init__(id="analyst")
+        self.llm, self.policy, self.tools = llm, policy, tools
         self.agent = Agent(
             client=AdapterChatClient(llm), instructions=prompts.ANALYST, name="analyst"
         )
@@ -73,16 +100,35 @@ class AnalystExecutor(Executor):
     async def analyse(
         self, task: NarrationTask, ctx: WorkflowContext[Analysis]
     ) -> None:
-        values = values_of(task)
-        reply = await self.agent.run(prompts.analyst_prompt(task, values))
-        insight = parse_insight(reply.text, task)
+        with step("analyst") as span:
+            values = values_of(task)
+            seq = await call_tool(
+                self.tools,
+                "get_sequence",
+                {
+                    "event_id": task.moment.evidence_event_ids[-1],
+                    "before": SEQUENCE_BEFORE,
+                    "after": 0,
+                },
+                self.policy,
+            )
+            prompt = prompts.analyst_prompt(task, values, sequence_lines(seq, task))
+            reply = await ask(self.llm, self.agent, prompt, "analyst", self.policy)
+            insight = parse_insight(reply, task)
+            span.set_attributes(
+                {
+                    "code_insight": reply is None,
+                    "mcp_sequence": seq is not None,
+                    "confidence": insight.confidence,
+                }
+            )
         await ctx.send_message(Analysis(task=task, insight=insight, values=values))
 
 
 class NarratorExecutor(Executor):
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, policy: Policy):
         super().__init__(id="narrator")
-        self.llm = llm
+        self.llm, self.policy = llm, policy
         self.agents: dict[str, Agent] = {}
 
     def agent(self, persona: str) -> Agent:
@@ -97,15 +143,22 @@ class NarratorExecutor(Executor):
     async def write(
         self, analysis: Analysis, attempt: int, reasons, history, ctx
     ) -> None:
-        reply = await self.agent(analysis.task.persona).run(
-            prompts.narrator_prompt(analysis, reasons)
-        )
+        with step("narrator", attempt=attempt) as span:
+            reply = await ask(
+                self.llm,
+                self.agent(analysis.task.persona),
+                prompts.narrator_prompt(analysis, reasons),
+                "narrator",
+                self.policy,
+            )
+            span.set_attribute("answered", reply is not None)
         await ctx.send_message(
             Draft(
                 analysis=analysis,
-                text=reply.text.strip(),
+                text=(reply or "").strip(),
                 attempt=attempt,
                 history=history,
+                unavailable=reply is None,
             )
         )
 
@@ -120,17 +173,41 @@ class NarratorExecutor(Executor):
         )
 
 
+def fallback_approved(analysis: Analysis, attempts: int, history) -> Approved:
+    text = prompts.fallback(analysis)
+    return Approved(
+        analysis=analysis,
+        text=text,
+        verdict=verify(text, analysis),
+        fallback=True,
+        attempts=attempts,
+        history=history,
+    )
+
+
 class VerifierExecutor(Executor):
-    """Plain code: pass -> Localizer; fail -> Retry (max 2); then fallback."""
+    """Plain code: pass -> Localizer; fail -> Retry (max 2); then fallback.
+    No answer from the model (after resilience's own retry) -> fallback now."""
 
     def __init__(self):
         super().__init__(id="verifier")
 
     @handler
     async def check(self, draft: Draft, ctx: WorkflowContext[Retry | Approved]) -> None:
-        verdict = verify(
-            draft.text, draft.analysis, examples(draft.analysis.task.persona)
-        ).model_copy(update={"text": draft.text})
+        with step("verifier", attempt=draft.attempt) as span:
+            if draft.unavailable:
+                verdict = Verdict(passed=False, reasons=[UNAVAILABLE])
+            else:
+                verdict = verify(
+                    draft.text, draft.analysis, examples(draft.analysis.task.persona)
+                ).model_copy(update={"text": draft.text})
+            span.set_attributes(
+                {
+                    "passed": verdict.passed,
+                    "reasons": verdict.reasons,
+                    "risk_tier": verdict.risk_tier,
+                }
+            )
         history = [*draft.history, verdict]
         if verdict.passed:
             await ctx.send_message(
@@ -143,7 +220,7 @@ class VerifierExecutor(Executor):
                     history=history,
                 )
             )
-        elif draft.attempt < MAX_ATTEMPTS:
+        elif draft.attempt < MAX_ATTEMPTS and not draft.unavailable:
             await ctx.send_message(
                 Retry(
                     analysis=draft.analysis,
@@ -153,50 +230,66 @@ class VerifierExecutor(Executor):
                 )
             )
         else:
-            text = prompts.fallback(draft.analysis)
             await ctx.send_message(
-                Approved(
-                    analysis=draft.analysis,
-                    text=text,
-                    verdict=verify(text, draft.analysis),
-                    fallback=True,
-                    attempts=draft.attempt,
-                    history=history,
-                )
+                fallback_approved(draft.analysis, draft.attempt, history)
             )
 
 
-class LocalizerExecutor(Executor):
-    """Translates the approved line, checked by code (numbers unchanged, not
-    still English); one retry with the reason, then the language is dropped
-    (English always airs)."""
-
-    def __init__(self, llm: LLMClient):
-        super().__init__(id="localizer")
-        self.llm = llm
-
-    @handler
-    async def localize(
-        self, approved: Approved, ctx: WorkflowContext[None, Narration]
-    ) -> None:
-        task = approved.analysis.task
-        text = {"en": approved.text}
-        for lang in task.languages:
+async def localize(
+    llm: LLMClient, policy: Policy, text: str, analysis: Analysis, languages
+) -> dict[str, str]:
+    """{"en": text, lang: translation, ...}. Numbers and names are locked as
+    typed tokens; each translation is checked in code (tokens intact, numbers
+    allowed, not still English); one retry with the reason, then that language
+    is dropped (English always airs)."""
+    out = {"en": text}
+    masked, slots = lock(text, analysis)
+    for lang in languages:
+        with step(f"localizer.{lang}") as span:
             agent = Agent(
-                client=AdapterChatClient(self.llm),
+                client=AdapterChatClient(llm),
                 instructions=prompts.LOCALIZER.format(
                     language=prompts.LANGUAGE.get(lang, lang)
                 ),
                 name=f"localizer_{lang}",
             )
-            ask = f"TEXT: {approved.text}"
+            request = f"TEXT: {masked}"
+            problem = None
             for _ in range(LOCALIZER_ATTEMPTS):
-                reply = (await agent.run(ask)).text.strip()
-                problem = untranslated(reply, approved.text)
-                if problem is None:
-                    text[lang] = reply
+                reply = await ask(llm, agent, request, "localizer", policy)
+                if reply is None:
+                    problem = UNAVAILABLE
                     break
-                ask = f"Your last reply was rejected: {problem}.\nTEXT: {approved.text}"
+                translation, problem = unlock(reply.strip(), slots)
+                if translation is not None:
+                    # The Verifier again, on the translation.
+                    problem = untranslated(translation, text) or next(
+                        iter(wrong_numbers(translation, analysis)), None
+                    )
+                if problem is None:
+                    out[lang] = translation
+                    break
+                request = f"Your last reply was rejected: {problem}.\nTEXT: {masked}"
+            span.set_attributes({"kept": lang in out, "problem": problem})
+    return out
+
+
+class LocalizerExecutor(Executor):
+    def __init__(self, llm: LLMClient, policy: Policy):
+        super().__init__(id="localizer")
+        self.llm, self.policy = llm, policy
+
+    @handler
+    async def localize(
+        self, approved: Approved, ctx: WorkflowContext[None, Narration]
+    ) -> None:
+        text = await localize(
+            self.llm,
+            self.policy,
+            approved.text,
+            approved.analysis,
+            approved.analysis.task.languages,
+        )
         await ctx.yield_output(
             Narration(
                 overlay=overlay(approved, text),
@@ -227,11 +320,12 @@ def overlay(approved: Approved, text: dict[str, str]) -> Overlay:
     )
 
 
-def build(llm: LLMClient):
-    analyst = AnalystExecutor(llm)
-    narrator = NarratorExecutor(llm)
+def build(llm: LLMClient, policy: Policy | None = None, tools=None):
+    policy = policy or Policy()
+    analyst = AnalystExecutor(llm, policy, tools)
+    narrator = NarratorExecutor(llm, policy)
     verifier = VerifierExecutor()
-    localizer = LocalizerExecutor(llm)
+    localizer = LocalizerExecutor(llm, policy)
     return (
         WorkflowBuilder(start_executor=analyst, max_iterations=20)
         .add_edge(analyst, narrator)
@@ -242,11 +336,54 @@ def build(llm: LLMClient):
     )
 
 
-async def narrate(llm: LLMClient, task: NarrationTask) -> Narration:
-    """Run the workflow for one moment and persona."""
-    result = await build(llm).run(task)
-    (out,) = result.get_outputs()
+def emergency(task: NarrationTask, error: Exception) -> Narration:
+    """The workflow itself failed: the code template, English only."""
+    values = values_of(task)
+    analysis = Analysis(task=task, insight=parse_insight(None, task), values=values)
+    verdict = Verdict(
+        passed=False, reasons=[f"workflow failed: {type(error).__name__}"]
+    )
+    approved = fallback_approved(analysis, 0, [verdict])
+    return Narration(
+        overlay=overlay(approved, {"en": approved.text}),
+        fallback=True,
+        attempts=0,
+        verdicts=[verdict],
+    )
+
+
+async def narrate(
+    llm: LLMClient, task: NarrationTask, policy: Policy | None = None, tools=None
+) -> Narration:
+    """Run the workflow for one moment and persona (one `narrate` span)."""
+    m = task.moment
+    with step(
+        "narrate",
+        moment_id=m.moment_id,
+        kind=m.kind,
+        minute=m.clock.minute,
+        persona=task.persona,
+        importance=m.importance,
+    ) as span:
+        n = len(llm.budget.ledger)
+        try:
+            result = await build(llm, policy, tools).run(task)
+            (out,) = result.get_outputs()
+        except Exception as e:  # never an empty overlay
+            log.exception("narration workflow failed for %s", m.moment_id)
+            span.set_attribute("error", repr(e)[:200])
+            out = emergency(task, e)
+        rows = llm.budget.ledger[n:]
+        span.set_attributes(
+            {
+                "fallback": out.fallback,
+                "attempts": out.attempts,
+                "languages": sorted(out.overlay.text),
+                "llm.calls": len(rows),
+                "llm.usd": sum(r.get("usd") or 0.0 for r in rows),
+            }
+        )
     return out
 
 
-__all__ = ["MAX_ATTEMPTS", "Verdict", "build", "narrate", "values_of"]
+__all__ = ["MAX_ATTEMPTS", "Policy", "Verdict", "build", "narrate", "values_of"]

@@ -42,5 +42,16 @@ services:
       timeout: 5s
       retries: 10
 
+  # Traces: `make jaeger`, then OTEL_EXPORTER=otlp; UI at http://localhost:16686.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    restart: "no"
+    profiles: ["tracing"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+
 volumes:
   pgdata:

@@ -12,7 +12,7 @@ from agents.llm.prices import PRICES
 from agents.pipeline import prompts
 from agents.pipeline.models import Analysis, MatchContext, NarrationTask
 from agents.pipeline.producer import Producer, stat_card
-from agents.pipeline.verifier import verify
+from agents.pipeline.verifier import lock, numbers, verify
 from agents.pipeline.workflow import build, narrate, values_of
 from core.budget import Budget
 from core.contracts import Clock, Insight, MetricValue, Moment
@@ -42,9 +42,11 @@ CONTEXT = MatchContext(
     team_names={R: "Riverside", HT: "Harbour"},
     score=(0, 1),
     minute=73,
+    sent_off={R: 1},
     players={f"{R}-9": "Ada Brook", f"{HT}-11": "Juma Reed"},
 )
-TASK = NarrationTask(moment=MOMENT, context=CONTEXT, persona="casual")
+# Analyst: these lines quote values (casual lines may not; see the casual tests).
+TASK = NarrationTask(moment=MOMENT, context=CONTEXT, persona="analyst")
 
 
 def analysis(task=TASK):
@@ -208,18 +210,34 @@ def test_stale_line_is_dropped():
     assert [o.status for o in p.expired] == ["expired"]
 
 
-def test_one_narrative_per_45_s_most_important_first():
+def test_one_narrative_per_45_match_s_most_important_first():
     p = Producer()
     (first,) = p.offer(narrative("a"), moment_t=100, importance=0.5, now=101)
     assert first.overlay_id == "a"
     # Within 45 s: both wait; the more important one airs when the gap allows.
     assert p.offer(narrative("b"), moment_t=140, importance=0.4, now=141) == []
-    assert p.offer(narrative("c"), moment_t=140, importance=0.9, now=142) == []
+    assert p.offer(narrative("c"), moment_t=140, importance=0.7, now=142) == []
     (next_,) = p.tick(now=146)
     assert next_.overlay_id == "c"
     # "b" (moment at 140) is stale by 149.
     p.tick(now=191.5)
     assert [o.overlay_id for o in p.expired] == ["b"]
+
+
+def test_goals_and_red_cards_preempt_the_gap_and_lower_lines():
+    p = Producer()
+    p.offer(narrative("chance"), moment_t=100, importance=0.7, now=101)
+    p.offer(narrative("waiting"), moment_t=120, importance=0.6, now=121)
+    (goal,) = p.offer(narrative("goal"), moment_t=125, importance=1.0, now=126)
+    assert goal.overlay_id == "goal"  # inside the 45 s gap, airs at once
+    assert [o.overlay_id for o in p.expired] == ["waiting"]  # pushed out
+
+
+def test_the_gap_is_match_time_so_1x_and_10x_air_the_same():
+    for speed in (1, 10):
+        p = Producer(speed=speed)
+        p.offer(narrative("a"), moment_t=100, importance=0.5, now=101)
+        assert p.offer(narrative("b"), moment_t=150, importance=0.5, now=151)
 
 
 def test_risky_line_waits_for_approval():
@@ -276,7 +294,7 @@ def test_prompt_says_who_is_leading_and_who_the_red_card_helps():
 def test_copying_a_style_example_is_rejected():
     example = "Red card for Riverside! Their last man walks while trailing 0-1."
     copy = verify(example.replace("walks", "goes"), analysis(), [example])
-    assert not copy.passed and "style example" in copy.reasons[0]
+    assert not copy.passed and any("style example" in r for r in copy.reasons)
     assert verify("Riverside are a man down at 0-1.", analysis(), [example]).passed
 
 
@@ -284,14 +302,21 @@ def test_style_examples_are_labelled_do_not_copy():
     assert "DO NOT COPY" in prompts.narrator_system("casual")
 
 
+# The Localizer sees numbers and names as tokens: "[T1]'s control went from
+# [N1] to [N2]." for "Riverside's control went from 0.71 to 0.81."
+LINE = "Riverside's control went from 0.71 to 0.81."
+SW_TASK = TASK.model_copy(update={"languages": ["sw"]})
+
+
 @pytest.mark.parametrize(
     "reply",
     [
-        "Riverside's control went from 0.71 to 0.81.",  # the English line itself
-        "Udhibiti wa Riverside went from 0.71 and 0.81.",  # partly English
+        "[T1]'s control went from [N1] to [N2].",  # the English line itself
+        "Udhibiti wa [T1] went from [N1] and [N2].",  # partly English
+        "Udhibiti wa [T1] ulipanda kutoka [N1] hadi 0.9.",  # a token dropped
     ],
 )
-def test_localizer_retries_english_then_drops_it(reply):
+def test_localizer_retries_a_bad_translation_then_drops_it(reply):
     replies = []
 
     def script(prompt, system):
@@ -300,25 +325,35 @@ def test_localizer_retries_english_then_drops_it(reply):
             return reply
         if "ANALYST" in system:
             return FakeProvider(None).answer(prompt, system)
-        return "Riverside's control went from 0.71 to 0.81."
+        return LINE
 
-    out = run(llm(script=script))
+    out = run(llm(script=script), SW_TASK)
     assert set(out.overlay.text) == {"en"}
     assert len(replies) == 2 and "rejected" in replies[1]
 
 
-def test_localizer_keeps_a_good_retry():
+def test_localizer_keeps_a_good_retry_with_the_numbers_put_back():
     def script(prompt, system):
         if "ROLE: LOCALIZER" in system:
+            assert "0.71" not in prompt and "Riverside" not in prompt  # locked
             if "rejected" in prompt:
-                return "Udhibiti wa Riverside ulipanda kutoka 0.71 hadi 0.81."
-            return "Riverside's control went from 0.71 to 0.81."
+                return "Udhibiti wa [T1] ulipanda kutoka [N1] hadi [N2]."
+            return "[T1]'s control went from [N1] to [N2]."
         if "ANALYST" in system:
             return FakeProvider(None).answer(prompt, system)
-        return "Riverside's control went from 0.71 to 0.81."
+        return LINE
 
-    out = run(llm(script=script))
-    assert out.overlay.text["sw"].startswith("Udhibiti")
+    out = run(llm(script=script), SW_TASK)
+    assert (
+        out.overlay.text["sw"]
+        == "Udhibiti wa Riverside ulipanda kutoka 0.71 hadi 0.81."
+    )
+
+
+def test_four_languages_by_default():
+    out = run(llm())
+    assert set(out.overlay.text) == {"en", "fr", "es", "sw", "ar"}
+    assert prompts.RIGHT_TO_LEFT == {"ar"}
 
 
 @pytest.mark.parametrize(
@@ -329,6 +364,7 @@ def test_localizer_keeps_a_good_retry():
         "Game over for Riverside.",
         "Harbour have put it beyond doubt.",
         "Harbour clinch the win.",
+        "Late knockout blow by Harbour!",
     ],
 )
 def test_soft_predictions_are_rejected(line):
@@ -394,3 +430,91 @@ def test_giving_one_teams_numbers_to_the_other_is_rejected():
     wrong = verify("The red card raises Harbour's control index to 0.81.", analysis())
     assert not wrong.passed and "Riverside's, not Harbour's" in wrong.reasons[0]
     assert verify("Riverside's control index rises to 0.81.", analysis()).passed
+
+
+def casual_analysis(**update):
+    return analysis(TASK.model_copy(update={"persona": "casual", **update}))
+
+
+def test_casual_lines_show_no_index_numbers():
+    verdict = verify("Riverside's control went from 0.71 to 0.81.", casual_analysis())
+    assert not verdict.passed and "casual line" in verdict.reasons[0]
+    assert verify("Riverside are pressed half as much now.", casual_analysis()).passed
+
+
+def test_casual_prompt_gets_words_not_numbers():
+    a = casual_analysis()
+    block = prompts.values_block(a.task, a.values)
+    assert '"How much Riverside are being pressed": "halved"' in block
+    assert "0.52" not in block and "0.71" not in block
+
+
+def test_analyst_prompt_gets_units():
+    block = prompts.values_block(TASK, values_of(TASK))
+    assert '"control_index": "index 0-1"' in block
+
+
+def test_casual_fallback_uses_words():
+    text = prompts.fallback(casual_analysis())
+    assert not any(d for _, d, _ in numbers(text))
+    assert verify(text, casual_analysis()).passed
+
+
+@pytest.mark.parametrize(
+    ("line", "ok"),
+    [
+        ("Pressure on Riverside's ball has halved.", True),  # 0.52 -> 0.245: 47%
+        ("Riverside's control has doubled.", False),  # 0.712 -> 0.805
+        ("Riverside's control is up by a third.", False),
+    ],
+)
+def test_comparisons_must_match_a_real_change(line, ok):
+    assert verify(line, analysis()).passed is ok
+
+
+def goal_task(passes):
+    return NarrationTask(
+        moment=GOAL,
+        context=CONTEXT,
+        persona="analyst",
+        facts=COUNTER_FACTS,
+        counts={"passes_in_move": passes, "counter_goals": 2},
+    )
+
+
+@pytest.mark.parametrize(("passes", "ok"), [(1, True), (3, False)])
+def test_one_pass_needs_a_one_pass_move(passes, ok):
+    line = "One pass behind Riverside's left-back on the counter, and it's 0-1."
+    assert verify(line, analysis(goal_task(passes))).passed is ok
+
+
+@pytest.mark.parametrize(
+    ("line", "ok"),
+    [
+        ("Harbour's second counter goal behind Riverside's left-back.", True),
+        ("Harbour's third counter goal behind Riverside's left-back.", False),
+        ("Twice Harbour break behind Riverside's left-back.", True),
+        ("Ten men for Riverside as Harbour break behind the left-back.", True),
+        ("Nine men for Riverside as Harbour break behind the left-back.", False),
+        ("Harbour break behind Riverside's left-back once more.", True),
+        ("Harbour break behind Riverside's left-back for 3 goals.", False),
+    ],
+)
+def test_count_words_must_match_code_counts(line, ok):
+    verdict = verify(line, analysis(goal_task(1)))
+    assert verdict.passed is ok, verdict.reasons
+
+
+def test_lock_types_the_tokens():
+    masked, slots = lock("Harbour lead 0-1 with xG 0.61 at 34'.", analysis())
+    assert masked == "[T1] lead [S1] with [X1] [N1] at [N2]'."
+    assert slots["[S1]"] == "0-1" and slots["[T1]"] == "Harbour"
+
+
+def test_a_decimal_before_goals_is_xg_not_a_count():
+    from agents.pipeline.verifier import wrong_counts
+
+    a = analysis(goal_task(1))
+    assert wrong_counts("xG from 0.16 to 0.61 goals", a) == []
+    assert wrong_counts("1.28 goals to 1.73 goals", a) == []
+    assert wrong_counts("61 goals", a) != []

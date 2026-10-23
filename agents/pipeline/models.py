@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.contracts import Insight, Moment, Overlay
+from core.contracts import Insight, LineupPlayer, Moment, Overlay
 
 Persona = Literal["analyst", "casual"]
 RiskTier = Literal["low", "medium", "high"]
@@ -29,6 +29,8 @@ class MatchContext(Part):
     score: tuple[int, int]  # (home, away)
     minute: int
     players: dict[str, str] = Field(default_factory=dict)  # on the pitch: id -> name
+    # The published team sheets (Match.lineups): names, shirts, positions.
+    lineup: list[LineupPlayer] = Field(default_factory=list)
     sent_off: dict[str, int] = Field(default_factory=dict)  # team_id -> red cards
 
 
@@ -36,10 +38,13 @@ class NarrationTask(Part):
     moment: Moment
     context: MatchContext
     persona: Persona
-    languages: list[str] = Field(default_factory=lambda: ["sw"])
+    languages: list[str] = Field(default_factory=lambda: ["fr", "es", "sw", "ar"])
     # Code-made words about the moment (agents/pipeline/facts.py), e.g. a
     # goal's build_up and exploited_zone.
     facts: dict[str, str] = Field(default_factory=dict)
+    # Code-made counts a line may quote (digits or words): passes_in_move,
+    # counter_goals, shirt_number.
+    counts: dict[str, int] = Field(default_factory=dict)
 
 
 class Analysis(Part):
@@ -53,6 +58,7 @@ class Draft(Part):
     text: str
     attempt: int  # 1 = first try; at most 3 (two retries)
     history: list["Verdict"] = Field(default_factory=list)  # earlier attempts
+    unavailable: bool = False  # the model gave no answer (timeout, error, budget)
 
 
 class Verdict(Part):

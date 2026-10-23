@@ -3,7 +3,16 @@
 - Every number must match one of the Insight's values (with the rounding the
   line uses, e.g. "0.7" or "71%" for 0.712) or the match context (score,
   minutes, players on the pitch, shirt numbers).
-- Every capitalised name must be a team or a player on the pitch.
+- Counts written as words or digits before a football noun ("one pass",
+  "ten men", "second counter goal", "twice") must match a code-made count of
+  that kind (passes in the move, players on the pitch, goals, counters).
+- Comparisons ("halved", "doubled", "up by a third") must be within 10% of a
+  real before/after change (Ian, 2026-10-22).
+- Casual lines show no raw index numbers: no decimals at all.
+- Every capitalised name must be a team or a player on the team sheet; a
+  position, playing style or shirt number said with a player's name must
+  match the sheet ("left-back Lindqvane", "number 5 Stonebridge").
+- "Last man" only when code found a last-man foul (facts["reason"]).
 - Rejected outright: predictions ("will win", and soft ones that treat the
   match as over: "seal it", "secure the 0-2", "game over"), and blaming one
   event on the weather.
@@ -21,6 +30,12 @@ Returns a Verdict: passed, or the list of reasons (fed back to the Narrator).
 import re
 from collections.abc import Sequence
 
+from agents.pipeline.lineups import (
+    CLAIMS,
+    STYLE_OF,
+    STYLE_WORDS,
+    name_pattern,
+)
 from agents.pipeline.models import Analysis, Verdict
 
 NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(\s*%|\s*per\s*cent)?", re.IGNORECASE)
@@ -52,7 +67,8 @@ SOFT_PREDICTIONS = [
     r"\b(bag|bags|bagged)\s+the\s+(win|points|victory)\b",
     (
         r"\b(game\s+over|all\s+over|done\s+and\s+dusted|no\s+way\s+back|"
-        r"unassailable|insurmountable|surely\s+won|that\s+is\s+that|that's\s+that)\b"
+        r"unassailable|insurmountable|surely\s+won|that\s+is\s+that|that's\s+that|"
+        r"knockout\s+blow|killer\s+blow|nail\s+in\s+the\s+coffin|coup\s+de\s+gr[aâ]ce)\b"
     ),
 ]
 SOFT_PREDICTION = re.compile("|".join(SOFT_PREDICTIONS), re.IGNORECASE)
@@ -93,7 +109,8 @@ COMMON_WORDS = """
     full fullback full-back striker midfield centre center left right wide deep high
     big huge great brilliant superb lovely clinical quick fast sharp clever simple
     unbelievable incredible remarkable another familiar same pattern again lightning
-    leading trailing level down
+    leading trailing level down half-time full-time halftime fulltime kick-off
+    whistle recap shots xg number no captain
     home away side sides team teams players player everyone nobody somebody
     """
 COMMON = set(COMMON_WORDS.split())
@@ -122,26 +139,163 @@ def numbers(text: str) -> list[tuple[float, int, bool]]:
     return out
 
 
+def on_pitch(analysis: Analysis) -> list[float]:
+    """Players per team: 11 - red cards."""
+    ctx = analysis.task.context
+    return [float(11 - ctx.sent_off.get(t, 0)) for t in (ctx.home, ctx.away)]
+
+
+SHIRT = re.compile(r"\b(?:number|no\.?|#)\s*(\d{1,2})\b", re.IGNORECASE)
+LAST_MAN = re.compile(r"\blast[\s-]man\b", re.IGNORECASE)
+
+
 def allowed_numbers(analysis: Analysis) -> list[float]:
     ctx = analysis.task.context
     moment = analysis.task.moment
-    shirts = [
-        float(pid.rsplit("-", 1)[-1])
-        for pid in ctx.players
-        if pid.rsplit("-", 1)[-1].isdigit()
-    ]
-    on_pitch = [
-        float(sum(1 for pid in ctx.players if pid.startswith(team + "-")))
-        for team in (ctx.home, ctx.away)
-    ]
+    # With a team sheet, shirt numbers are checked where they are said
+    # ("number 5"), not allowed anywhere; without one, any shirt on the pitch.
+    shirts = (
+        []
+        if ctx.lineup
+        else [
+            float(pid.rsplit("-", 1)[-1])
+            for pid in ctx.players
+            if pid.rsplit("-", 1)[-1].isdigit()
+        ]
+    )
     return [
         *analysis.values.values(),
         *ctx.score,
         float(ctx.minute),
         float(moment.clock.minute),
         *shirts,
-        *on_pitch,
+        *on_pitch(analysis),
+        *map(float, analysis.task.counts.values()),
     ]
+
+
+CARDINALS = {
+    w: n
+    for n, w in enumerate(
+        [
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+            "twenty",
+        ]
+    )
+}
+ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5}
+MULTIPLES = {"twice": 2, "thrice": 3}  # not "once": "once more" means again
+# Football nouns a count can be about -> kind of count.
+NOUNS = {
+    **dict.fromkeys(["pass", "passes"], "passes"),
+    **dict.fromkeys(["man", "men", "player", "players"], "players"),
+    **dict.fromkeys(["goal", "goals"], "goals"),
+    **dict.fromkeys(
+        ["counter", "counters", "counter-attack", "counter-attacks", "break", "breaks"],
+        "counters",
+    ),
+    **dict.fromkeys(["card", "cards"], "cards"),
+    **dict.fromkeys(["time", "times"], "times"),
+}
+COUNT = re.compile(
+    # A whole number only: "0.61 goals" is xG, not 61 goals.
+    r"(?<![\d.])\b(?P<n>\d+(?![.,]\d)|" + "|".join([*CARDINALS, *ORDINALS]) + r")"
+    r"(?:\s+(?P<adj>[a-z][a-z'\-]*))?\s+(?P<noun>" + "|".join(NOUNS) + r")\b",
+    re.IGNORECASE,
+)
+MULTIPLE = re.compile(r"\b(" + "|".join(MULTIPLES) + r")\b", re.IGNORECASE)
+# Comparison words -> after/before ratio they claim.
+COMPARISONS = [
+    (r"\bhalved\b|\bhalving\b|\bcut\s+in\s+half\b|\bdown\s+by\s+half\b", 0.5),
+    (r"\bhalves\b(?=\s+(from|to|in|after|since))", 0.5),
+    (r"\bdoubled\b|\bdoubles\b|\bdoubling\b", 2.0),
+    (r"\btripled\b|\btriples\b|\btrebled\b", 3.0),
+    (r"\b(up|rises?|rose|climbs?|grows?|grew)\s+by\s+a\s+third\b", 4 / 3),
+    (r"\b(down|falls?|fell|drops?|dropped)\s+by\s+a\s+third\b", 2 / 3),
+    (r"\b(up|rises?|rose|climbs?|grows?|grew)\s+by\s+half\b", 1.5),
+]
+COMPARE_TOLERANCE = 0.10
+
+
+def counts_of_kind(kind: str, analysis: Analysis) -> set[float]:
+    """Code-made counts a 'kind' of count may match."""
+    task, ctx = analysis.task, analysis.task.context
+    c = task.counts
+    repeated = {float(v) for k, v in analysis.values.items() if "counters" in k}
+    if "counter_goals" in c:
+        repeated.add(float(c["counter_goals"]))
+    if kind == "passes":
+        return {float(c["passes_in_move"])} if "passes_in_move" in c else set()
+    if kind == "players":
+        teams = on_pitch(analysis)
+        return {*teams, abs(teams[0] - teams[1])} - {0.0}
+    if kind == "goals":
+        return {float(x) for x in ctx.score} | {float(sum(ctx.score))}
+    if kind == "counters":
+        return repeated | ({1.0} if "build_up" in task.facts else set())
+    if kind == "cards":
+        return {float(v) for v in ctx.sent_off.values()} | (
+            {1.0} if task.moment.kind == "red_card_impact" else set()
+        )
+    return repeated  # times
+
+
+def wrong_counts(text: str, analysis: Analysis) -> list[str]:
+    out = []
+    for m in COUNT.finditer(text):
+        word, noun = m.group("n").lower(), m.group("noun").lower()
+        n = float(word) if word.isdigit() else CARDINALS.get(word, ORDINALS.get(word))
+        adj = (m.group("adj") or "").lower()
+        # "second counter goal" counts counter goals: a noun in between decides.
+        kind = NOUNS.get(adj, NOUNS[noun])
+        if n not in counts_of_kind(kind, analysis):
+            out.append(f"'{m.group(0)}': no code-made count of {kind} is {n:g}")
+    for m in MULTIPLE.finditer(text):
+        n = MULTIPLES[m.group(1).lower()]
+        if n not in counts_of_kind("times", analysis):
+            out.append(f"'{m.group(1)}': nothing in the evidence happened {n} times")
+    return out
+
+
+def pairs(values: dict[str, float]) -> list[tuple[str, float, float]]:
+    """(metric, before, after) for every metric with both."""
+    return [
+        (k[: -len("_before")], v, values[k[: -len("_before")] + "_after"])
+        for k, v in values.items()
+        if k.endswith("_before") and k[: -len("_before")] + "_after" in values
+    ]
+
+
+def wrong_comparisons(text: str, analysis: Analysis) -> list[str]:
+    ratios = [after / before for _, before, after in pairs(analysis.values) if before]
+    out = []
+    for pattern, target in COMPARISONS:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m and not any(abs(r / target - 1) <= COMPARE_TOLERANCE for r in ratios):
+            out.append(
+                f"'{m.group(0)}' does not match any before/after change "
+                f"(within {COMPARE_TOLERANCE:.0%})"
+            )
+    return out
 
 
 def matches(x: float, decimals: int, percent: bool, v: float) -> bool:
@@ -154,7 +308,14 @@ def matches(x: float, decimals: int, percent: bool, v: float) -> bool:
 def known_names(analysis: Analysis) -> set[str]:
     ctx = analysis.task.context
     words = set()
-    for name in [*ctx.team_names.values(), *ctx.players.values(), ctx.home, ctx.away]:
+    sheet = [p.name for p in ctx.lineup]
+    for name in [
+        *ctx.team_names.values(),
+        *ctx.players.values(),
+        *sheet,
+        ctx.home,
+        ctx.away,
+    ]:
         words |= {w.lower() for w in WORD.findall(name.replace("_", " "))}
     return words
 
@@ -249,6 +410,50 @@ def copied(text: str, examples: Sequence[str]) -> bool:
     return False
 
 
+LOCKED_NUMBER = re.compile(r"\d+(?:\.\d+)?(?:-\d+)?(?:\s*%)?")
+TOKEN = re.compile(r"\[([TSNX]\d+)\]")
+
+
+def lock(text: str, analysis: Analysis) -> tuple[str, dict[str, str]]:
+    """Names, scores, numbers -> typed tokens [T1], [S1], [N1], [X1] for the
+    Localizer (the type tells it how the token reads in a sentence)."""
+    ctx = analysis.task.context
+    names = sorted(
+        {*ctx.team_names.values(), *ctx.players.values(), "xG"}, key=len, reverse=True
+    )
+    pattern = re.compile(
+        "|".join([*(rf"\b{re.escape(n)}\b" for n in names), LOCKED_NUMBER.pattern])
+    )
+    slots: dict[str, str] = {}
+
+    def slot(m):
+        s = m.group(0)
+        kind = (
+            "X"
+            if s == "xG"
+            else "S"
+            if re.fullmatch(r"\d+-\d+", s)
+            else "N"
+            if s[0].isdigit()
+            else "T"
+        )
+        key = f"[{kind}{sum(k[1] == kind for k in slots) + 1}]"
+        slots[key] = s
+        return key
+
+    return pattern.sub(slot, text), slots
+
+
+def unlock(reply: str, slots: dict[str, str]) -> tuple[str | None, str | None]:
+    """(translation, None) or (None, why): every token once, no other digits."""
+    found = TOKEN.findall(reply)
+    if sorted(found) != sorted(k.strip("[]") for k in slots):
+        return None, "copy every token ([T1], [S1], [N1] ...) exactly once, unchanged"
+    if re.search(r"\d", TOKEN.sub("", reply)):
+        return None, "write no digits of your own; the numbers are the tokens"
+    return TOKEN.sub(lambda m: slots[m.group(0)], reply), None
+
+
 def untranslated(translation: str, english: str) -> str | None:
     """Why a translation is not usable, or None. Numbers are checked too."""
     if not translation:
@@ -264,25 +469,113 @@ def untranslated(translation: str, english: str) -> str | None:
     return None
 
 
-def verify(text: str, analysis: Analysis, examples: Sequence[str] = ()) -> Verdict:
-    """`examples`: the Narrator's style examples, which a line must not copy."""
-    reasons = []
+def shirts_said(text: str, analysis: Analysis) -> tuple[str, list[str]]:
+    """Text without the shirt numbers that are on the team sheet, and the
+    reasons for any that are not."""
+    ctx = analysis.task.context
+    if not ctx.lineup:
+        return text, []
+    sheet = {p.shirt_number for p in ctx.lineup}
+    bad = [
+        f"'{m.group(0)}': no player wears number {m.group(1)}"
+        for m in SHIRT.finditer(text)
+        if int(m.group(1)) not in sheet
+    ]
+    return SHIRT.sub(
+        lambda m: "" if int(m.group(1)) in sheet else m.group(0), text
+    ), bad
+
+
+def wrong_players(text: str, analysis: Analysis) -> list[str]:
+    """Position, style or shirt said with a player's name must match the sheet."""
+    ctx = analysis.task.context
+    out = []
+    claim_words = "|".join(sorted(map(re.escape, CLAIMS), key=len, reverse=True))
+    style_words = "|".join(sorted(map(re.escape, STYLE_WORDS), key=len, reverse=True))
+    for p in ctx.lineup:
+        name = name_pattern(p)
+        team = re.escape(ctx.team_names.get(p.team_id, p.team_id))
+        joiner = rf",?\s+(?:(?:the|their|his|{team}'s)\s+)?"
+        for words, check in ((claim_words, "position"), (style_words, "style")):
+            for m in re.finditer(
+                rf"\b(?P<w>{words})\s+{name}\b|\b{name}{joiner}(?P<w2>{words})\b",
+                text,
+                re.IGNORECASE,
+            ):
+                word = (m.group("w") or m.group("w2")).lower()
+                if check == "position" and p.position not in CLAIMS[word]:
+                    out.append(f"{p.name} is not a {word} (team sheet: {p.position})")
+                if check == "style" and STYLE_OF.get(word, word) != p.style:
+                    out.append(
+                        f"{p.name} is not a {word} (team sheet: {p.style or 'no style'})"
+                    )
+        for m in re.finditer(
+            rf"\b(?:number|no\.?|#)\s*(\d{{1,2}})\s+{name}\b"
+            rf"|\b{name}\s*\((?:number\s*|no\.?\s*|#)?(\d{{1,2}})\)",
+            text,
+            re.IGNORECASE,
+        ):
+            n = int(m.group(1) or m.group(2))
+            if n != p.shirt_number:
+                out.append(f"{p.name} wears number {p.shirt_number}, not {n}")
+    return out
+
+
+def wrong_numbers(text: str, analysis: Analysis) -> list[str]:
     allowed = allowed_numbers(analysis)
+    text, out = shirts_said(text, analysis)
     for x, decimals, percent in numbers(text):
         if not any(matches(x, decimals, percent, v) for v in allowed):
             shown = f"{x:g}{'%' if percent else ''}"
-            reasons.append(
+            out.append(
                 f"number {shown} is not in the values or the match context; "
                 f"use only: {', '.join(f'{k}={v:g}' for k, v in analysis.values.items())}"
             )
+    return out
+
+
+MAX_WORDS = 25  # one on-screen line
+
+
+def verify(
+    text: str,
+    analysis: Analysis,
+    examples: Sequence[str] = (),
+    *,
+    max_words: int = MAX_WORDS,
+    final: bool = False,
+) -> Verdict:
+    """`examples`: the Narrator's style examples, which a line must not copy.
+    `final`: the match is over (full-time recap), so "sealed the win" is a fact,
+    not a prediction."""
+    if not text.strip():
+        return Verdict(passed=False, reasons=["the line is empty"])
+    reasons = wrong_numbers(text, analysis)
+    if len(text.split()) > max_words:
+        reasons.append(f"too long: at most {max_words} words")
+    if analysis.task.persona == "casual" and any(d for _, d, _ in numbers(text)):
+        reasons.append(
+            "casual line: no index numbers or decimals; say it in words "
+            "(e.g. 'halved') from the changes given"
+        )
+    reasons += wrong_counts(text, analysis)
+    reasons += wrong_players(text, analysis)
+    if LAST_MAN.search(text) and "last-man" not in analysis.task.facts.get(
+        "reason", ""
+    ):
+        reasons.append(
+            "'last man' only when the events show a last-man foul (no other "
+            "outfield defender goal-side); they do not here"
+        )
+    reasons += wrong_comparisons(text, analysis)
     for name in unknown_names(text, analysis):
-        reasons.append(f"'{name}' is not a team or a player on the pitch")
+        reasons.append(f"'{name}' is not a team or a player on the team sheet")
     reasons += score_mistakes(text, analysis)
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):
         reasons.append("no predictions: describe what happened, not what will happen")
-    if SOFT_PREDICTION.search(text):
+    if SOFT_PREDICTION.search(text) and not final:
         reasons.append(
             "no predictions: the match is not over, so nothing is sealed, "
             "secured or over yet"

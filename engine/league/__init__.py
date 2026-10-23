@@ -7,6 +7,8 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from core.contracts.match import PlayingStyle
+
 CLUBS_DIR = Path(__file__).parent / "clubs"
 COMPETITION = "Second Ball League (fictional)"
 
@@ -52,6 +54,9 @@ class Player(Strict):
     number: Annotated[int, Field(ge=1, le=99)]
     name: Annotated[str, Field(min_length=1)]
     role: str | None = None  # needed when the club writes its own shapes
+    style: PlayingStyle | None = (
+        None  # how he plays it (team sheet); TUNABLE, owner Ian
+    )
 
 
 # [depth, y]: depth 0 = back line, 1 = front line; y in metres, left touchline = 68.

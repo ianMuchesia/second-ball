@@ -409,3 +409,137 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
 - Leader check reads only clear forms ("Harbour lead", "Harbour are
   trailing"), not a bare participle after a team that is an object, and not
   "behind" (space). Verdicts keep the draft text, for evals and debugging.
+
+## 2026-10-22: Phase 3b-3 (number words, personas, four languages, repeat runs)
+
+- Red card facts from events (agents/pipeline/facts.py): who (shirt number;
+  the feed has no names or positions, so not "centre-back") and why. "On a
+  counter" = the fouled team won the ball in its own half, went >= 15 m
+  forward and was fouled within 10 s (the detector's counter thresholds).
+  "Last-man" = no other outfield player of the fouling team goal-side of the
+  foul (Ian's pick). Demo: "foul on a counter", NOT last-man: two Riverside
+  defenders (numbers 2 and 4) were goal-side. The scenario action
+  red_card_last_man does not place the defenders to match: engine gap,
+  reported to Ian, not tuned. The Insight claim for a red card is code's.
+- Number words: counts before a football noun ("one pass", "ten men",
+  "second counter goal", "twice") must match a code-made count of that kind
+  (passes in the move, 11 - red cards, goals, counter goals/counters, cards).
+  "once" is not checked ("once more" means again). Comparisons (halved,
+  doubled, up/down by a third, up by half) must be within 10% of a real
+  before/after ratio (Ian's pick).
+- Personas: casual lines carry no decimals; their prompt has the registry's
+  casual names with the team in place of "they" ("How much Riverside are
+  being pressed": "halved"), and the change words computed in code. Analyst
+  prompt has values plus units.
+- Localizer: French, Spanish, Swahili, Arabic (Arabic right-to-left in the
+  UI). Team names, scores, numbers and xG are locked as typed tokens ([T1],
+  [S1], [N1], [X1]); a reply must keep every token once and add no digits;
+  then the number check and the not-English check run on the translation.
+  Number words inside a translation (e.g. Arabic) are not checked yet.
+- Repeat runs (evals/narration/report.py, "narration" section of
+  docs/EVAL.md, shared with the moments report by markers): free tier, 10
+  requests/min, 10 runs English + 2 translation runs. The full 20-run report
+  runs on the Foundry models in Phase 6: eval numbers belong to the model that
+  produced them.
+- More soft predictions: knockout blow, killer blow, nail in the coffin,
+  coup de grace.
+
+## 2026-10-22: Phase 3c (failure recovery, tracing, recaps, live narrator)
+
+- Live narrator (agents/live/): Phase 3 had no path from the stream to the
+  agents; this is it. Consumes match-events (group "narrator", from "latest":
+  a live broadcast starts now), runs the detector, airs a stat card for every
+  moment, narrates moments with importance >= 0.7 (goals 1.0, red card 0.9,
+  big chances 0.7) for both personas, one at a time (the model's request
+  limit), most important first, and skips a moment that is already stale
+  before any model call. Recaps at the start of the second half and at
+  MatchEnd. Every overlay status change goes to the "overlays" topic (and a
+  JSONL file with --out). Restart: in-memory dedupe of event ids; state is
+  not rebuilt from Postgres yet (the interpreter's store could do it later).
+- Freshness counts from when a moment FIRED (Moment.clock), not from its
+  evidence: a red card's impact fires minutes after the card by design.
+- FINDING for Ian, not changed: at 10x the one-narrative-per-45 s rule is 7.5
+  match minutes, so a goal 4 minutes after an aired big chance expires in the
+  queue (both demo goals do, at 10x). At 1x both air. Options: let importance
+  >= 0.9 (goals, red cards) jump the gap; or scale the gap differently from
+  freshness. Ian's call.
+- Recovery (agents/pipeline/resilience.py): per-call time budget by role
+  (analyst 10 s, narrator 8 s, localizer 8 s, recap 15 s); timeout, 429, 5xx
+  and network errors -> one retry after 2 s (exponential); 400 -> no retry;
+  no answer -> code (Insight, template line, language dropped). Retrying a
+  line the model could not produce at all is skipped: straight to the
+  template. BudgetExceeded trips LLMClient.killed: no model call for the rest
+  of the run. narrate() catches anything left: the template, English only.
+  An empty line and a line over 25 words are Verifier rejections.
+- A timed-out model call keeps running in its thread; it is still charged to
+  the budget when it returns (the precheck already passed). Acceptable.
+- ProviderError (agents/llm/base.py) is what every provider raises: Gemini's
+  APIError and httpx errors are mapped (retryable = 408/429/5xx/network).
+  Gemini HTTP timeout: GEMINI_TIMEOUT_S, default 20 s.
+- MCP in the pipeline: the Analyst reads the events before the moment with
+  get_sequence through the in-process MCP server (its tool layer, validation
+  and errors), shown without coordinates. Tool error: one retry, then on
+  without it.
+- Tracing: OpenTelemetry SDK + OTLP/HTTP exporter (new dependencies:
+  opentelemetry-sdk, opentelemetry-exporter-otlp-proto-http, for traces to
+  Jaeger now and App Insights later). Jaeger is a compose service under the
+  "tracing" profile, so `make up` does not start it. Azure exporter: env
+  var path exists, package added in Phase 7.
+- Recaps: input only aired lines (with their tasks' counts) and the
+  MatchState (xG, shots, big chances per team). The Verifier allows the stats
+  and the aired lines' values; at full time soft "predictions" ("sealed the
+  win") are facts and allowed; max 60 words; template fallback uses only the
+  score, shots or xG and the most important aired line.
+- Fix after the first real run of 3c: a call that timed out on the asyncio
+  side kept running in its thread, the next call started, and the budget's
+  precheck/charge pairs interleaved ("charge() called without a passed
+  precheck()"). Now LLMClient runs precheck -> generate -> charge under a
+  lock, and the per-agent time limit is set on the HTTP request itself
+  (CALL_TIMEOUT -> GeminiProvider), so a slow call really stops; the pacing
+  wait does not count. asyncio's guard stays as a backstop (+90 s). Limits
+  raised to 20 s (recap 25 s): on the free tier a request took 19 s when
+  Google answered 429 and the SDK waited. A failed call is not charged.
+- A 429 whose "retry in" is over 2 minutes (the free tier's daily cap: 500
+  requests/day for gemini-3.5-flash-lite) is not retried: it trips the kill
+  switch, templates for the rest of the run. Proven live on 2026-10-22: the
+  demo through Kafka at 60x with the quota gone aired every stat card, the
+  narrative templates and all four recaps; no empty overlay, no crash.
+
+## 2026-10-23: Producer priority, true last-man red card, team sheets
+
+Approved by Ian (advisor's fix list, 2026-10-23).
+
+- Producer: priority queue (most important first). Goals and red cards
+  (importance >= 0.9) preempt: they air at once, inside the gap, and push out
+  any less important line still waiting. The 45 s gap is now MATCH time (how
+  busy the screen is per minute of football), so 1x and 10x air the same
+  lines; both demo goals and the red card air at both speeds (tested).
+  Freshness (8 s) stays VIEWER time, scaled by replay speed: it is about how
+  fast the agents answer, which is wall time. (The advisor asked for both in
+  match time; at 10x that would give a real model 0.8 s per line. Ian's call
+  if he wants it anyway.)
+- Demo 63' beat: the engine's red_card_last_man beat now places the other
+  outfield defenders upfield of the ball (the high line caught out; fixed
+  offsets, no random draws, so the rest of the match is unchanged). Code now
+  finds "last-man foul on a counter". The night-before case (two defenders
+  goal-side) is a test: code does not call it last man and the Verifier
+  rejects a line that does.
+- Verifier: "last man" only when facts["reason"] says last-man.
+- Team sheets: Match.lineups (core contract, approved): player_id, name,
+  shirt_number, position (GK, RB, RCB, CB, LCB, LB, RWB, LWB, DM, RCM, CM,
+  LCM, RM, LM, AM, RW, LW, ST), optional style (Ian's vocabulary: sweeper
+  keeper, ball-playing centre-back, stopper, inverted/overlapping full-back,
+  wing-back, deep-lying playmaker, holding / box-to-box / attacking
+  midfielder, inverted / touchline winger, poacher, target man, false 9,
+  creative 9, second striker), starting. "Number 6/8/10" are left out as
+  styles: they would clash with shirt numbers in the checks.
+- Positions come from a club's roles (Riverside) or its formation, line by
+  line right to left (Harbour's 5-4-1: RWB, RCB, CB, LCB, LWB, RM, RCM, LCM,
+  LM, ST), i.e. where the engine actually plays each player. Styles for
+  Riverside and Harbour are TUNABLE (owner Ian); names stay invented.
+- Players on the pitch = starting XIs minus red cards. Names allowed in a line:
+  the team sheet (a sent-off player may be named). A position, style or shirt
+  said with a name must match the sheet; with a sheet, shirt numbers are only
+  allowed as "number N" with N on the sheet. Facts name the sent-off player
+  ("Riverside's left centre-back Ilya Stonebridge (number 5)") and the
+  full-back a counter went behind ("Kofi Lindqvane, Riverside's left-back").
