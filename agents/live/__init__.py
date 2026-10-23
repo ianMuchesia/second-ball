@@ -26,7 +26,7 @@ from agents.mcp_server import build as build_mcp
 from agents.mcp_server.data import MatchData
 from agents.pipeline.facts import context_at, task_for
 from agents.pipeline.models import NarrationTask, Persona
-from agents.pipeline.producer import Producer, stat_card
+from agents.pipeline.producer import FRESH_S, Producer, stat_card
 from agents.pipeline.recap import Aired, recap
 from agents.pipeline.resilience import Policy, mcp_tools
 from agents.pipeline.workflow import narrate
@@ -92,6 +92,9 @@ class Live:
         self.queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
         self.order = itertools.count()
         self.stats = Stats()
+        # One record per line made (narration or recap): verdicts with the
+        # rejected drafts, the insight, and how long it took, for the run bundle.
+        self.records: list[dict] = []
 
     # ---- input ---------------------------------------------------------------
 
@@ -197,6 +200,7 @@ class Live:
             oid = out.overlay.overlay_id
             self.tasks[oid], self.moment_t[oid] = task, moment_t
             self.traces[oid] = span.get_span_context()
+            self.record(out, task, queued_at, span)
             with step("producer.offer", overlay_id=oid, risk=out.overlay.risk_tier):
                 shown = prod.offer(out.overlay, moment_t, m.importance, game.now)
                 if out.overlay.risk_tier == "high":
@@ -226,7 +230,8 @@ class Live:
         )
         for persona in self.personas:
             aired = [a for a in game.aired if a.task.persona == persona]
-            with step("moment", kind=f"recap_{when}", persona=persona):
+            queued_at = time.monotonic()
+            with step("moment", kind=f"recap_{when}", persona=persona) as span:
                 out = await recap(
                     self.llm,
                     when,
@@ -237,6 +242,7 @@ class Live:
                     self.languages,
                     self.policy,
                 )
+                self.record(out, None, queued_at, span)
                 for o in self.producer(game, persona).offer(
                     out.overlay, game.now, 1.0, game.now
                 ):
@@ -245,6 +251,28 @@ class Live:
             self.flush(game)
 
     # ---- output --------------------------------------------------------------
+
+    def record(self, out, task: NarrationTask | None, queued_at: float, span) -> None:
+        """Wall-clock latency = the moment's event available (queued) -> line
+        ready (verified, translated), and whether it met the 8 s target."""
+        latency = time.monotonic() - queued_at
+        self.records.append(
+            {
+                "overlay_id": out.overlay.overlay_id,
+                "kind": out.overlay.kind,
+                "persona": task.persona
+                if task
+                else out.overlay.overlay_id.rsplit("-", 1)[-1],
+                "fallback": out.fallback,
+                "attempts": out.attempts,
+                "verdicts": [v.model_dump(mode="json") for v in out.verdicts],
+                "insight": out.insight.model_dump(mode="json") if out.insight else None,
+                "latency_s": round(latency, 3),
+                "met_target": latency <= FRESH_S,
+                "trace_id": f"{span.get_span_context().trace_id:032x}",
+                "task": task.model_dump(mode="json") if task else None,
+            }
+        )
 
     def aired(self, game: Game, o: Overlay) -> None:
         oid = o.overlay_id

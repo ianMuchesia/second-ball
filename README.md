@@ -54,4 +54,24 @@ number. Rejected drafts are kept with their reasons. If the model is slow,
 down or over budget, a code template airs instead: never an empty overlay.
 Details: [agents/README.md](agents/README.md).
 
+## Broadcast screen (Phase 4a)
+
+```sh
+make record MATCH=demo            # the pipeline once -> runs/demo/ (model from .env; EN + SW)
+cd web && npm run build && cd ..  # the screen
+make api                          # http://localhost:8000/runs/demo  (judge mode: 0 model calls)
+make e2e                          # Playwright smoke test on a fake-model bundle
+```
+
+The screen (React + TypeScript, Redux Toolkit + RTK Query, React Router with
+lazy routes) plays a recorded run: scoreboard, 2D pitch with the ball path and
+name tags, timeline markers, the lower-third line (fan or analyst, English or
+Kiswahili), and only three indicators (control, openness, momentum) with their
+registry definitions. **Why?** opens the evidence: the claim, the Verifier's
+verdict with any rejected drafts, the events in plain words, the rule or
+metric, and the pitch jumps to the moment with the players lit. The Producer
+tab shows lines waiting for approval, the real rejected drafts, an
+append-only audit log, and a clearly labelled "Inject a test error". Every
+line shows how long it really took (target: 8 s).
+
 Rules for coding agents: [AGENTS.md](AGENTS.md). Decisions: [DECISIONS.md](DECISIONS.md).

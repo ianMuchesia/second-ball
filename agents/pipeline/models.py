@@ -95,6 +95,7 @@ class Narration(Part):
     fallback: bool
     attempts: int
     verdicts: list[Verdict]
+    insight: Insight | None = None  # the Analyst's claim and why (or code's)
 
 
 Draft.model_rebuild()
