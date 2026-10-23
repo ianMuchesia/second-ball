@@ -1,0 +1,111 @@
+# The code templates: what airs when the model gives no answer or every draft
+# is rejected. Broadcast sentences per moment kind and persona, filled only
+# with code values (agents/pipeline/templates.py); the Verifier checks them
+# like any line. TUNABLE, owner: Ian. The Kiswahili wording is a first draft
+# for Ian to review (evals/human/sw_review.md).
+#
+# Placeholders: {minute} {team} {other} {standing} {score} {chance}
+# {before} {zone} {name} {shirt} {reason} {changes} {words} {kind}
+
+en:
+  standing:
+    lead: "{team} lead {a}-{b}"
+    level: "Level at {a}-{b}"
+  zone: "in behind {other}'s {side}-back"
+  goal:
+    casual: "GOAL, {minute}'. {team} score{how}. {standing}."
+    analyst: "GOAL, {minute}'. {team} score{how}: a chance worth {chance}{before}. {standing}."
+    before: " (xG {before} before the move)"
+    counter: " on the counter, {zone}"
+  big_chance:
+    casual: "BIG CHANCE, {minute}'. {team} go close: {chance}. {standing}."
+    analyst: "BIG CHANCE, {minute}'. {team} create a chance worth {chance}. {standing}."
+  red_card_impact:
+    casual: "RED CARD, {minute}'. {team}'s {name} (number {shirt}) is sent off{reason}. {standing}."
+    analyst: "RED CARD, {minute}'. {team} with ten since then: {changes}."
+    reason:
+      last-man foul on a counter: " for a last-man foul on a counter"
+      last-man foul: " for a last-man foul"
+      foul on a counter: " for a foul on a counter"
+      foul: " for a foul"
+  other:
+    casual: "{kind}, {minute}'. {team}: {words}. {standing}."
+    analyst: "{kind}, {minute}'. {team}: {changes}."
+    match: "{kind}, {minute}'. {words}. {standing}."
+  change: "{metric} {a} to {b}"
+  kind:
+    momentum_swing: MOMENTUM
+    repeated_pattern: SAME PATTERN AGAIN
+    control_shift: CONTROL
+    pressure_spike: PRESSING
+    shape_change: NEW SHAPE
+    openness_spike: END TO END
+    overload: OVERLOAD
+    bad_situation: IN TROUBLE
+    player_milestone: MILESTONE
+  recap:
+    half_time: "HALF-TIME. {score}. {stat}."
+    full_time: "FULL-TIME. {score}. {stat}."
+    stat:
+      casual: "Shots: {home} {home_shots}, {away} {away_shots}"
+      analyst: "xG: {home} {home_xg}, {away} {away_xg}"
+
+sw:
+  standing:
+    lead: "{team} wanaongoza {a}-{b}"
+    level: "Sare ya {a}-{b}"
+  zone: "nyuma ya beki wa {side} wa {other}"
+  side:
+    left: kushoto
+    right: kulia
+  goal:
+    casual: "GOLI, dakika ya {minute}. {team} wanafunga{how}. {standing}."
+    analyst: "GOLI, dakika ya {minute}. {team} wanafunga{how}: nafasi yenye {chance}{before}. {standing}."
+    before: " (xG {before} kabla ya shambulizi)"
+    counter: " kwa shambulizi la kushtukiza, {zone}"
+  big_chance:
+    casual: "NAFASI KUBWA, dakika ya {minute}. {team} wanakaribia kufunga. {standing}."
+    analyst: "NAFASI KUBWA, dakika ya {minute}. {team} wanatengeneza nafasi yenye {chance}. {standing}."
+  red_card_impact:
+    casual: "KADI NYEKUNDU, dakika ya {minute}. {name} (namba {shirt}) wa {team} anatolewa nje{reason}. {standing}."
+    analyst: "KADI NYEKUNDU, dakika ya {minute}. {team} wakiwa kumi tangu hapo: {changes}."
+    reason:
+      last-man foul on a counter: " kwa kosa la mlinzi wa mwisho, kwenye shambulizi la kushtukiza"
+      last-man foul: " kwa kosa la mlinzi wa mwisho"
+      foul on a counter: " kwa kosa kwenye shambulizi la kushtukiza"
+      foul: " kwa kosa"
+  other:
+    casual: "{kind}, dakika ya {minute}. {team}. {standing}."
+    analyst: "{kind}, dakika ya {minute}. {team}: {changes}."
+    match: "{kind}, dakika ya {minute}. {standing}."
+  change: "{metric} {a} hadi {b}"
+  # Metric names in Kiswahili; a metric missing here is left out of the line.
+  metric:
+    control_index: udhibiti
+    pressure_on_ball: shinikizo kwenye mpira
+    defensive_line_gap: nafasi kati ya ulinzi na kiungo
+    final_third_pressures: shinikizo theluthi ya mwisho
+    possession_time: umiliki wa mpira
+    field_tilt: kucheza upande wa mpinzani
+    openness_index: uwazi wa mchezo
+    momentum: mwelekeo wa mchezo
+    back_line_depth_x: kina cha safu ya ulinzi
+    back_line_players: wachezaji kwenye safu ya ulinzi
+    block_drift_deeper_m: kurudi nyuma (m)
+    block_drift_higher_m: kupanda juu (m)
+  kind:
+    momentum_swing: MWELEKEO WA MCHEZO
+    repeated_pattern: MBINU ILE ILE TENA
+    control_shift: UDHIBITI
+    pressure_spike: SHINIKIZO
+    shape_change: MFUMO MPYA
+    openness_spike: MCHEZO WAZI
+    overload: WINGI WA WACHEZAJI
+    bad_situation: HATARINI
+    player_milestone: HATUA MUHIMU
+  recap:
+    half_time: "MAPUMZIKO. {score}. {stat}."
+    full_time: "MWISHO WA MCHEZO. {score}. {stat}."
+    stat:
+      casual: "Mashuti: {home} {home_shots}, {away} {away_shots}"
+      analyst: "xG: {home} {home_xg}, {away} {away_xg}"

@@ -9,6 +9,7 @@
 """
 
 from core.contracts import MatchEvent
+from core.metrics import registry
 from core.metrics.events import RESTARTS
 
 # Moments about one action: their move is the possession that led to it.
@@ -62,6 +63,17 @@ def evidence_of(moment: dict, events: list[MatchEvent], index: dict[str, int]) -
     }
 
 
+# Moment values that are not registry metrics, by name.
+LABELS = {"shot_xg": "xG of the chance"}
+
+
+def label(name: str) -> str:
+    """The registry's analyst name ("xG", "Control index"), else plain words."""
+    if name in registry.METRICS:
+        return registry.get(name).display_name["analyst"]
+    return LABELS.get(name, name.replace("_", " ").capitalize())
+
+
 def numbers(moment: dict, index: dict[str, int], t: dict[str, float]) -> list[dict]:
     """Each metric the moment quotes: value, event count and the time span
     its events cover (its window, as it was really computed)."""
@@ -73,6 +85,7 @@ def numbers(moment: dict, index: dict[str, int], t: dict[str, float]) -> list[di
             out.append(
                 {
                     "metric": name,
+                    "label": label(name),
                     "when": when,
                     "value": mv["value"],
                     "events": len(ids),

@@ -1,4 +1,4 @@
-import { latencyText, plural } from "../api";
+import { evidenceCounts, latencyText } from "../api";
 import type { FeedItem } from "../store/selectors";
 
 const KIND: Record<string, string> = {
@@ -45,9 +45,9 @@ export function MomentCard({
         {text}
       </p>
       <footer>
-        <span>{plural(item.linkedEvents, "linked event")}</span>
-        <span>{plural(item.players.length, "player")}</span>
-        <span>{plural(item.metrics, "metric")}</span>
+        {evidenceCounts(item.linkedEvents, item.players.length, item.metrics).map((x) => (
+          <span key={x}>{x}</span>
+        ))}
         {narration && (
           <span
             className={latencyText(narration).ok ? "latency ok" : "latency late"}

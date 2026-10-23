@@ -71,6 +71,13 @@ export interface Narration {
 
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+/** The same counting words on the lower third, the feed and the drawer. */
+export const evidenceCounts = (actions: number, players: number, numbers: number) => [
+  `${plural(actions, "action")} in the move`,
+  plural(players, "player"),
+  plural(numbers, "number"),
+];
+
 /** How a line's timing reads: honest about templates and missed targets. */
 export function latencyText(n: Narration): { text: string; ok: boolean } {
   if (n.fallback) {
@@ -116,6 +123,7 @@ export interface Move {
 /** A metric the moment quotes, summarised: never merged into the move. */
 export interface NumberRow {
   metric: string;
+  label: string; // the registry's name for it ("xG", "Control index")
   when: "before" | "after";
   value: number;
   events: number; // how many events it was computed over

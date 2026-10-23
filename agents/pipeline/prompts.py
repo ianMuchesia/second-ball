@@ -232,29 +232,8 @@ def narrator_prompt(analysis: Analysis, reasons: list[str]) -> str:
 
 
 def fallback(analysis: Analysis) -> str:
-    """A plain sentence built only from code values (used after 2 failed retries)."""
-    task = analysis.task
-    ctx = task.context
-    who = ctx.team_names.get(task.moment.team or "", "The match")
-    words = KIND_WORDS.get(task.moment.kind, task.moment.kind.replace("_", " "))
-    pairs = [
-        (
-            name[: -len("_before")],
-            v,
-            analysis.values.get(name[: -len("_before")] + "_after"),
-        )
-        for name, v in analysis.values.items()
-        if name.endswith("_before")
-    ]
-    detail = ""
-    if "exploited_zone" in analysis.task.facts:
-        words += f", a counter {analysis.task.facts['exploited_zone']}"
-    if task.persona == "casual":
-        changes = casual_changes(analysis.values)
-        if changes:
-            name, word = next(iter(changes.items()))
-            detail = f" {name.lower()}: {word}."
-    elif pairs and pairs[0][2] is not None:
-        name, before, after = pairs[0]
-        detail = f" {name.replace('_', ' ')} {before:.2f} to {after:.2f}."
-    return f"{who}, {task.moment.clock.minute}': {words}.{detail}"
+    """The English code template (agents/pipeline/templates.py), used after
+    two failed retries or when the model gives no answer."""
+    from agents.pipeline.templates import template
+
+    return template(analysis, "en")

@@ -409,7 +409,7 @@ def test_counter_goal_facts_reach_the_prompt_and_the_fallback():
         a.task, a.values
     )
     text = prompts.fallback(a)
-    assert "counter behind Riverside's left-back" in text
+    assert "on the counter, in behind Riverside's left-back" in text
     assert verify(text, a).passed
 
 

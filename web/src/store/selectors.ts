@@ -128,9 +128,7 @@ export function feedOf(
         narration,
         linkedEvents: ev.ids.length,
         players: ev.players.length ? ev.players : [...new Set(ev.ids.map((id) => byId.get(id)!.player_id))],
-        metrics: moment
-          ? new Set([...Object.keys(moment.metrics_before), ...Object.keys(moment.metrics_after)]).size
-          : Object.keys(o.values).length,
+        metrics: moment ? moment.numbers.length : Object.keys(o.values).length,
       };
     });
 }

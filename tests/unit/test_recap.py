@@ -81,7 +81,7 @@ def test_a_recap_that_keeps_failing_falls_back_to_a_code_recap():
     )
     out = full_time(llm)
     assert out.fallback and len(out.verdicts) == 3
-    assert out.overlay.text["en"].startswith("Full-time: Riverside 0-2 Harbour. xG:")
+    assert out.overlay.text["en"].startswith("FULL-TIME. Riverside 0-2 Harbour. xG:")
 
 
 def test_casual_recap_fallback_has_no_decimals():

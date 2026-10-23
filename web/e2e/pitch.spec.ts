@@ -58,7 +58,16 @@ test("a goal's evidence is the move from Harbour's regain, and the regain shows 
   await expect(drawer.locator(".badge", { hasText: "regain" })).toHaveCount(1);
   await expect(steps.last()).toContainText("goal");
   // The numbers are summaries, collapsed: their windows are not in the move.
-  await expect(drawer.getByTestId("evidence-numbers").locator("details[open]")).toHaveCount(0);
+  const numbers = drawer.getByTestId("evidence-numbers");
+  await expect(numbers.locator("details[open]")).toHaveCount(0);
+  await expect(numbers).toContainText("xG (before)");
+  await expect(numbers).not.toContainText("Xg");
+  await expect(drawer).toContainText("goals always fire (no threshold)");
+  // The lower third and the drawer count the same things in the same words.
+  const card = await page.getByTestId("lower-third").locator("footer").innerText();
+  const head = await drawer.locator(".evidence-facts").innerText();
+  for (const words of [/\d+ actions? in the move/, /\d+ players?/, /\d+ numbers?/])
+    expect(card.match(words)?.[0], String(words)).toBe(head.match(words)?.[0]);
   await expect(drawer).toContainText("Kofi Lindqvane");
   await drawer.getByTestId("freeze-regain").click();
   await expect(page.getByTestId("player-riverside_athletic-3")).toHaveClass(/highlighted/);

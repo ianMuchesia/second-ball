@@ -1,5 +1,5 @@
 // Broadcast identity: team codes and kit colours from the Msodoki palette
-// (night theme): home in brand amber, away in ivory.
+// (night theme): home in ivory, away in harbour blue (styles.css).
 export const KIT = {
   home: { fill: "var(--home)", text: "var(--on-home)" },
   away: { fill: "var(--away)", text: "var(--on-away)" },

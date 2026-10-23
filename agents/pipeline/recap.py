@@ -26,6 +26,7 @@ from agents.pipeline.models import (
     Verdict,
 )
 from agents.pipeline.resilience import Policy, ask
+from agents.pipeline.templates import recap_template
 from agents.pipeline.verifier import verify
 from agents.pipeline.workflow import UNAVAILABLE, localize
 from agents.telemetry import step
@@ -119,20 +120,8 @@ def recap_task(
 
 
 def fallback(when: When, task: NarrationTask, values, aired: list[Aired]) -> str:
-    ctx = task.context
-    home, away = ctx.team_names[ctx.home], ctx.team_names[ctx.away]
-    text = f"{WORDS[when]}: {home} {ctx.score[0]}-{ctx.score[1]} {away}."
-    metric = "shots" if task.persona == "casual" else "xg"
-    a, b = values.get(f"{slug(home)}_{metric}"), values.get(f"{slug(away)}_{metric}")
-    if a is not None and b is not None:
-        shown = (lambda v: f"{v:.0f}") if metric == "shots" else (lambda v: f"{v:.2f}")
-        label = "Shots" if metric == "shots" else "xG"
-        text += f" {label}: {home} {shown(a)}, {away} {shown(b)}."
-    mine = [x for x in aired if x.task.persona == task.persona]
-    if mine:
-        best = max(mine, key=lambda x: x.overlay.priority)
-        text += " " + best.overlay.text["en"]
-    return text
+    """The English code template: score and one stat (templates.yaml)."""
+    return recap_template(when, task, values, "en")
 
 
 def prompt(task: NarrationTask, values, aired: list[Aired], reasons) -> str:
@@ -213,7 +202,15 @@ async def recap(
             text = fallback(when, task, values, aired)
         verdict = verify(text, analysis, max_words=MAX_WORDS, final=final)
         span.set_attributes({"fallback": is_fallback, "attempts": len(history)})
-        translated = await localize(llm, policy, text, analysis, task.languages)
+        translated = await localize(
+            llm,
+            policy,
+            text,
+            analysis,
+            task.languages,
+            templated=is_fallback,
+            kind=lambda lang: recap_template(when, task, values, lang),
+        )
     overlay = Overlay(
         overlay_id=f"{task.moment.moment_id}-{persona}",
         match_id=context.match_id,

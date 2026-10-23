@@ -1,5 +1,6 @@
 import type { LineupPlayer, Narration, NumberRow, Overlay, RunMoment, ScreenEvent, Timed } from "../api";
-import { clockText, latencyText, plural, surname } from "../api";
+import { clockText, evidenceCounts, latencyText, plural, surname } from "../api";
+import { kindLabel } from "./MomentCard";
 import { useRun } from "../hooks/useRun";
 import { useAppDispatch } from "../store";
 import { actions } from "../store/playback";
@@ -56,9 +57,9 @@ export default function EvidenceDrawer({
         <span className={n && !n.fallback ? "status verified" : "status template"}>
           {n ? (n.fallback ? "Template" : "✓ Verified") : "Stat card"}
         </span>
-        <span>{plural(evidence.ids.length, "action")} in the move</span>
-        <span>{plural(evidence.players.length, "player")}</span>
-        <span>{plural(moment.numbers.length, "number")}</span>
+        {evidenceCounts(evidence.ids.length, evidence.players.length, moment.numbers.length).map((x) => (
+          <span key={x}>{x}</span>
+        ))}
         {latency && <span className={latency.ok ? "latency ok" : "latency late"}>{latency.text}</span>}
       </div>
 
@@ -138,8 +139,15 @@ export default function EvidenceDrawer({
       </ul>
       {rule && (
         <p className="small">
-          Detector rule <code>{moment.kind}</code> (importance {String(rule.importance)}), thresholds{" "}
-          <code>{JSON.stringify(rule.thresholds)}</code> from <code>{String(rule.source)}</code>.
+          Detector rule <code>{moment.kind}</code> (importance {String(rule.importance)}):{" "}
+          {Object.keys(rule.thresholds).length ? (
+            <>
+              thresholds <code>{JSON.stringify(rule.thresholds)}</code>
+            </>
+          ) : (
+            `${kindLabel(moment.kind).toLowerCase()}s always fire (no threshold)`
+          )}{" "}
+          from <code>{String(rule.source)}</code>.
         </p>
       )}
       {n && <p className="small">Trace: {n.trace_id}</p>}
@@ -155,7 +163,7 @@ function Number({ row }: { row: NumberRow }) {
   return (
     <details>
       <summary>
-        <b>{row.metric.replace(/_/g, " ")}</b> ({row.when}) <span className="value">{row.value.toFixed(3)}</span>
+        <b>{row.label}</b> ({row.when}) <span className="value">{row.value.toFixed(3)}</span>
       </summary>
       <p className="small">
         Computed by code over {plural(row.events, "event")}, {span} of match time. These events are its window, not

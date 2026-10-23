@@ -34,6 +34,8 @@ from agents.pipeline.models import (
     Verdict,
 )
 from agents.pipeline.resilience import Policy, ask, call_tool
+from agents.pipeline.templates import LANGUAGES as TEMPLATE_LANGUAGES
+from agents.pipeline.templates import template
 from agents.pipeline.verifier import lock, unlock, untranslated, verify, wrong_numbers
 from agents.telemetry import step
 from core.contracts import Insight, Overlay
@@ -236,13 +238,27 @@ class VerifierExecutor(Executor):
 
 
 async def localize(
-    llm: LLMClient, policy: Policy, text: str, analysis: Analysis, languages
+    llm: LLMClient,
+    policy: Policy,
+    text: str,
+    analysis: Analysis,
+    languages,
+    templated: bool = False,
+    kind=None,
 ) -> dict[str, str]:
     """{"en": text, lang: translation, ...}. Numbers and names are locked as
     typed tokens; each translation is checked in code (tokens intact, numbers
     allowed, not still English); one retry with the reason, then that language
-    is dropped (English always airs)."""
+    is dropped (English always airs). A code template (`templated`) takes its
+    own wording where it has one (Kiswahili), checked the same way; `kind`
+    gives that wording per language (default: the moment template)."""
     out = {"en": text}
+    if templated:  # a code template has its own wording in these languages
+        for lang in [x for x in languages if x in TEMPLATE_LANGUAGES]:
+            t = template(analysis, lang) if kind is None else kind(lang)
+            if not untranslated(t, text) and not wrong_numbers(t, analysis):
+                out[lang] = t
+        languages = [x for x in languages if x not in TEMPLATE_LANGUAGES]
     masked, slots = lock(text, analysis)
     for lang in languages:
         with step(f"localizer.{lang}") as span:
@@ -289,6 +305,7 @@ class LocalizerExecutor(Executor):
             approved.text,
             approved.analysis,
             approved.analysis.task.languages,
+            templated=approved.fallback,
         )
         await ctx.yield_output(
             Narration(
