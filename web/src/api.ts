@@ -65,6 +65,21 @@ export interface Narration {
   latency_s: number;
   met_target: boolean;
   trace_id: string;
+  facts?: Record<string, string>; // what code knew (agents/pipeline/facts.py)
+  counts?: Record<string, number>;
+}
+
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** How a line's timing reads: honest about templates and missed targets. */
+export function latencyText(n: Narration): { text: string; ok: boolean } {
+  if (n.fallback) {
+    const noModel = n.verdicts.every((v) => v.reasons.some((r) => r.includes("no answer")) || !v.text);
+    return { text: noModel ? "template, no model" : "template after rejected drafts", ok: false };
+  }
+  return n.met_target
+    ? { text: `AI latency ${n.latency_s.toFixed(1)} s · within 8 s`, ok: true }
+    : { text: `AI latency ${n.latency_s.toFixed(1)} s · missed 8 s target`, ok: false };
 }
 
 export interface IndicatorValue {

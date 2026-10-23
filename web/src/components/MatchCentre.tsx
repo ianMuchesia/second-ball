@@ -1,5 +1,5 @@
 import type { IndicatorRow, IndicatorValue } from "../api";
-import { teamName } from "../api";
+import { latencyText, plural, teamName } from "../api";
 import { useAppDispatch, useAppSelector } from "../store";
 import { actions, type IndicatorPick } from "../store/playback";
 import type { FeedItem } from "../store/selectors";
@@ -52,8 +52,8 @@ function Moments({ feed, t, onOpen }: { feed: FeedItem[]; t: number; onOpen: (i:
               </span>
               <span className="text">{i.overlay.text.en}</span>
               <span className="facts">
-                {i.linkedEvents} events · {i.players.length} players · {i.metrics} metrics
-                {i.narration && ` · ${i.narration.latency_s.toFixed(1)} s`}
+                {plural(i.linkedEvents, "event")} · {plural(i.players.length, "player")} · {plural(i.metrics, "metric")}
+                {i.narration && ` · ${latencyText(i.narration).text}`}
               </span>
             </span>
           </button>

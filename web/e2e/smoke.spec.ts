@@ -15,7 +15,7 @@ test("demo bundle: jump to 63', open the evidence, Stonebridge is highlighted", 
   await expect(drawer).toContainText("last-man foul on a counter");
 
   await expect(page.getByTestId("player-riverside_athletic-5")).toHaveClass(/highlighted/);
-  await expect(page.getByTestId("tag-riverside_athletic-5")).toHaveText("Stonebridge");
+  await expect(page.getByTestId("tag-riverside_athletic-5")).toHaveText(/stonebridge/i);
 });
 
 test("producer: a test error goes through the real Verifier and is labelled", async ({ page }) => {

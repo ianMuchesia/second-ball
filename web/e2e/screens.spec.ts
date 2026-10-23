@@ -13,20 +13,22 @@ test("review screenshots", async ({ page, request }) => {
   const at = (minute: number, pick?: (e: (typeof events)[0]) => boolean) =>
     (events.find((e) => e.minute === minute && (!pick || pick(e))) ?? events.find((e) => e.minute >= minute))!.t;
   const goal = (e: { type: string; outcome: string }) => e.type.startsWith("shot") && e.outcome === "success";
-  const shots: [string, number, boolean][] = [
-    ["02", at(2), false],
-    ["34", at(34, goal) + 20, false],
-    ["63", at(63, (e) => e.outcome === "red_card"), true],
-    ["88", at(88, goal) + 20, false],
+  const shots: [string, number, "none" | "red" | "why"][] = [
+    ["02", at(2), "none"],
+    ["34", at(34, goal) + 20, "why"],
+    ["63", at(63, (e) => e.outcome === "red_card"), "red"],
+    ["88", at(88, goal) + 20, "none"],
   ];
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const [name, t, evidence] of shots) {
     await page.goto(`/runs/${RUN}?t=${t}`);
     await page.getByTestId("scoreboard").waitFor();
-    if (evidence) {
+    if (evidence === "red") {
       await page.locator('[data-testid^="marker-red_card-"]').first().click();
       await page.getByTestId("evidence-open").click();
     }
+    if (evidence === "why") await page.getByTestId("why").click();
+    await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(400);
     await page.screenshot({ path: `../docs/screens/${name}.png` });
   }

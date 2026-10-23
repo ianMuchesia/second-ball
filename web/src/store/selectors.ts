@@ -71,6 +71,41 @@ export function markersOf(run: Run, events: ScreenEvent[]): Marker[] {
   return out;
 }
 
+export interface Evidence {
+  ids: string[]; // in match order
+  players: string[];
+  regainId: string | null; // the first action of the possession (counters)
+  exposedId: string | null; // the full-back a counter went behind (facts)
+}
+
+const CHAIN_KINDS = new Set(["goal", "big_chance"]);
+
+/** The events behind a moment. For goals and chances: the whole possession
+ * that led to the shot (regain -> passes/carries -> shot), and the full-back
+ * the facts say was exposed. All from the recorded events and facts. */
+export function evidenceOf(
+  moment: Moment,
+  narration: Narration | undefined,
+  events: ScreenEvent[],
+  byId: Map<string, ScreenEvent>,
+  lineup: Map<string, LineupPlayer>,
+): Evidence {
+  let ids = moment.evidence_event_ids.filter((id) => byId.has(id));
+  let regainId: string | null = null;
+  const last = byId.get(ids[ids.length - 1]);
+  if (last && CHAIN_KINDS.has(moment.kind)) {
+    const i = events.indexOf(last);
+    let k = i;
+    while (k > 0 && events[k - 1].possession_id === last.possession_id) k--;
+    ids = events.slice(k, i + 1).map((e) => e.event_id);
+    regainId = ids[0];
+  }
+  const exposedName = narration?.facts?.exposed_player?.split(",")[0];
+  const exposed = exposedName ? [...lineup.values()].find((p) => p.name === exposedName) : undefined;
+  const players = [...new Set([...ids.map((id) => byId.get(id)!.player_id), ...(exposed ? [exposed.player_id] : [])])];
+  return { ids, players, regainId, exposedId: exposed?.player_id ?? null };
+}
+
 export interface FeedItem {
   overlay: Timed<Overlay>;
   moment: Timed<Moment> | undefined;
@@ -84,7 +119,9 @@ export interface FeedItem {
  * with how much evidence stands behind it (counted from the run, not made up). */
 export function feedOf(
   run: Run,
-  events: Map<string, ScreenEvent>,
+  events: ScreenEvent[],
+  byId: Map<string, ScreenEvent>,
+  lineup: Map<string, LineupPlayer>,
   persona: string,
   audit: AuditRow[] = [],
 ): FeedItem[] {
@@ -93,13 +130,16 @@ export function feedOf(
     .sort((a, b) => a.t - b.t)
     .map((o) => {
       const moment = run.moments.find((m) => m.moment_id === momentIdOf(o.overlay_id));
-      const evs = (moment?.evidence_event_ids ?? o.evidence_event_ids).map((id) => events.get(id)).filter((e) => !!e);
+      const narration = run.narrations.find((n) => n.overlay_id === o.overlay_id);
+      const ev = moment
+        ? evidenceOf(moment, narration, events, byId, lineup)
+        : { ids: o.evidence_event_ids.filter((id) => byId.has(id)), players: [] as string[] };
       return {
         overlay: o,
         moment,
-        narration: run.narrations.find((n) => n.overlay_id === o.overlay_id),
-        linkedEvents: evs.length,
-        players: [...new Set(evs.map((e) => e!.player_id))],
+        narration,
+        linkedEvents: ev.ids.length,
+        players: ev.players.length ? ev.players : [...new Set(ev.ids.map((id) => byId.get(id)!.player_id))],
         metrics: moment
           ? new Set([...Object.keys(moment.metrics_before), ...Object.keys(moment.metrics_after)]).size
           : Object.keys(o.values).length,

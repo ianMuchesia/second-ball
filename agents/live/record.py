@@ -169,6 +169,8 @@ def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
         # and code templates (model failed, out of quota, or rejected 3 times).
         "ai_lines": sum(1 for r in live.records if not r["fallback"]),
         "template_lines": sum(1 for r in live.records if r["fallback"]),
+        # True if the budget or the model's quota stopped all model calls.
+        "kill_switch": llm.killed,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     (out / "audit.jsonl").touch()  # the producer's log for this run, append-only
@@ -188,7 +190,18 @@ def main(argv=None):
     llm = fake_llm() if args.fake else from_env()
     langs = args.languages.split(",") if args.languages else None
     out = record(args.match_file, args.out, llm, langs)
-    print(json.dumps(json.loads((out / "meta.json").read_text())))
+    meta = json.loads((out / "meta.json").read_text())
+    print(json.dumps(meta))
+    if not args.fake and meta["ai_lines"] == 0:
+        raise SystemExit(
+            f"WARNING: {out} has no AI lines, only templates"
+            + (
+                " (the budget or the model's quota stopped every call)"
+                if meta["kill_switch"]
+                else ""
+            )
+            + ". Re-record when the model is available."
+        )
 
 
 if __name__ == "__main__":

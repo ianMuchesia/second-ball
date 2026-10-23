@@ -28,7 +28,8 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Pro
     players
       .filter((p) => highlighted.has(p.player_id) || event?.player_id === p.player_id || actors.has(p.player_id))
       .filter((p) => lineup.has(p.player_id))
-      .map((p) => ({ id: p.player_id, x: p.xy[0], y: y(p.xy[1]), text: surname(lineup.get(p.player_id)!) })),
+      .map((p) => ({ id: p.player_id, x: p.xy[0], y: y(p.xy[1]), text: surname(lineup.get(p.player_id)!).toUpperCase() })),
+    players.map((p) => ({ id: p.player_id, x: p.xy[0], y: y(p.xy[1]) })),
   );
   return (
     <div className="pitch-scene">
@@ -107,8 +108,11 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Pro
               <text x={px} y={py + 0.6} className="shirt">
                 {sheet?.shirt_number ?? ""}
               </text>
+              {tag && Math.hypot(tag.tx! - px, tag.ty! - 0.7 - py) > 3.6 && (
+                <line x1={px} y1={py} x2={tag.tx!} y2={tag.ty! - 0.7} className="leader" />
+              )}
               {tag && (
-                <text x={tag.x} y={tag.y} className={`tag${hot ? " highlighted" : ""}`} data-testid={`tag-${p.player_id}`}>
+                <text x={tag.tx} y={tag.ty} className={`tag${hot ? " highlighted" : ""}`} data-testid={`tag-${p.player_id}`}>
                   {tag.text}
                 </text>
               )}
@@ -135,24 +139,56 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Pro
 
 interface Tag {
   id: string;
-  x: number;
+  x: number; // the player
   y: number;
   text: string;
+  tx?: number; // where the name went (text anchor: middle, baseline)
+  ty?: number;
 }
 
-/** Name tags above their players; a tag that would overlap one already placed
- * moves up a line, or below the player if there is no room above. */
-function placeTags(wanted: Tag[]): Map<string, Tag> {
-  const placed: Tag[] = [];
-  const width = (t: Tag) => t.text.length * 1.25;
-  const clash = (a: Tag) =>
-    placed.some((b) => Math.abs(a.x - b.x) < (width(a) + width(b)) / 2 && Math.abs(a.y - b.y) < 2.4);
+const CHAR_W = 1.15; // pitch metres per character at the tag size (measured 1.05)
+const TAG_ASCENT = 2.2;
+const TAG_DESCENT = 0.55;
+const DOT_R = 1.75;
+
+/** Names never cover a player or another name: each tag tries spots around
+ * its player (above, below, sides, further out) and takes the first free
+ * one; a tag placed away from its player gets a leader line. */
+function placeTags(wanted: Tag[], dots: { id: string; x: number; y: number }[]): Map<string, Tag> {
+  const boxes: { x0: number; x1: number; y0: number; y1: number }[] = dots.map((d) => ({
+    x0: d.x - DOT_R,
+    x1: d.x + DOT_R,
+    y0: d.y - DOT_R,
+    y1: d.y + DOT_R,
+  }));
+  const out = new Map<string, Tag>();
   for (const w of [...wanted].sort((a, b) => a.y - b.y)) {
-    const tries = [w.y - 2.9, w.y - 5.4, w.y - 7.9, w.y + 4.4, w.y + 6.9];
-    const spot = tries.map((ty) => ({ ...w, y: ty })).find((t) => t.y > 1.5 && !clash(t)) ?? { ...w, y: w.y - 2.9 };
-    placed.push(spot);
+    const half = (w.text.length * CHAR_W) / 2;
+    const spots: [number, number][] = [
+      [0, -2.9],
+      [0, 4.3],
+      [half + 2.4, 0.7],
+      [-half - 2.4, 0.7],
+      [0, -5.6],
+      [0, 7.0],
+      [half + 2.4, -2.4],
+      [-half - 2.4, -2.4],
+      [half + 2.4, 3.8],
+      [-half - 2.4, 3.8],
+      [0, -8.3],
+      [0, 9.7],
+    ];
+    // Measured in the page: the text box runs 2.1 above the baseline to 0.5 below.
+    const box = (tx: number, ty: number) => ({ x0: tx - half, x1: tx + half, y0: ty - TAG_ASCENT, y1: ty + TAG_DESCENT });
+    const free = (b: ReturnType<typeof box>) =>
+      b.x0 > -1 && b.x1 < L + 1 && b.y0 > -1 && b.y1 < W + 1 &&
+      !boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
+    const pick = spots.map(([dx, dy]) => [w.x + dx, w.y + dy] as const).find(([tx, ty]) => free(box(tx, ty)));
+    const [tx, ty] = pick ?? [w.x, w.y - 2.9];
+    boxes.push(box(tx, ty));
+    out.set(w.id, { ...w, tx, ty });
   }
-  return new Map(placed.map((t) => [t.id, t]));
+  return out;
 }
 
 // Actions by the team WITHOUT the ball: the other team is in possession.

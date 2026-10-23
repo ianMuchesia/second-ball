@@ -114,7 +114,13 @@ def get_run(run: str):
         "moments": [{**m, "t": clock_t(b, m["clock"])} for m in b["moments"]],
         "overlays": [{**o, "t": overlay_t(b, o)} for o in b["overlays"]],
         "narrations": [
-            {k: v for k, v in n.items() if k != "task"} for n in b["narrations"]
+            {
+                **{k: v for k, v in n.items() if k != "task"},
+                # What code knew (facts, counts): the evidence drawer shows them.
+                "facts": (n.get("task") or {}).get("facts", {}),
+                "counts": (n.get("task") or {}).get("counts", {}),
+            }
+            for n in b["narrations"]
         ],
         "indicators": b["indicators"],
         "audit": rows(run_path(run) / "audit.jsonl"),

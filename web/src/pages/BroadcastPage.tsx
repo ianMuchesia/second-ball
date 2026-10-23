@@ -8,7 +8,16 @@ import { Timeline } from "../components/Timeline";
 import { useRun } from "../hooks/useRun";
 import { useAppDispatch, useAppSelector } from "../store";
 import { actions } from "../store/playback";
-import { feedOf, type FeedItem, lineupOf, makeViewSelector, markersOf, type Marker, onAir } from "../store/selectors";
+import {
+  evidenceOf,
+  feedOf,
+  type FeedItem,
+  lineupOf,
+  makeViewSelector,
+  markersOf,
+  type Marker,
+  onAir,
+} from "../store/selectors";
 import { useEventsQuery, useProducerQuery, useRunQuery } from "../store/serverApi";
 import { useTicker } from "../useTicker";
 
@@ -29,14 +38,14 @@ export default function BroadcastPage() {
 
   const byId = useMemo(() => new Map(events.map((e) => [e.event_id, e])), [events]);
   const airable = useMemo(() => (data ? onAir(data, producer?.audit) : []), [data, producer]);
+  const lineup = useMemo(() => (data ? lineupOf(data) : new Map()), [data]);
   const feed = useMemo(
-    () => (data ? feedOf(data, byId, pb.persona, producer?.audit) : []),
-    [data, byId, pb.persona, producer],
+    () => (data ? feedOf(data, events, byId, lineup, pb.persona, producer?.audit) : []),
+    [data, events, byId, lineup, pb.persona, producer],
   );
   const selectView = useMemo(makeViewSelector, []);
   const view = useAppSelector((s) => (data ? selectView(s, data, events, airable) : null));
   const markers = useMemo(() => (data ? markersOf(data, events) : []), [data, events]);
-  const lineup = useMemo(() => (data ? lineupOf(data) : new Map()), [data]);
   const momentumScale = useMemo(
     () =>
       Math.max(
@@ -51,14 +60,20 @@ export default function BroadcastPage() {
   const moment = data.moments.find((m) => m.moment_id === pb.momentId);
   const current = feed.find((i) => i.overlay.overlay_id === view.line?.overlay_id);
 
-  const openEvidence = (momentId: string) => {
+  const narrationFor = (momentId: string) =>
+    data.narrations.find((n) => n.overlay_id === `${momentId}-${pb.persona}`) ??
+    data.narrations.find((n) => n.overlay_id.startsWith(momentId));
+  const evidenceFor = (momentId: string) => {
     const m = data.moments.find((x) => x.moment_id === momentId);
-    const evs = (m?.evidence_event_ids ?? []).map((id) => byId.get(id)).filter((e) => e !== undefined);
+    return m ? evidenceOf(m, narrationFor(momentId), events, byId, lineup) : null;
+  };
+  const openEvidence = (momentId: string) => {
+    const ev = evidenceFor(momentId);
     dispatch(
       actions.openDrawer({
         momentId,
-        players: [...new Set(evs.map((e) => e.player_id))],
-        eventId: evs[0]?.event_id ?? null,
+        players: ev?.players ?? [],
+        eventId: ev?.ids[ev.ids.length - 1] ?? null,
       }),
     );
   };
@@ -121,7 +136,14 @@ export default function BroadcastPage() {
       )}
       <Suspense fallback={null}>
         {pb.drawerOpen && moment && (
-          <EvidenceDrawer moment={moment} overlays={data.overlays} narrations={data.narrations} persona={pb.persona} />
+          <EvidenceDrawer
+            moment={moment}
+            overlays={data.overlays}
+            narrations={data.narrations}
+            persona={pb.persona}
+            evidence={evidenceFor(moment.moment_id)!}
+            lineup={lineup}
+          />
         )}
         {pb.indicator && <IndicatorModal item={pb.indicator} row={view.row} />}
       </Suspense>

@@ -601,3 +601,16 @@ Approved by Ian (advisor's fix list, 2026-10-23).
   follows the audit log), held lines air only once approved, rejected drafts
   as "Verifier catches". New dependency: @fontsource/barlow(-condensed)
   (fonts served with the app, no CDN).
+- Screen fixes after review (2026-10-23): kits moved off the accent colour
+  (amber only for what you click or select): Riverside ivory, Harbour
+  charcoal with ivory trim. Name tags avoid every player dot and other names
+  (measured text box), with a leader line when moved; a browser test checks
+  no overlap at 36:05 and nine other moments, after the web font loads.
+  Goal and chance evidence is the whole possession (regain -> shot) plus the
+  facts ("exposed player"), with a freeze-frame button at the regain lighting
+  the exposed full-back. Latency reads "template, no model" for templates and
+  "missed 8 s target" when over. The header counts AI lines and templates
+  from the run itself. The recorder fails loudly (exit code) when a real-model
+  bundle has no AI lines, e.g. recorded while the quota was gone: the 07:00
+  bundle had 0 of 18 (the first call waited 9.8 s on retries, then the
+  daily-cap 429 tripped the kill switch).

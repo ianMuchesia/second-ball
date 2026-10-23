@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { teamName } from "../api";
+import { plural, teamName } from "../api";
 import { Crest } from "../components/Crest";
 import { useRun } from "../hooks/useRun";
 import { paths } from "../router/routes";
@@ -14,6 +14,9 @@ export default function RunLayout() {
   if (!runQ.data || !eventsQ.data) return <p className="page">Loading {run}…</p>;
   const { meta, match } = runQ.data;
   const fake = meta.model === "fake-model";
+  // Counted from the run itself, so older bundles show real numbers too.
+  const ai = runQ.data.narrations.filter((n) => !n.fallback).length;
+  const templates = runQ.data.narrations.length - ai;
   return (
     <div className="app">
       <header className="masthead">
@@ -41,7 +44,7 @@ export default function RunLayout() {
         <span className={fake ? "judge test" : "judge"} title={meta.how} data-testid="run-label">
           {fake
             ? "Test run · fake model, placeholder lines, no AI"
-            : `Replay of a recorded run · ${meta.model} · ${meta.ai_lines ?? "?"} AI lines, ${meta.template_lines ?? "?"} templates · no model calls now`}
+            : `Replay of a recorded run · ${meta.model} · ${plural(ai, "AI line")}, ${plural(templates, "template")} · no model calls now`}
         </span>
       </header>
       <Outlet />

@@ -1,3 +1,4 @@
+import { latencyText, plural } from "../api";
 import type { FeedItem } from "../store/selectors";
 
 const KIND: Record<string, string> = {
@@ -44,18 +45,16 @@ export function MomentCard({
         {text}
       </p>
       <footer>
-        <span>
-          <b>{item.linkedEvents}</b> linked event{item.linkedEvents === 1 ? "" : "s"}
-        </span>
-        <span>
-          <b>{item.players.length}</b> player{item.players.length === 1 ? "" : "s"}
-        </span>
-        <span>
-          <b>{item.metrics}</b> metric{item.metrics === 1 ? "" : "s"}
-        </span>
+        <span>{plural(item.linkedEvents, "linked event")}</span>
+        <span>{plural(item.players.length, "player")}</span>
+        <span>{plural(item.metrics, "metric")}</span>
         {narration && (
-          <span className={narration.met_target ? "latency ok" : "latency late"} title="event available → line verified">
-            AI latency <b>{narration.latency_s.toFixed(1)} s</b> {narration.met_target ? "· within 8 s" : "· over 8 s"}
+          <span
+            className={latencyText(narration).ok ? "latency ok" : "latency late"}
+            title="event available → line verified and translated"
+            data-testid="latency"
+          >
+            {latencyText(narration).text}
           </span>
         )}
         <button className="evidence-btn" onClick={onEvidence} data-testid="why">
