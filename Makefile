@@ -1,4 +1,4 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate live jaeger eval-narration eval-latency
+.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate live jaeger eval-narration eval-latency record api e2e
 
 help:
 	@echo "Targets:"
@@ -22,6 +22,9 @@ help:
 	@echo "  jaeger  start Jaeger for traces (then OTEL_EXPORTER=otlp), UI :16686"
 	@echo "  eval-narration  repeat runs: first-pass/retry/fallback rates -> docs/EVAL.md"
 	@echo "  eval-latency    live demo at SPEED, p50/p95 per stage -> docs/EVAL.md"
+	@echo "  record  MATCH=demo: the full pipeline once -> runs/<name>/ (judge mode bundle)"
+	@echo "  api     broadcast API + built screen on :8000 (cd web && npm run build first)"
+	@echo "  e2e     Playwright smoke test (fake-model bundle, no network)"
 
 up:
 	docker compose up -d
@@ -98,3 +101,15 @@ eval-narration:
 eval-latency:
 	@test -f demo/match.jsonl || $(MAKE) demo
 	uv run python -m evals.latency.report --speed $(SPEED)
+
+RUN ?= $(basename $(notdir $(MATCH_FILE)))
+
+record:
+	@test "$(MATCH)" != demo || test -f demo/match.jsonl || $(MAKE) demo
+	uv run python -m agents.live.record --match-file $(MATCH_FILE) --out runs/$(if $(filter demo,$(MATCH)),demo,$(RUN))
+
+api:
+	uv run uvicorn stream.api:app --port 8000
+
+e2e:
+	cd web && npm run e2e

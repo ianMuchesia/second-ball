@@ -296,6 +296,7 @@ class LocalizerExecutor(Executor):
                 fallback=approved.fallback,
                 attempts=approved.attempts,
                 verdicts=approved.history,
+                insight=approved.analysis.insight,
             )
         )
 
@@ -349,6 +350,7 @@ def emergency(task: NarrationTask, error: Exception) -> Narration:
         fallback=True,
         attempts=0,
         verdicts=[verdict],
+        insight=analysis.insight,
     )
 
 

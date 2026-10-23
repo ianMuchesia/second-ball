@@ -543,3 +543,74 @@ Approved by Ian (advisor's fix list, 2026-10-23).
   allowed as "number N" with N on the sheet. Facts name the sent-off player
   ("Riverside's left centre-back Ilya Stonebridge (number 5)") and the
   full-back a counter went behind ("Kofi Lindqvane, Riverside's left-back").
+
+## 2026-10-23: Phase 4a (broadcast screen, vertical slice)
+
+- Run bundles (agents/live/record.py, runs/<name>/, gitignored data): the
+  full pipeline once, offline: the match waits for each line, so the bundle
+  holds exactly what the pipeline made, and each line's latency is the real
+  wall time (event available -> line verified and translated). Judge mode
+  plays a bundle with zero model calls. A re-record replaces the bundle and
+  starts a new audit log. Recorded languages: SHIPPED_LANGUAGES (en, sw).
+- API (stream/api, FastAPI; new dependencies fastapi, uvicorn: the HTTP/SSE
+  server for the screen): bundle, events on core's continuous clock, evidence
+  in plain words with absolute coordinates (home attacks left to right), the
+  registry and detector rules, SSE replay of a run and SSE from Kafka for live
+  mode, producer approve/reject into an append-only audit log, and a test
+  injection that corrupts a real line and runs the real Verifier (labelled
+  "TEST INJECTION", logged).
+- Screen (web/): Ian's choices: Redux Toolkit + RTK Query (no fetching in
+  effects; the one effect is the animation-frame clock), React Router 7 with
+  routes.ts + createBrowserRouter and lazy pages, typed hooks
+  (useAppSelector/useAppDispatch via .withTypes; useTypedSelector alias),
+  memoised selectors for per-frame view state, route error boundaries.
+  Styling: vanilla CSS with variables (Tailwind is Ian's call). New
+  dependencies: @reduxjs/toolkit, react-redux, react-router-dom (state,
+  data fetching, routing), @playwright/test and @types/node (dev: smoke test,
+  vite config types).
+- Timeline: one marker per moment; goals and red cards draw above other
+  moments (the smoke test caught a moment dot covering the red card).
+
+## 2026-10-23: screen polish (4a-2) and two data checks
+
+- Check 1, Harbour 82% control at 02:33 (advisor's frame-trap hypothesis):
+  disproved. Harbour really attacked first: in minute 0-1 they reached 93 m
+  in their own frame and shot, while Riverside's actions were at 7.7 m and
+  19.6 m in theirs. Field tilt uses the acting team's frame correctly. But
+  the value rests on ~27 events, so stats now show "warming up (n of 10
+  minutes)" and dim until the 10-minute window is full. New guard tests:
+  a touch in a team's own box is its defensive third, both teams, both halves
+  (tests/unit/test_frames.py).
+- Check 2, bundle contents: the test bundle is the fake model (no AI); the
+  label now says exactly that ("Test run · fake model, placeholder lines, no
+  AI"); real bundles say "N AI lines, M templates · no model calls now".
+  meta.json records ai_lines and template_lines.
+- Bug found by the screenshots: a red card's impact fires ~10 minutes after
+  the card but carries the card's clock, so the replay showed it at 63' with
+  data from 63'-73'. Bundles now record aired_t (when a line really went out);
+  replay uses it. Test: a line never airs before the data it describes.
+- Possession chip: after a foul the other team has the ball.
+- Design: football-TV shapes and type (Barlow Condensed, self-hosted; angled
+  bars, score bug, split stat bars, minute ticks), Msodoki night palette
+  (Riverside amber, Harbour ivory; red/yellow only for cards), invented
+  shield crests. Pitch draws only the current possession's last 3 actions
+  (current solid with an arrow, earlier ones faded and numbered), names only
+  on players involved, collision-free tags. Match Centre: verified key
+  moments with evidence counts and latency, and stats with plain meanings
+  from the registry. Producer: pull/restore lines on air (the broadcast
+  follows the audit log), held lines air only once approved, rejected drafts
+  as "Verifier catches". New dependency: @fontsource/barlow(-condensed)
+  (fonts served with the app, no CDN).
+- Screen fixes after review (2026-10-23): kits moved off the accent colour
+  (amber only for what you click or select): Riverside ivory, Harbour
+  charcoal with ivory trim. Name tags avoid every player dot and other names
+  (measured text box), with a leader line when moved; a browser test checks
+  no overlap at 36:05 and nine other moments, after the web font loads.
+  Goal and chance evidence is the whole possession (regain -> shot) plus the
+  facts ("exposed player"), with a freeze-frame button at the regain lighting
+  the exposed full-back. Latency reads "template, no model" for templates and
+  "missed 8 s target" when over. The header counts AI lines and templates
+  from the run itself. The recorder fails loudly (exit code) when a real-model
+  bundle has no AI lines, e.g. recorded while the quota was gone: the 07:00
+  bundle had 0 of 18 (the first call waited 9.8 s on retries, then the
+  daily-cap 429 tripped the kill switch).

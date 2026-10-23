@@ -230,4 +230,5 @@ async def recap(
         fallback=is_fallback,
         attempts=len(history),
         verdicts=history,
+        insight=analysis.insight,
     )

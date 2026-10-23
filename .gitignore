@@ -17,3 +17,6 @@ data/
 *.jsonl
 demo/
 evals/realism/.cache/
+runs/
+web/test-results/
+web/playwright-report/
