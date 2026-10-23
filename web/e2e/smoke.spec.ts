@@ -24,5 +24,28 @@ test("producer: a test error goes through the real Verifier and is labelled", as
   const box = page.getByTestId("injection");
   await expect(box).toContainText("TEST INJECTION");
   await expect(box).toContainText("Verifier: rejected");
-  await expect(page.locator(".audit")).toContainText("inject_test_error");
+  await expect(page.locator(".audit")).toContainText("inject test error");
+});
+
+test("producer: a pulled line leaves the broadcast, and comes back when restored", async ({ page, request }) => {
+  const run = await (await request.get("/api/runs/e2e")).json();
+  const line = run.overlays.find(
+    (o: { slot: string; status: string; kind: string; overlay_id: string }) =>
+      o.slot === "narrative" && o.status === "aired" && o.kind === "goal" && o.overlay_id.endsWith("-casual"),
+  );
+  const at = `/runs/e2e?t=${line.t + 5}`;
+  await page.goto(at);
+  await expect(page.getByTestId("lower-third")).toContainText(line.text.en);
+
+  await page.goto("/runs/e2e/producer");
+  await page.getByTestId(`pull-${line.overlay_id}`).click();
+  await expect(page.getByTestId("on-air")).toContainText("pulled");
+  await page.goto(at);
+  await expect(page.getByTestId("scoreboard")).toBeVisible();
+  await expect(page.getByText(line.text.en)).toHaveCount(0);
+
+  await page.goto("/runs/e2e/producer");
+  await page.getByRole("button", { name: "Restore" }).first().click();
+  await page.goto(at);
+  await expect(page.getByTestId("lower-third")).toContainText(line.text.en);
 });

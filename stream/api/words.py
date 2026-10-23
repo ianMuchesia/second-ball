@@ -58,6 +58,7 @@ def absolute(e: MatchEvent, match: Match, t: float | None = None) -> dict:
     turn = flip(e.team_id, match)
     return {
         "event_id": e.event_id,
+        "possession_id": e.possession_id,
         "t": t,
         "period": e.period,
         "minute": e.minute,

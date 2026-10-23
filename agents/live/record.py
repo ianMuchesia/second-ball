@@ -10,7 +10,8 @@ plays it back with zero model calls:
     match.json         the Match (team sheets included)
     events.jsonl       every MatchEvent, with freeze frames
     moments.jsonl      every Moment the detector fired
-    overlays.jsonl     every overlay status change (all personas, languages)
+    overlays.jsonl     every overlay status change (all personas, languages),
+                       with aired_t: match seconds when it went out
     narrations.jsonl   per line: verdicts incl. rejected drafts, the insight,
                        wall-clock latency and whether it met the 8 s target
     indicators.jsonl   control / openness / momentum each match minute
@@ -124,8 +125,16 @@ def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
     RECORDER.clear()
     languages = [x for x in (languages or SHIPPED) if x != "en"]
     data = MatchData.from_file(match_file)
-    overlays = []
-    live = Live(llm, overlays.append, languages=languages, speed=1)
+    overlays: list[str] = []
+
+    def publish(o):
+        # When it really went out in the run (match seconds): a red card's
+        # impact fires minutes after the card, so its own clock is not when it aired.
+        row = json.loads(o.model_dump_json())
+        row["aired_t"] = live.games[o.match_id].now
+        overlays.append(json.dumps(row))
+
+    live = Live(llm, publish, languages=languages, speed=1)
     start = time.monotonic()
     asyncio.run(play(live, data))
     if out.exists():  # a re-record is a new run: new bundle, new audit log
@@ -137,7 +146,7 @@ def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
         out / "moments.jsonl",
         (m.model_dump_json() for g in live.games.values() for m in g.moments),
     )
-    jsonl(out / "overlays.jsonl", (o.model_dump_json() for o in overlays))
+    jsonl(out / "overlays.jsonl", overlays)
     jsonl(out / "narrations.jsonl", live.records)
     jsonl(out / "indicators.jsonl", indicators(data.match, data.events.items))
     jsonl(out / "traces.jsonl", (span_row(s) for s in RECORDER.spans))
@@ -156,6 +165,10 @@ def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
         "wall_s": round(time.monotonic() - start, 1),
         "how": "offline: the match waited for each line; latency is real wall time",
         "outcomes": dict(live.stats.outcomes),
+        # What the bundle holds: lines the model wrote and the Verifier passed,
+        # and code templates (model failed, out of quota, or rejected 3 times).
+        "ai_lines": sum(1 for r in live.records if not r["fallback"]),
+        "template_lines": sum(1 for r in live.records if r["fallback"]),
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     (out / "audit.jsonl").touch()  # the producer's log for this run, append-only

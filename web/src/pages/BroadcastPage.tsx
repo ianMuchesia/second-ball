@@ -1,13 +1,15 @@
 import { lazy, Suspense, useMemo } from "react";
-import { Scoreboard, Timeline, LowerThird, type Marker } from "../components/Broadcast";
 import { Controls } from "../components/Controls";
-import { Indicators } from "../components/Indicators";
+import { MatchCentre } from "../components/MatchCentre";
+import { MomentCard } from "../components/MomentCard";
 import { Pitch } from "../components/Pitch";
+import { ScoreBug } from "../components/ScoreBug";
+import { Timeline } from "../components/Timeline";
 import { useRun } from "../hooks/useRun";
 import { useAppDispatch, useAppSelector } from "../store";
 import { actions } from "../store/playback";
-import { lineupOf, makeViewSelector, markersOf } from "../store/selectors";
-import { useEventsQuery, useRunQuery } from "../store/serverApi";
+import { feedOf, type FeedItem, lineupOf, makeViewSelector, markersOf, type Marker, onAir } from "../store/selectors";
+import { useEventsQuery, useProducerQuery, useRunQuery } from "../store/serverApi";
 import { useTicker } from "../useTicker";
 
 // Opened on demand: separate chunks.
@@ -18,21 +20,37 @@ export default function BroadcastPage() {
   const run = useRun();
   const { data } = useRunQuery(run);
   const { data: events = [] } = useEventsQuery(run);
+  // The producer's decisions (pulled lines, approved held lines) decide what airs.
+  const { data: producer } = useProducerQuery(run);
   const dispatch = useAppDispatch();
   const pb = useAppSelector((s) => s.playback);
   const end = events.length ? events[events.length - 1].t : 0;
   useTicker(end);
 
+  const byId = useMemo(() => new Map(events.map((e) => [e.event_id, e])), [events]);
+  const airable = useMemo(() => (data ? onAir(data, producer?.audit) : []), [data, producer]);
+  const feed = useMemo(
+    () => (data ? feedOf(data, byId, pb.persona, producer?.audit) : []),
+    [data, byId, pb.persona, producer],
+  );
   const selectView = useMemo(makeViewSelector, []);
-  const view = useAppSelector((s) => (data ? selectView(s, data, events) : null));
+  const view = useAppSelector((s) => (data ? selectView(s, data, events, airable) : null));
   const markers = useMemo(() => (data ? markersOf(data, events) : []), [data, events]);
   const lineup = useMemo(() => (data ? lineupOf(data) : new Map()), [data]);
-  const byId = useMemo(() => new Map(events.map((e) => [e.event_id, e])), [events]);
+  const momentumScale = useMemo(
+    () =>
+      Math.max(
+        1e-6,
+        ...(data?.indicators ?? []).map((r) => Math.abs((r.momentum as { value: number } | null)?.value ?? 0)),
+      ),
+    [data],
+  );
   if (!data || !view) return null;
 
   const { match } = data;
   const moment = data.moments.find((m) => m.moment_id === pb.momentId);
-  const narration = data.narrations.find((n) => n.overlay_id === view.line?.overlay_id);
+  const current = feed.find((i) => i.overlay.overlay_id === view.line?.overlay_id);
+
   const openEvidence = (momentId: string) => {
     const m = data.moments.find((x) => x.moment_id === momentId);
     const evs = (m?.evidence_event_ids ?? []).map((id) => byId.get(id)).filter((e) => e !== undefined);
@@ -48,42 +66,56 @@ export default function BroadcastPage() {
     dispatch(actions.jump({ t, end }));
     dispatch(actions.selectMoment(m?.momentId ?? null));
   };
+  const openFeed = (item: FeedItem) => {
+    dispatch(actions.jump({ t: item.overlay.t, end }));
+    if (item.moment) openEvidence(item.moment.moment_id);
+  };
 
   return (
     <main className="broadcast">
-      <Scoreboard
-        events={events}
-        upto={view.index}
-        home={match.home_team}
-        away={match.away_team}
-        scripted={match.mode === "scenario"}
-      />
       <div className="stage">
-        <div className="pitch-wrap">
+        <div className="screen">
           <Pitch
-            event={view.frame}
+            event={view.event}
+            frame={view.frame}
             path={view.path}
             homeTeam={match.home_team}
             lineup={lineup}
             highlighted={new Set(pb.highlighted)}
           />
+          <ScoreBug
+            events={events}
+            upto={view.index}
+            home={match.home_team}
+            away={match.away_team}
+            scripted={match.mode === "scenario"}
+          />
           {view.card && <div className="stat-card">{view.card.text.en}</div>}
-          <LowerThird
-            overlay={view.line}
+          <MomentCard
+            item={current}
             lang={pb.lang}
-            narration={narration}
-            onWhy={() => view.lineMoment && openEvidence(view.lineMoment)}
+            onEvidence={() => view.lineMoment && openEvidence(view.lineMoment)}
           />
         </div>
-        <Indicators row={view.row} home={match.home_team} away={match.away_team} persona={pb.persona} />
+        <MatchCentre
+          feed={feed}
+          t={pb.t}
+          row={view.row}
+          home={match.home_team}
+          away={match.away_team}
+          momentumScale={momentumScale}
+          onOpen={openFeed}
+        />
       </div>
       <Controls languages={data.meta.languages} end={end} />
-      <Timeline end={end} t={pb.t} markers={markers} onJump={onJump} />
+      <Timeline events={events} end={end} t={pb.t} markers={markers} onJump={onJump} />
       {moment && !pb.drawerOpen && (
         <div className="selected">
-          {moment.kind.replace(/_/g, " ")} ({moment.clock.minute}')
+          <span>
+            {moment.kind.replace(/_/g, " ")} · {moment.clock.minute}'
+          </span>
           <button onClick={() => openEvidence(moment.moment_id)} data-testid="evidence-open">
-            Evidence
+            Evidence ›
           </button>
         </div>
       )}

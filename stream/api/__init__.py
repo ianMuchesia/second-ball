@@ -112,7 +112,7 @@ def get_run(run: str):
         "meta": b["meta"],
         "match": b["match"].model_dump(mode="json"),
         "moments": [{**m, "t": clock_t(b, m["clock"])} for m in b["moments"]],
-        "overlays": [{**o, "t": clock_t(b, o["t_in"]["match"])} for o in b["overlays"]],
+        "overlays": [{**o, "t": overlay_t(b, o)} for o in b["overlays"]],
         "narrations": [
             {k: v for k, v in n.items() if k != "task"} for n in b["narrations"]
         ],
@@ -309,7 +309,7 @@ async def stream_run(
         (b["t"][e.event_id], "event", absolute(e, b["match"], b["t"][e.event_id]))
         for e in b["events"]
     ]
-    timeline += [(clock_t(b, o["t_in"]["match"]), "overlay", o) for o in b["overlays"]]
+    timeline += [(overlay_t(b, o), "overlay", o) for o in b["overlays"]]
     timeline.sort(key=lambda x: x[0])
 
     async def gen():
@@ -325,6 +325,13 @@ async def stream_run(
         yield sse("end", {"match_id": b["match"].match_id})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+def overlay_t(b: dict, o: dict) -> float:
+    """When an overlay went out in the run; older bundles: its clock."""
+    return (
+        o["aired_t"] if o.get("aired_t") is not None else clock_t(b, o["t_in"]["match"])
+    )
 
 
 def clock_t(b: dict, c: dict) -> float:

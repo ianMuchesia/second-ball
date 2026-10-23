@@ -13,6 +13,8 @@ export interface Meta {
   languages: string[];
   shipped_languages: string[];
   model_calls: number;
+  ai_lines?: number;
+  template_lines?: number;
   usd: number;
   kes: number;
   how: string;
@@ -29,6 +31,7 @@ export interface FramePlayer {
 // match seconds on the pipeline's clock.
 export interface ScreenEvent {
   event_id: string;
+  possession_id: string;
   t: number;
   period: number;
   minute: number;

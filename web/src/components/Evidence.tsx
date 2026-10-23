@@ -43,6 +43,25 @@ export default function EvidenceDrawer({
         </button>
       </header>
 
+      <div className="evidence-facts">
+        <span className={n && !n.fallback ? "status verified" : "status template"}>
+          {n ? (n.fallback ? "Template" : "✓ Verified") : "Stat card"}
+        </span>
+        <span>
+          <b>{moment.evidence_event_ids.length}</b> linked events
+        </span>
+        <span>
+          <b>{players.length}</b> players
+        </span>
+        <span>
+          <b>{new Set([...Object.keys(moment.metrics_before), ...Object.keys(moment.metrics_after)]).size}</b> metrics
+        </span>
+        {n && (
+          <span className={n.met_target ? "latency ok" : "latency late"}>
+            <b>{n.latency_s.toFixed(1)} s</b> AI latency
+          </span>
+        )}
+      </div>
       {n ? (
         <section>
           <h4>Claim</h4>

@@ -15,6 +15,7 @@ export interface Playback {
   persona: "casual" | "analyst";
   lang: string;
   tab: "broadcast" | "producer";
+  panel: "moments" | "stats"; // the Match Centre column
   momentId: string | null; // selected moment (timeline marker or "Why?")
   drawerOpen: boolean;
   indicator: IndicatorPick | null;
@@ -22,13 +23,17 @@ export interface Playback {
   focusEventId: string | null; // the event whose ball path is lit
 }
 
+// A deep link (?t=<match seconds>) opens the replay at that moment.
+const linked = Number(new URLSearchParams(window.location.search).get("t"));
+
 const initialState: Playback = {
-  t: 0,
+  t: Number.isFinite(linked) && linked > 0 ? linked : 0,
   playing: false,
   speed: 4,
   persona: "casual",
   lang: "en",
   tab: "broadcast",
+  panel: "moments",
   momentId: null,
   drawerOpen: false,
   indicator: null,
@@ -66,6 +71,9 @@ export const playback = createSlice({
     },
     setTab(s, a: PayloadAction<Playback["tab"]>) {
       s.tab = a.payload;
+    },
+    setPanel(s, a: PayloadAction<Playback["panel"]>) {
+      s.panel = a.payload;
     },
     selectMoment(s, a: PayloadAction<string | null>) {
       s.momentId = a.payload;

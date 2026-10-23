@@ -1,4 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { teamName } from "../api";
+import { Crest } from "../components/Crest";
 import { useRun } from "../hooks/useRun";
 import { paths } from "../router/routes";
 import { useEventsQuery, useRunQuery } from "../store/serverApi";
@@ -10,21 +12,38 @@ export default function RunLayout() {
   const eventsQ = useEventsQuery(run);
   if (runQ.error || eventsQ.error) return <p className="page">Could not load run “{run}”.</p>;
   if (!runQ.data || !eventsQ.data) return <p className="page">Loading {run}…</p>;
-  const m = runQ.data.meta;
+  const { meta, match } = runQ.data;
+  const fake = meta.model === "fake-model";
   return (
     <div className="app">
-      <nav className="tabs">
-        <NavLink to={paths.run(run)} end>
-          Broadcast
-        </NavLink>
-        <NavLink to={paths.producer(run)} data-testid="tab-producer">
-          Producer
-        </NavLink>
-        <span className="small judge" title={m.how}>
-          Judge mode: recorded run “{m.name}”, model {m.model}, {m.model_calls} model calls when recorded, 0
-          now.
+      <header className="masthead">
+        <div className="brand">
+          <span className="wordmark">Second Ball</span>
+          <span className="sub">Match centre</span>
+        </div>
+        <div className="fixture">
+          <span className="sides">
+            <Crest name={teamName(match.home_team)} side="home" /> {teamName(match.home_team)} <span className="v">v</span>{" "}
+            {teamName(match.away_team)} <Crest name={teamName(match.away_team)} side="away" />
+          </span>
+          <small>
+            {match.venue} · {match.competition}
+          </small>
+        </div>
+        <nav className="tabs">
+          <NavLink to={paths.run(run)} end>
+            Broadcast
+          </NavLink>
+          <NavLink to={paths.producer(run)} data-testid="tab-producer">
+            Producer
+          </NavLink>
+        </nav>
+        <span className={fake ? "judge test" : "judge"} title={meta.how} data-testid="run-label">
+          {fake
+            ? "Test run · fake model, placeholder lines, no AI"
+            : `Replay of a recorded run · ${meta.model} · ${meta.ai_lines ?? "?"} AI lines, ${meta.template_lines ?? "?"} templates · no model calls now`}
         </span>
-      </nav>
+      </header>
       <Outlet />
     </div>
   );
