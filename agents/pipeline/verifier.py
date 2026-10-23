@@ -184,6 +184,31 @@ WHOLE_WITH_DECIMALS = re.compile(r"(?<![\w.])(\d+)\.0+(?![\d])")
 SCORE = r"(\d+)\s*[-–]\s*(\d+)"
 
 
+RISE = r"ris\w*|rais\w*|up|increas\w*|climb\w*|grow\w*|grew|lift\w*|boost\w*|jump\w*|doubl\w*"
+FALL = r"drop\w*|fall\w*|fell|down|decreas\w*|slip\w*|sink\w*|sank|dip\w*|lower\w*|cut\w*|halv\w*"
+FROM_TO = re.compile(
+    rf"\b(?:({RISE})|({FALL}))\b(?:\W+\w+){{0,5}}?\W+from\s+(?:xG\s+)?(\d+(?:\.\d+)?)\s*"
+    rf"(?:%|m)?\s+to\s+(?:xG\s+)?(\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+
+
+def wrong_direction(text: str) -> list[str]:
+    """'drop from 0.71 to 0.80' says down while the numbers go up (and the
+    reverse): the word must agree with the numbers."""
+    out = []
+    for m in FROM_TO.finditer(text):
+        rise, fall, a, b = m.groups()
+        a, b = float(a), float(b)
+        if (fall and b > a) or (rise and b < a):
+            word = (fall or rise).lower()
+            out.append(
+                f"'{word}' but the number goes from {a:g} to {b:g}: "
+                f"say it {'rose' if b > a else 'fell'}"
+            )
+    return out
+
+
 def number_style(text: str, analysis: Analysis) -> list[str]:
     """Numbers written the way code writes them: counts whole, scores in
     digits with the right team's goals first, xG as 'xG 0.30'."""
@@ -625,6 +650,7 @@ def verify(
         reasons.append(f"'{name}' is not a team or a player on the team sheet")
     reasons += score_mistakes(text, analysis)
     reasons += number_style(text, analysis)
+    reasons += wrong_direction(text)
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):
