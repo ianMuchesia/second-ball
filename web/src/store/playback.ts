@@ -20,7 +20,9 @@ export interface Playback {
   drawerOpen: boolean;
   indicator: IndicatorPick | null;
   highlighted: string[]; // player ids lit on the pitch
-  focusEventId: string | null; // the event whose ball path is lit
+  focusEventId: string | null; // the clicked evidence event (that instant)
+  move: string[] | null; // the open moment's move: its actions are drawn
+  until: number | null; // playing the move: stop here (its last action)
 }
 
 // A deep link (?t=<match seconds>) opens the replay at that moment.
@@ -39,6 +41,8 @@ const initialState: Playback = {
   indicator: null,
   highlighted: [],
   focusEventId: null,
+  move: null,
+  until: null,
 };
 
 // The match length is derived from the events, never stored: actions that
@@ -51,14 +55,20 @@ export const playback = createSlice({
   reducers: {
     tick(s, a: PayloadAction<{ dt: number; end: number }>) {
       // dt: wall seconds since the last frame
-      s.t = clamp(s.t + a.payload.dt * s.speed, a.payload.end);
-      if (s.t >= a.payload.end) s.playing = false;
+      const stop = Math.min(a.payload.end, s.until ?? Infinity);
+      s.t = clamp(s.t + a.payload.dt * s.speed, stop);
+      if (s.t >= stop) {
+        s.playing = false;
+        s.until = null;
+      }
     },
     jump(s, a: PayloadAction<{ t: number; end: number }>) {
       s.t = clamp(a.payload.t, a.payload.end);
+      s.until = null;
     },
     setPlaying(s, a: PayloadAction<boolean>) {
       s.playing = a.payload;
+      s.until = null;
     },
     setSpeed(s, a: PayloadAction<number>) {
       s.speed = a.payload;
@@ -78,17 +88,25 @@ export const playback = createSlice({
     selectMoment(s, a: PayloadAction<string | null>) {
       s.momentId = a.payload;
     },
-    // Evidence opened: the moment's players are lit, its first event focused.
-    openDrawer(s, a: PayloadAction<{ momentId: string; players: string[]; eventId: string | null }>) {
+    // Evidence opened: the whole replay goes to the start of the move (clock,
+    // players, ball together) and plays it at 1x, stopping at its last action.
+    openDrawer(s, a: PayloadAction<{ momentId: string; players: string[]; move: string[]; from: number; to: number }>) {
       s.momentId = a.payload.momentId;
       s.drawerOpen = true;
       s.highlighted = a.payload.players;
-      s.focusEventId = a.payload.eventId;
+      s.move = a.payload.move;
+      s.focusEventId = null;
+      s.t = clamp(a.payload.from);
+      s.until = a.payload.to;
+      s.speed = 1;
+      s.playing = a.payload.to > a.payload.from;
     },
     closeDrawer(s) {
       s.drawerOpen = false;
       s.highlighted = [];
       s.focusEventId = null;
+      s.move = null;
+      s.until = null;
     },
     openIndicator(s, a: PayloadAction<IndicatorPick | null>) {
       s.indicator = a.payload;
@@ -97,6 +115,7 @@ export const playback = createSlice({
     focusEvent(s, a: PayloadAction<{ t: number; eventId: string; players: string[] }>) {
       s.t = clamp(a.payload.t);
       s.playing = false;
+      s.until = null;
       s.focusEventId = a.payload.eventId;
       s.highlighted = a.payload.players;
     },

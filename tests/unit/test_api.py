@@ -73,6 +73,38 @@ def test_evidence_in_plain_words_with_absolute_positions(client):
     assert any(p["player_id"] == "riverside_athletic-5" for p in e["freeze_frame"])
 
 
+def test_evidence_is_the_move_not_the_metric_windows(client):
+    """The smallest set that proves the claim: the possession plus the regain,
+    with each metric's window summarised apart, never merged in."""
+    r = client.get("/api/runs/demo").json()
+    events = {e["event_id"]: e for e in client.get("/api/runs/demo/events").json()}
+    (goal,) = [
+        m for m in r["moments"] if m["kind"] == "goal" and m["clock"]["minute"] == 34
+    ]
+    move = goal["move"]
+    assert len(move["ids"]) < 20
+    first, last = events[move["ids"][0]], events[move["ids"][-1]]
+    assert move["regain_id"] == first["event_id"]
+    assert first["team_id"] == "harbour_town" and first["type"] in (
+        "tackle",
+        "interception",
+    )
+    assert last["type"] == "shot" and last["outcome"] == "success"
+    assert set(move["players"]) == {events[i]["player_id"] for i in move["ids"]}
+    windows = {
+        i for n in goal["metrics_after"].values() for i in n["evidence_event_ids"]
+    }
+    assert {n["events"] for n in goal["numbers"]} and not windows - set(events)
+
+    (red,) = [m for m in r["moments"] if m["kind"] == "red_card_impact"]
+    ids = red["move"]["ids"]
+    assert len(ids) < 20 and events[ids[-1]]["outcome"] == "red_card"
+    assert events[ids[0]]["team_id"] == "harbour_town"  # the team that was fouled
+    # The impact compares 10-minute windows: hundreds of events, none in the move.
+    assert sum(n["events"] for n in red["numbers"]) > 100
+    assert all(n["from_t"] <= n["to_t"] for n in red["numbers"])
+
+
 def test_unknown_run_or_event_is_404_and_names_are_checked(client):
     assert client.get("/api/runs/nope").status_code == 404
     assert client.get("/api/runs/..%2Fetc").status_code == 404

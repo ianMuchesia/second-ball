@@ -41,6 +41,7 @@ from agents.pipeline.workflow import values_of
 from core.contracts import Insight, Match, MatchEvent
 from core.metrics import Events, registry
 from core.moments import config as moment_config
+from stream.api.moves import evidence_of, numbers
 from stream.api.words import absolute, describe_event
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -79,6 +80,7 @@ def bundle(path: Path, stamp: float) -> dict:
         "match": match,
         "events": events,
         "by_id": {e.event_id: e for e in events},
+        "index": {e.event_id: i for i, e in enumerate(events)},
         "t": {e.event_id: t for e, t in zip(events, clock, strict=True)},
         "moments": rows(path / "moments.jsonl"),
         "overlays": rows(path / "overlays.jsonl"),
@@ -111,7 +113,16 @@ def get_run(run: str):
     return {
         "meta": b["meta"],
         "match": b["match"].model_dump(mode="json"),
-        "moments": [{**m, "t": clock_t(b, m["clock"])} for m in b["moments"]],
+        "moments": [
+            {
+                **m,
+                "t": clock_t(b, m["clock"]),
+                # The evidence in two layers (stream/api/moves.py).
+                "move": evidence_of(m, b["events"], b["index"]),
+                "numbers": numbers(m, b["index"], b["t"]),
+            }
+            for m in b["moments"]
+        ],
         "overlays": [{**o, "t": overlay_t(b, o)} for o in b["overlays"]],
         "narrations": [
             {

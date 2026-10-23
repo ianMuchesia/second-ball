@@ -272,4 +272,8 @@ b { font-weight: 600; }
 .known span { display: inline-block; min-width: 110px; color: var(--muted); text-transform: uppercase; font-family: var(--display); letter-spacing: 0.06em; font-size: 0.75rem; }
 .chain { counter-reset: step; }
 .chain .badge { color: var(--amber); border-color: var(--amber); }
+.numbers { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.88rem; }
+.numbers summary { cursor: pointer; padding: 4px 0; }
+.numbers summary b { font-weight: 600; text-transform: capitalize; }
+.numbers .value { color: var(--muted); font-variant-numeric: tabular-nums; }
 .freeze { margin-top: 8px; width: 100%; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; background: var(--amber); color: var(--bg); border: none; }

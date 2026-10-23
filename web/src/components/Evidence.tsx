@@ -1,5 +1,5 @@
-import type { LineupPlayer, Moment, Narration, Overlay, ScreenEvent, Timed } from "../api";
-import { latencyText, plural, surname } from "../api";
+import type { LineupPlayer, Narration, NumberRow, Overlay, RunMoment, ScreenEvent, Timed } from "../api";
+import { clockText, latencyText, plural, surname } from "../api";
 import { useRun } from "../hooks/useRun";
 import { useAppDispatch } from "../store";
 import { actions } from "../store/playback";
@@ -7,9 +7,10 @@ import type { Evidence } from "../store/selectors";
 import { useEvidenceQuery, useRuleQuery } from "../store/serverApi";
 
 /** Why a line said what it said: the claim, the Verifier's verdict (with any
- * rejected drafts), what code knew, the events in order (for a goal: the
- * whole possession from the regain), and the rule or metric used. Clicking
- * an event jumps the pitch there with its players lit. Loaded on demand. */
+ * rejected drafts), what code knew, then the evidence in two layers: the move
+ * (the smallest run of events that proves it, from the regain) and the
+ * numbers (each metric summarised, collapsed: its window is context, not
+ * part of the move). Clicking an action shows the pitch at that instant. */
 export default function EvidenceDrawer({
   moment,
   overlays,
@@ -18,7 +19,7 @@ export default function EvidenceDrawer({
   evidence,
   lineup,
 }: {
-  moment: Timed<Moment>;
+  moment: RunMoment;
   overlays: Timed<Overlay>[];
   narrations: Narration[];
   persona: string;
@@ -39,7 +40,6 @@ export default function EvidenceDrawer({
   const mine = narrations.filter((x) => x.overlay_id.startsWith(moment.moment_id));
   const n = mine.find((x) => x.persona === persona) ?? mine[0];
   const aired = overlays.find((o) => o.overlay_id === n?.overlay_id && o.status === "aired");
-  const values = { ...flatten(moment.metrics_before, "before"), ...flatten(moment.metrics_after, "after") };
   const facts = Object.entries(n?.facts ?? {}).filter(([k]) => k !== "side" && k !== "claim");
   const latency = n ? latencyText(n) : null;
   return (
@@ -56,11 +56,9 @@ export default function EvidenceDrawer({
         <span className={n && !n.fallback ? "status verified" : "status template"}>
           {n ? (n.fallback ? "Template" : "✓ Verified") : "Stat card"}
         </span>
-        <span>{plural(evidence.ids.length, "linked event")}</span>
+        <span>{plural(evidence.ids.length, "action")} in the move</span>
         <span>{plural(evidence.players.length, "player")}</span>
-        <span>
-          {plural(Object.keys(moment.metrics_before).length + Object.keys(moment.metrics_after).length, "metric")}
-        </span>
+        <span>{plural(moment.numbers.length, "number")}</span>
         {latency && <span className={latency.ok ? "latency ok" : "latency late"}>{latency.text}</span>}
       </div>
 
@@ -109,12 +107,13 @@ export default function EvidenceDrawer({
         </>
       )}
 
-      <h4>{evidence.regainId ? "How it happened (the whole move, in order)" : "Supporting events"}</h4>
+      <h4>The move</h4>
       <ol className="events chain" data-testid="evidence-events">
         {events.map((e) => (
           <li key={e.event_id}>
             <button onClick={() => onJump(e)} data-testid={`evidence-${e.event_id}`}>
-              {e.event_id === evidence.regainId && <span className="badge">regain</span>} {e.words}
+              {e.event_id === evidence.regainId && <span className="badge">regain</span>}{" "}
+              {e.words}
             </button>
           </li>
         ))}
@@ -129,19 +128,14 @@ export default function EvidenceDrawer({
         </button>
       )}
 
-      <h4>Metric / rule used</h4>
-      {Object.keys(values).length > 0 && (
-        <table className="values">
-          <tbody>
-            {Object.entries(values).map(([k, v]) => (
-              <tr key={k}>
-                <td>{k}</td>
-                <td>{v.toFixed(3)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <h4>The numbers</h4>
+      <ul className="numbers" data-testid="evidence-numbers">
+        {moment.numbers.map((x) => (
+          <li key={`${x.metric}-${x.when}`}>
+            <Number row={x} />
+          </li>
+        ))}
+      </ul>
       {rule && (
         <p className="small">
           Detector rule <code>{moment.kind}</code> (importance {String(rule.importance)}), thresholds{" "}
@@ -153,6 +147,20 @@ export default function EvidenceDrawer({
   );
 }
 
-function flatten(m: Moment["metrics_before"], when: string): Record<string, number> {
-  return Object.fromEntries(Object.entries(m).map(([k, v]) => [`${k} (${when})`, v.value]));
+const mmss = (t: number) => clockText(Math.floor(t / 60), Math.floor(t % 60));
+
+/** One metric, collapsed: value, how many events, over which span. */
+function Number({ row }: { row: NumberRow }) {
+  const span = row.from_t !== null && row.to_t !== null ? `${mmss(row.from_t)}–${mmss(row.to_t)}` : "–";
+  return (
+    <details>
+      <summary>
+        <b>{row.metric.replace(/_/g, " ")}</b> ({row.when}) <span className="value">{row.value.toFixed(3)}</span>
+      </summary>
+      <p className="small">
+        Computed by code over {plural(row.events, "event")}, {span} of match time. These events are its window, not
+        part of the move.
+      </p>
+    </details>
+  );
 }

@@ -5,10 +5,10 @@ import type {
   AuditRow,
   IndicatorRow,
   LineupPlayer,
-  Moment,
   Narration,
   Overlay,
   Run,
+  RunMoment,
   ScreenEvent,
   Timed,
 } from "../api";
@@ -72,43 +72,32 @@ export function markersOf(run: Run, events: ScreenEvent[]): Marker[] {
 }
 
 export interface Evidence {
-  ids: string[]; // in match order
-  players: string[];
-  regainId: string | null; // the first action of the possession (counters)
+  ids: string[]; // the move, in match order
+  players: string[]; // only players in the move (+ the exposed full-back)
+  regainId: string | null; // where the team won the ball
   exposedId: string | null; // the full-back a counter went behind (facts)
 }
 
-const CHAIN_KINDS = new Set(["goal", "big_chance"]);
-
-/** The events behind a moment. For goals and chances: the whole possession
- * that led to the shot (regain -> passes/carries -> shot), and the full-back
- * the facts say was exposed. All from the recorded events and facts. */
+/** The evidence for a moment: the move the API computed (never a metric's
+ * window), and the full-back the facts say was exposed. */
 export function evidenceOf(
-  moment: Moment,
+  moment: RunMoment,
   narration: Narration | undefined,
-  events: ScreenEvent[],
-  byId: Map<string, ScreenEvent>,
   lineup: Map<string, LineupPlayer>,
 ): Evidence {
-  let ids = moment.evidence_event_ids.filter((id) => byId.has(id));
-  let regainId: string | null = null;
-  const last = byId.get(ids[ids.length - 1]);
-  if (last && CHAIN_KINDS.has(moment.kind)) {
-    const i = events.indexOf(last);
-    let k = i;
-    while (k > 0 && events[k - 1].possession_id === last.possession_id) k--;
-    ids = events.slice(k, i + 1).map((e) => e.event_id);
-    regainId = ids[0];
-  }
   const exposedName = narration?.facts?.exposed_player?.split(",")[0];
   const exposed = exposedName ? [...lineup.values()].find((p) => p.name === exposedName) : undefined;
-  const players = [...new Set([...ids.map((id) => byId.get(id)!.player_id), ...(exposed ? [exposed.player_id] : [])])];
-  return { ids, players, regainId, exposedId: exposed?.player_id ?? null };
+  return {
+    ids: moment.move.ids,
+    players: [...new Set([...moment.move.players, ...(exposed ? [exposed.player_id] : [])])],
+    regainId: moment.move.regain_id,
+    exposedId: exposed?.player_id ?? null,
+  };
 }
 
 export interface FeedItem {
   overlay: Timed<Overlay>;
-  moment: Timed<Moment> | undefined;
+  moment: RunMoment | undefined;
   narration: Narration | undefined;
   linkedEvents: number;
   players: string[];
@@ -119,7 +108,6 @@ export interface FeedItem {
  * with how much evidence stands behind it (counted from the run, not made up). */
 export function feedOf(
   run: Run,
-  events: ScreenEvent[],
   byId: Map<string, ScreenEvent>,
   lineup: Map<string, LineupPlayer>,
   persona: string,
@@ -132,7 +120,7 @@ export function feedOf(
       const moment = run.moments.find((m) => m.moment_id === momentIdOf(o.overlay_id));
       const narration = run.narrations.find((n) => n.overlay_id === o.overlay_id);
       const ev = moment
-        ? evidenceOf(moment, narration, events, byId, lineup)
+        ? evidenceOf(moment, narration, lineup)
         : { ids: o.evidence_event_ids.filter((id) => byId.has(id)), players: [] as string[] };
       return {
         overlay: o,
@@ -148,7 +136,9 @@ export function feedOf(
 }
 
 /** At playback time t: the current event, the ball path, the line on air,
- * the latest stat card, the indicator row. */
+ * the latest stat card, the indicator row. Positions, ball and arrows are
+ * always of the same instant: while a move is open, the arrows are the move's
+ * actions up to now; a clicked evidence event is that instant exactly. */
 export function viewAt(
   run: Run,
   events: ScreenEvent[],
@@ -156,11 +146,18 @@ export function viewAt(
   t: number,
   persona: string,
   focusEventId: string | null,
+  move: string[] | null,
 ) {
-  const i = indexAt(events, t);
+  let i = indexAt(events, t);
+  // Several events can share a second: the clicked one is the instant shown.
+  const focus = focusEventId ? events.findIndex((e) => e.event_id === focusEventId) : -1;
+  if (focus >= 0 && events[focus].t === t) i = focus;
   let frameAt = i;
   while (frameAt > 0 && events[frameAt].freeze_frame.length === 0) frameAt--;
-  const focus = focusEventId ? events.find((e) => e.event_id === focusEventId) : undefined;
+  const inMove = move ? new Set(move) : null;
+  const path = inMove?.has(events[i].event_id)
+    ? events.slice(0, i + 1).filter((e) => inMove.has(e.event_id))
+    : chain(events, i);
   const pick = (slot: string, within: number, mine: (o: Overlay) => boolean) =>
     latest(airable.filter((o) => o.slot === slot && mine(o)), t, within);
   const line = pick("narrative", LINE_SHOWN_S, (o) => o.overlay_id.endsWith(`-${persona}`));
@@ -172,7 +169,7 @@ export function viewAt(
     index: i,
     event: events[i],
     frame: events[frameAt],
-    path: focus ? [focus] : chain(events, i),
+    path,
     line: shown,
     card,
     row,
@@ -203,6 +200,7 @@ export const makeViewSelector = () =>
       selectT,
       selectPersona,
       (s: RootState) => s.playback.focusEventId,
+      (s: RootState) => s.playback.move,
     ],
     viewAt,
   );

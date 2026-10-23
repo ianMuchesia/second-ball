@@ -104,10 +104,31 @@ export interface AuditRow {
 
 export type Timed<T> = T & { t: number };
 
+/** The smallest run of events that proves a moment (stream/api/moves.py):
+ * for a goal, chance or red card, the possession plus the regain. */
+export interface Move {
+  ids: string[]; // in match order
+  regain_id: string | null; // the action that won the ball, if in open play
+  players: string[];
+  team: string | null;
+}
+
+/** A metric the moment quotes, summarised: never merged into the move. */
+export interface NumberRow {
+  metric: string;
+  when: "before" | "after";
+  value: number;
+  events: number; // how many events it was computed over
+  from_t: number | null; // the span those events cover (match seconds)
+  to_t: number | null;
+}
+
+export type RunMoment = Timed<Moment> & { move: Move; numbers: NumberRow[] };
+
 export interface Run {
   meta: Meta;
   match: Match;
-  moments: Timed<Moment>[];
+  moments: RunMoment[];
   overlays: Timed<Overlay>[];
   narrations: Narration[];
   indicators: IndicatorRow[];

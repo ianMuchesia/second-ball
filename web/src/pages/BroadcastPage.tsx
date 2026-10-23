@@ -40,8 +40,8 @@ export default function BroadcastPage() {
   const airable = useMemo(() => (data ? onAir(data, producer?.audit) : []), [data, producer]);
   const lineup = useMemo(() => (data ? lineupOf(data) : new Map()), [data]);
   const feed = useMemo(
-    () => (data ? feedOf(data, events, byId, lineup, pb.persona, producer?.audit) : []),
-    [data, events, byId, lineup, pb.persona, producer],
+    () => (data ? feedOf(data, byId, lineup, pb.persona, producer?.audit) : []),
+    [data, byId, lineup, pb.persona, producer],
   );
   const selectView = useMemo(makeViewSelector, []);
   const view = useAppSelector((s) => (data ? selectView(s, data, events, airable) : null));
@@ -65,15 +65,20 @@ export default function BroadcastPage() {
     data.narrations.find((n) => n.overlay_id.startsWith(momentId));
   const evidenceFor = (momentId: string) => {
     const m = data.moments.find((x) => x.moment_id === momentId);
-    return m ? evidenceOf(m, narrationFor(momentId), events, byId, lineup) : null;
+    return m ? evidenceOf(m, narrationFor(momentId), lineup) : null;
   };
+  // The replay goes to the move's first action and plays it to its last.
   const openEvidence = (momentId: string) => {
     const ev = evidenceFor(momentId);
+    const steps = (ev?.ids ?? []).map((id) => byId.get(id)).filter((e) => e !== undefined);
+    const m = data.moments.find((x) => x.moment_id === momentId)!;
     dispatch(
       actions.openDrawer({
         momentId,
         players: ev?.players ?? [],
-        eventId: ev?.ids[ev.ids.length - 1] ?? null,
+        move: ev?.ids ?? [],
+        from: steps[0]?.t ?? m.t,
+        to: steps[steps.length - 1]?.t ?? m.t,
       }),
     );
   };
@@ -82,8 +87,8 @@ export default function BroadcastPage() {
     dispatch(actions.selectMoment(m?.momentId ?? null));
   };
   const openFeed = (item: FeedItem) => {
-    dispatch(actions.jump({ t: item.overlay.t, end }));
     if (item.moment) openEvidence(item.moment.moment_id);
+    else dispatch(actions.jump({ t: item.overlay.t, end }));
   };
 
   return (
