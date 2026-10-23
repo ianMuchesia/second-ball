@@ -67,13 +67,17 @@ class LLMClient:
         return response
 
 
-def from_env(env=None):
-    """Build the client from LLM_PROVIDER, MAX_RUN_USD etc. Reads .env when env is None."""
+def from_env(env=None, provider=None):
+    """Build the client from MAX_RUN_USD etc. Reads .env when env is None.
+
+    The provider is chosen explicitly (e.g. --provider gemini, make ...
+    PROVIDER=gemini); without one it is the free fake model, whatever .env
+    says, so nothing spends real requests by accident."""
     if env is None:
         load_dotenv()
         env = os.environ
 
-    provider_name = env.get("LLM_PROVIDER", "gemini")
+    provider_name = provider or "fake"
     if provider_name == "gemini":
         provider = GeminiProvider(
             api_key=env.get("GEMINI_API_KEY"),
@@ -91,14 +95,14 @@ def from_env(env=None):
         provider = FakeProvider()  # tests and offline runs: free, no network
     else:
         raise ValueError(
-            f"unknown LLM_PROVIDER {provider_name!r}; use 'gemini', 'foundry' or 'fake'"
+            f"unknown provider {provider_name!r}; use 'gemini', 'foundry' or 'fake'"
         )
 
-    if not env.get("MAX_RUN_USD"):
+    if provider_name != "fake" and not env.get("MAX_RUN_USD"):
         raise ValueError("MAX_RUN_USD must be set (the kill switch)")
 
     budget = Budget(
-        usd_limit=float(env["MAX_RUN_USD"]),
+        usd_limit=float(env.get("MAX_RUN_USD") or 1.0),
         token_limit=int(env.get("MAX_RUN_TOKENS", DEFAULT_MAX_RUN_TOKENS)),
         run_id=env.get("RUN_ID") or str(uuid.uuid4()),
         prices=PRICES,

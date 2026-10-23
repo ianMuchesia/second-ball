@@ -30,6 +30,7 @@ Returns a Verdict: passed, or the list of reasons (fed back to the Narrator).
 import re
 from collections.abc import Sequence
 
+from agents.pipeline.display import score_line
 from agents.pipeline.lineups import (
     CLAIMS,
     STYLE_OF,
@@ -171,7 +172,59 @@ def allowed_numbers(analysis: Analysis) -> list[float]:
         *shirts,
         *on_pitch(analysis),
         *map(float, analysis.task.counts.values()),
+        # Numbers in code's display strings ("xG 0.45", "Harbour lead 1-0").
+        *(x for v in analysis.task.display.values() for x, _, _ in numbers(v)),
     ]
+
+
+SPELLED = r"(?:nil|zero|one|two|three|four|five|six|seven|eight|nine)"
+SPELLED_SCORE = re.compile(rf"\b{SPELLED}\s*(?:-|to|–)\s*{SPELLED}\b", re.IGNORECASE)
+XG_AS_GOALS = re.compile(r"\b\d+\.\d+\s+goals?\b", re.IGNORECASE)
+WHOLE_WITH_DECIMALS = re.compile(r"(?<![\w.])(\d+)\.0+(?![\d])")
+SCORE = r"(\d+)\s*[-–]\s*(\d+)"
+
+
+def number_style(text: str, analysis: Analysis) -> list[str]:
+    """Numbers written the way code writes them: counts whole, scores in
+    digits with the right team's goals first, xG as 'xG 0.30'."""
+    out = []
+    for m in WHOLE_WITH_DECIMALS.finditer(text):
+        if not re.search(r"xG\s*$", text[: m.start()]):
+            out.append(
+                f"counts are whole numbers: write {m.group(1)}, not {m.group(0)}"
+            )
+    if XG_AS_GOALS.search(text):
+        out.append("write xG as 'xG 0.30', never '0.3 goals'")
+    if SPELLED_SCORE.search(text):
+        out.append(
+            "write scores in digits, e.g. "
+            + analysis.task.display.get("standing", "Riverside 0-1 Harbour")
+        )
+    ctx = analysis.task.context
+    goals = dict(zip((ctx.home, ctx.away), ctx.score, strict=True))
+    for team in (ctx.home, ctx.away):
+        name = re.escape(ctx.team_names[team])
+        other = ctx.away if team == ctx.home else ctx.home
+        # "Harbour 1-0 Riverside": the number next to a team is its goals.
+        for m in re.finditer(
+            rf"\b{name}\s+{SCORE}\s+{re.escape(ctx.team_names[other])}\b",
+            text,
+            re.IGNORECASE,
+        ):
+            if (int(m.group(1)), int(m.group(2))) != (goals[team], goals[other]):
+                out.append(f"score the wrong way round: it is {score_line(ctx)}")
+        # "Harbour lead 1-0" / "Harbour beat Riverside 2-0": the leader's goals first.
+        for m in re.finditer(
+            rf"\b{name}(?:{LEADS}|\s+(?:beat|beats|defeated|won|win)\b)[^.!?\d]{{0,30}}?{SCORE}",
+            text,
+            re.IGNORECASE,
+        ):
+            a, b = int(m.group(m.lastindex - 1)), int(m.group(m.lastindex))
+            if a < b:
+                out.append(
+                    f"the leader's score goes first: {analysis.task.display.get('standing', score_line(ctx))}"
+                )
+    return list(dict.fromkeys(out))
 
 
 CARDINALS = {
@@ -571,6 +624,7 @@ def verify(
     for name in unknown_names(text, analysis):
         reasons.append(f"'{name}' is not a team or a player on the team sheet")
     reasons += score_mistakes(text, analysis)
+    reasons += number_style(text, analysis)
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):

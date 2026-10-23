@@ -4,4 +4,4 @@ class FoundryProvider:
     name = "foundry"
 
     def __init__(self, endpoint=None, api_key=None, model=None):
-        raise NotImplementedError("foundry provider is a stub; use LLM_PROVIDER=gemini")
+        raise NotImplementedError("foundry provider is a stub; use --provider gemini")

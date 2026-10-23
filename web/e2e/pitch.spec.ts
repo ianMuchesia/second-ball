@@ -49,6 +49,7 @@ test("a goal's evidence is the move from Harbour's regain, and the regain shows 
   const drawer = page.getByTestId("evidence-drawer");
   await expect(drawer).toContainText("The move");
   const steps = drawer.getByTestId("evidence-events").locator("li");
+  await expect(steps.last()).toContainText("goal"); // loaded
   const n = await steps.count();
   expect(n).toBeGreaterThanOrEqual(3);
   expect(n).toBeLessThan(20);

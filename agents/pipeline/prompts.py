@@ -5,6 +5,7 @@ import json
 import re
 
 from agents.narrator import examples
+from agents.pipeline.display import shown
 from agents.pipeline.lineups import describe
 from agents.pipeline.models import Analysis, MatchContext, NarrationTask
 from core.metrics import registry
@@ -40,7 +41,10 @@ moment helps and "numbers_are_for" whose numbers they are, so never say
 otherwise; when facts has build_up and exploited_zone, name both the action
 (counter, break) and the zone (e.g. behind the left-back); no predictions
 (not even "seal it" or "secure the win": the match is not over); do not blame one event
-on the weather; no injury or referee talk."""
+on the weather; no injury or referee talk. Write the score, the standing and a
+chance exactly as "say" gives them (digits, leader first: "Harbour lead 1-0",
+never "zero to one"); counts are whole numbers ("13 shots", never "13.0");
+xG as "xG 0.30", never "0.3 goals"."""
 
 STYLE = {
     "casual": "Casual fan: short, a little emotion, plain words, no jargon. "
@@ -52,7 +56,7 @@ STYLE = {
 
 LOCALIZER = """ROLE: LOCALIZER
 Translate the line into {language}. Tokens stand for locked text: [T1] a team
-name, [S1] a score (home-away), [N1] a number, [X1] a term like xG. Copy each
+name, [S1] a score (keep its order), [N1] a number, [X1] a term like xG. Copy each
 token exactly once, unchanged, and write no other digits or number words of
 your own.
 Use football meanings: "clinical" means
@@ -173,10 +177,12 @@ def values_block(task: NarrationTask, values: dict[str, float]) -> str:
         if whole:
             block["numbers"] = {k: int(v) for k, v in whole.items()}
     else:
-        block["numbers"] = {k: round(v, 2) for k, v in values.items()}
+        block["numbers"] = {k: shown(v) for k, v in values.items()}
         block["units"] = units(values)
     if task.counts:
         block["counts"] = task.counts
+    if task.display:
+        block["say"] = task.display
     if task.facts:
         block["facts"] = {
             k: v for k, v in task.facts.items() if k not in ("side", "claim")

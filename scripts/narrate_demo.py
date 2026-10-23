@@ -1,10 +1,10 @@
 """Narrate a match's big moments through the real pipeline.
 
-Uses the model in .env (LLM_PROVIDER, default gemini) through core/budget.py;
-MAX_RUN_USD caps the run. Prints each line, how many tries it took and why
+Uses the free fake model unless --provider says otherwise (a real one prints
+an estimate and asks first), through core/budget.py; MAX_RUN_USD caps it. Prints each line, how many tries it took and why
 the Verifier sent lines back, then the cost.
 
-    MAX_RUN_USD=0.20 uv run python -m scripts.narrate_demo
+    uv run python -m scripts.narrate_demo --provider gemini
 """
 
 import argparse
@@ -12,6 +12,7 @@ import asyncio
 from pathlib import Path
 
 from agents.llm import from_env
+from agents.llm.guard import add_flags, confirm, dry_run_requests
 from agents.mcp_server.data import MatchData
 from agents.pipeline.facts import task_for
 from agents.pipeline.workflow import narrate
@@ -39,9 +40,15 @@ def main():
     p.add_argument("--match-file", type=Path, default=Path("demo/match.jsonl"))
     p.add_argument("--min-importance", type=float, default=0.9)
     p.add_argument("--personas", nargs="+", default=["casual", "analyst"])
+    add_flags(p)
     args = p.parse_args()
-    llm = from_env()
+    llm = from_env(provider=args.provider)
     data = MatchData.from_file(args.match_file)
+    if args.provider != "fake":
+        n = dry_run_requests(
+            lambda f: asyncio.run(run(data, f, args.min_importance, args.personas))
+        )
+        confirm(llm, f"About {n} requests (a free dry run)", args.yes)
     try:
         asyncio.run(run(data, llm, args.min_importance, args.personas))
     finally:

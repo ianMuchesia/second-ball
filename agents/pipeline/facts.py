@@ -17,6 +17,7 @@ no positions, so the player is named by shirt number only.
 from collections import Counter
 
 from agents.mcp_server.data import MatchData
+from agents.pipeline.display import display_for
 from agents.pipeline.lineups import said
 from agents.pipeline.models import MatchContext, NarrationTask, Persona
 from core.contracts import Moment
@@ -216,11 +217,13 @@ def task_for(
     languages: list[str] | None = None,
 ) -> NarrationTask:
     extra = {} if languages is None else {"languages": languages}
+    ctx = context_at(data, moment)
     return NarrationTask(
         moment=moment,
-        context=context_at(data, moment),
+        context=ctx,
         persona=persona,
         facts=facts_for(data, moment),
         counts=counts_for(data, moment),
+        display=display_for(data, moment, ctx, persona),
         **extra,
     )

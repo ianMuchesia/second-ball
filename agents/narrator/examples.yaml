@@ -13,7 +13,7 @@ examples:
   - moment: counter_goal_34
     kind: goal
     minute: 34
-    casual: "Lightning from Harbour! One pass behind Riverside's left-back on the counter, and Harbour lead 0-1!"
+    casual: "Lightning from Harbour! One pass behind Riverside's left-back on the counter, and Harbour lead 1-0!"
     analyst: "Harbour counter into the space behind Riverside's left-back, pushing their xG from 0.16 to 0.61 with that single chance."
   - moment: red_card_63
     kind: red_card_impact

@@ -16,6 +16,7 @@ from agent_framework import Agent
 from agents.llm import LLMClient
 from agents.pipeline import prompts
 from agents.pipeline.client import AdapterChatClient
+from agents.pipeline.display import score_line, standing
 from agents.pipeline.models import (
     Analysis,
     MatchContext,
@@ -102,12 +103,14 @@ def recap_task(
         for k, v in a.task.counts.items():
             counts[k] = max(counts.get(k, v), v)
     counts.pop("passes_in_move", None)  # about one move, not the match
+    ctx = context.model_copy(update={"minute": state.clock.minute})
     task = NarrationTask(
         moment=moment,
-        context=context.model_copy(update={"minute": state.clock.minute}),
+        context=ctx,
         persona=persona,
         languages=languages,
         counts=counts,
+        display={"score": score_line(ctx), "standing": standing(ctx)},
     )
     values = {k: mv.value for k, mv in stats.items()}
     for i, a in enumerate(aired):

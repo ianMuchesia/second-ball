@@ -45,6 +45,9 @@ class NarrationTask(Part):
     # Code-made counts a line may quote (digits or words): passes_in_move,
     # counter_goals, shirt_number.
     counts: dict[str, int] = Field(default_factory=dict)
+    # How numbers are written for this persona (agents/pipeline/display.py):
+    # score, standing, a chance's xG or words. Facts are the same for everyone.
+    display: dict[str, str] = Field(default_factory=dict)
 
 
 class Analysis(Part):

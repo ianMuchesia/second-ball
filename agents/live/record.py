@@ -1,7 +1,8 @@
 """Record a run: the full pipeline once over a match, saved as a run bundle.
 
-    make record MATCH=demo            # model from .env (LLM_PROVIDER, MAX_RUN_USD)
-    uv run python -m agents.live.record --fake --out runs/e2e
+    make record MATCH=demo                    # the free fake model
+    make record MATCH=demo PROVIDER=gemini    # a real model: estimate, then asks
+    uv run python -m agents.live.record --out runs/e2e
 
 The bundle (runs/<name>/) holds everything the screen needs, so judge mode
 plays it back with zero model calls:
@@ -32,7 +33,8 @@ from pathlib import Path
 
 from agents.live import Live
 from agents.llm import LLMClient, from_env
-from agents.llm.fake import FakeProvider
+from agents.llm.fake import FAKE_MODEL, FakeProvider
+from agents.llm.guard import add_flags, confirm, match_requests
 from agents.llm.prices import PRICES
 from agents.mcp_server.data import MatchData
 from agents.telemetry import RECORDER, setup
@@ -184,15 +186,37 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--match-file", type=Path, default=Path("demo/match.jsonl"))
     p.add_argument("--out", type=Path, default=Path("runs/demo"))
-    p.add_argument("--fake", action="store_true", help="the free fake model")
+    p.add_argument("--fake", action="store_true", help="same as --provider fake")
+    p.add_argument(
+        "--force", action="store_true", help="replace a real-model bundle with fake"
+    )
     p.add_argument("--languages", help="comma list; default SHIPPED_LANGUAGES")
+    add_flags(p)
     args = p.parse_args(argv)
-    llm = fake_llm() if args.fake else from_env()
+    if args.fake:
+        args.provider = "fake"
     langs = args.languages.split(",") if args.languages else None
+    old = args.out / "meta.json"
+    if args.provider == "fake" and old.exists() and not args.force:
+        was = json.loads(old.read_text()).get("model")
+        if was != FAKE_MODEL:
+            raise SystemExit(
+                f"{args.out} was recorded with {was}: a fake run would replace it. "
+                "Use another --out (make record RUN=...), or --force."
+            )
+    llm = fake_llm() if args.provider == "fake" else from_env(provider=args.provider)
+    if args.provider != "fake":
+        n = match_requests(args.match_file, langs)
+        confirm(
+            llm,
+            f"About {n} requests (a free dry run of this match made {n}; "
+            f"Verifier retries can add more)",
+            args.yes,
+        )
     out = record(args.match_file, args.out, llm, langs)
     meta = json.loads((out / "meta.json").read_text())
     print(json.dumps(meta))
-    if not args.fake and meta["ai_lines"] == 0:
+    if args.provider != "fake" and meta["ai_lines"] == 0:
         raise SystemExit(
             f"WARNING: {out} has no AI lines, only templates"
             + (
