@@ -6,6 +6,7 @@ quote as digits or words.
 A goal "came from a counter behind the full-back" only if the move that ended
 in it passes the detector's own counter rule (core.moments), run here on that
 move alone; nothing is inferred from nearby moments.
+Names and positions come from the published team sheet (Match.lineups).
 A red card is "on a counter" if the fouled team had won the ball in its own
 half, moved it forward at least min_forward_m and was fouled within within_s
 (the detector's counter thresholds); "last-man" if no other outfield player
@@ -16,6 +17,7 @@ no positions, so the player is named by shirt number only.
 from collections import Counter
 
 from agents.mcp_server.data import MatchData
+from agents.pipeline.lineups import said
 from agents.pipeline.models import MatchContext, NarrationTask, Persona
 from core.contracts import Moment
 from core.metrics import positional
@@ -37,6 +39,7 @@ def context_at(data: MatchData, moment: Moment) -> MatchContext:
     so_far = data.events.upto(last_index(data, moment) + 1)
     s = score(so_far)
     m = data.match
+    reds = [e for e in so_far.items if e.outcome == "red_card"]
     return MatchContext(
         match_id=m.match_id,
         home=m.home_team,
@@ -47,9 +50,14 @@ def context_at(data: MatchData, moment: Moment) -> MatchContext:
         },
         score=(s.home, s.away),
         minute=moment.clock.minute,
-        sent_off=dict(
-            Counter(e.team_id for e in so_far.items if e.outcome == "red_card")
-        ),
+        sent_off=dict(Counter(e.team_id for e in reds)),
+        # On the pitch: the starting XIs minus anyone sent off so far.
+        players={
+            p.player_id: p.name
+            for p in m.lineups
+            if p.starting and p.player_id not in {e.player_id for e in reds}
+        },
+        lineup=list(m.lineups),
     )
 
 
@@ -88,7 +96,13 @@ def red_card(data: MatchData, moment: Moment) -> tuple[dict[str, str], dict[str,
     foul = ev.items[k]
     ctx = context_at(data, moment)
     number = shirt(foul.player_id)
-    who = f"{ctx.team_names[foul.team_id]}'s number {number}"
+    team = ctx.team_names[foul.team_id]
+    sheet = next((p for p in ctx.lineup if p.player_id == foul.player_id), None)
+    who = (
+        f"{team}'s {said(sheet)} {sheet.name} (number {sheet.shirt_number})"
+        if sheet
+        else f"{team}'s number {number}"
+    )
     # The fouled team's move: its events just before the foul.
     j = k - 1
     while j >= 0 and ev.items[j].team_id == foul.team_id:
@@ -119,7 +133,9 @@ def red_card(data: MatchData, moment: Moment) -> tuple[dict[str, str], dict[str,
         "reason": reason,
         "claim": f"{who} was sent off for a {reason}.",
     }
-    return facts, ({"shirt_number": number} if number is not None else {})
+    # With a team sheet the shirt is checked against it ("number 5
+    # Stonebridge"); without one, the number is a count the line may quote.
+    return facts, ({"shirt_number": number} if number is not None and not sheet else {})
 
 
 def facts_for(data: MatchData, moment: Moment) -> dict[str, str]:
@@ -137,6 +153,20 @@ def facts_for(data: MatchData, moment: Moment) -> dict[str, str]:
     other = ctx.away if moment.team == ctx.home else ctx.home
     zone = f"behind {ctx.team_names[other]}'s {side}-back"
     out = {"build_up": "counter-attack", "exploited_zone": zone, "side": side}
+    full_back = next(
+        (
+            p
+            for p in ctx.lineup
+            if p.team_id == other
+            and p.player_id in ctx.players
+            and p.position in ({"LB", "LWB"} if side == "left" else {"RB", "RWB"})
+        ),
+        None,
+    )
+    if full_back is not None:
+        out["exposed_player"] = (
+            f"{full_back.name}, {ctx.team_names[other]}'s {said(full_back)}"
+        )
     n = 1 + sum(
         1
         for m in data.moments

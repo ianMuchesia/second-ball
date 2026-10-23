@@ -1,15 +1,19 @@
 """Producer (code): what airs, when; stale lines are dropped.
 
 - Stat cards and recaps air at once.
-- A narrative line must air within 8 s of its moment or it expires.
-- At most one narrative per 45 s; when several wait, the most important
-  first (then the oldest).
+- A narrative line must air within 8 s (viewer seconds) of its moment or it
+  expires: that is about how fast the agents are, so it scales with replay
+  speed (80 match seconds at 10x).
+- At most one narrative per 45 MATCH seconds: about how busy the screen is
+  per minute of football, so 1x and 10x air the same lines. When several
+  wait, the most important first (then the oldest): a priority queue.
+- Goals and red cards (importance >= 0.9) preempt: they air at once, gap or
+  not, and push out any less important line still waiting (it expires).
 - High-risk lines (injuries, referee) wait as `pending` until a human
   approves; low/medium risk lines are `approved` straight away.
 - Status: pending -> approved -> aired, or expired.
 
-Times are MATCH seconds (elapsed). The 8 s and 45 s are viewer seconds, so
-they scale with replay speed: at 10x, a line has 80 match seconds to air.
+Times are MATCH seconds (elapsed).
 """
 
 from dataclasses import dataclass, field
@@ -21,8 +25,9 @@ from core.contracts import Moment, Overlay
 from core.contracts.overlay import OverlayTime
 
 INSTANT = {"stat_card", "recap"}  # slots that air as soon as they are ready
-FRESH_S = 8.0
-NARRATIVE_GAP_S = 45.0
+FRESH_S = 8.0  # viewer seconds
+NARRATIVE_GAP_S = 45.0  # match seconds
+PREEMPT = 0.9  # importance: goals 1.0, red cards 0.9
 
 
 @dataclass
@@ -46,17 +51,31 @@ class Producer:
 
     @property
     def gap_s(self) -> float:
-        return NARRATIVE_GAP_S * self.speed
+        return NARRATIVE_GAP_S
 
     def offer(self, overlay: Overlay, moment_t: float, importance: float, now: float):
         """A finished overlay (narrative or stat card). Returns what aired now."""
         if overlay.slot in INSTANT:
             return [self.air(overlay)]
         status = "pending" if overlay.risk_tier == "high" else "approved"
-        self.queue.append(
-            Slot(overlay.model_copy(update={"status": status}), moment_t, importance)
-        )
+        slot = Slot(overlay.model_copy(update={"status": status}), moment_t, importance)
+        if importance >= PREEMPT and status == "approved":
+            for s in [s for s in self.queue if s.importance < importance]:
+                self.queue.remove(s)
+                self.expired.append(s.overlay.model_copy(update={"status": "expired"}))
+            self.expire(now)
+            if now - moment_t <= self.fresh_s:
+                self.last_narrative_t = now
+                return [self.air(slot.overlay)]
+            self.expired.append(slot.overlay.model_copy(update={"status": "expired"}))
+            return []
+        self.queue.append(slot)
         return self.tick(now)
+
+    def expire(self, now: float) -> None:
+        for s in [s for s in self.queue if now - s.moment_t > self.fresh_s]:
+            self.queue.remove(s)
+            self.expired.append(s.overlay.model_copy(update={"status": "expired"}))
 
     def approve(self, overlay_id: str, now: float):
         """A human approved a high-risk line."""
@@ -66,10 +85,19 @@ class Producer:
         return self.tick(now)
 
     def tick(self, now: float) -> list[Overlay]:
-        """Expire stale lines; air the best approved narrative if the gap allows."""
-        for s in [s for s in self.queue if now - s.moment_t > self.fresh_s]:
-            self.queue.remove(s)
-            self.expired.append(s.overlay.model_copy(update={"status": "expired"}))
+        """Expire stale lines; air the best approved narrative if the gap allows.
+        An approved high-risk line that preempts airs here once a human said yes."""
+        self.expire(now)
+        urgent = [
+            s
+            for s in self.queue
+            if s.overlay.status == "approved" and s.importance >= PREEMPT
+        ]
+        if urgent:
+            best = max(urgent, key=lambda s: (s.importance, -s.moment_t))
+            self.queue.remove(best)
+            self.last_narrative_t = now
+            return [self.air(best.overlay)]
         if (
             self.last_narrative_t is not None
             and now - self.last_narrative_t < self.gap_s

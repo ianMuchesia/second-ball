@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.contracts import Insight, Moment, Overlay
+from core.contracts import Insight, LineupPlayer, Moment, Overlay
 
 Persona = Literal["analyst", "casual"]
 RiskTier = Literal["low", "medium", "high"]
@@ -29,6 +29,8 @@ class MatchContext(Part):
     score: tuple[int, int]  # (home, away)
     minute: int
     players: dict[str, str] = Field(default_factory=dict)  # on the pitch: id -> name
+    # The published team sheets (Match.lineups): names, shirts, positions.
+    lineup: list[LineupPlayer] = Field(default_factory=list)
     sent_off: dict[str, int] = Field(default_factory=dict)  # team_id -> red cards
 
 

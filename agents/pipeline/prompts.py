@@ -5,6 +5,7 @@ import json
 import re
 
 from agents.narrator import examples
+from agents.pipeline.lineups import describe
 from agents.pipeline.models import Analysis, MatchContext, NarrationTask
 from core.metrics import registry
 
@@ -33,7 +34,8 @@ NARRATOR = """ROLE: NARRATOR
 You write ONE on-screen line (max 25 words) about a football moment for the
 {persona} viewer. {style}
 Rules: quote only numbers from VALUES (you may round them); name only the teams
-and players listed; "standing" says who is leading, "good_for" who the
+and players listed (with the position, style and shirt number given for
+them, if you say one); "standing" says who is leading, "good_for" who the
 moment helps and "numbers_are_for" whose numbers they are, so never say
 otherwise; when facts has build_up and exploited_zone, name both the action
 (counter, break) and the zone (e.g. behind the left-back); no predictions
@@ -128,6 +130,17 @@ def units(values: dict[str, float]) -> dict[str, str]:
     return out
 
 
+def players_on_pitch(ctx: MatchContext):
+    """Names only, or (with a team sheet) name -> team, position, style, shirt."""
+    if not ctx.lineup:
+        return sorted(ctx.players.values())
+    return {
+        p.name: describe(p, ctx.team_names.get(p.team_id, p.team_id))
+        for p in ctx.lineup
+        if p.player_id in ctx.players
+    }
+
+
 def standing(ctx: MatchContext, team: str) -> str:
     """'leading', 'trailing' or 'level', plus 'a player down' (or more)."""
     home, away = ctx.score
@@ -152,7 +165,7 @@ def values_block(task: NarrationTask, values: dict[str, float]) -> str:
         f"{ctx.team_names[ctx.away]}",
         "standing": {ctx.team_names[t]: standing(ctx, t) for t in (ctx.home, ctx.away)},
         "numbers_are_for": name or "the match",
-        "players_on_pitch": sorted(ctx.players.values()),
+        "players_on_pitch": players_on_pitch(ctx),
     }
     if task.persona == "casual":
         block["changes"] = casual_changes(values, name)

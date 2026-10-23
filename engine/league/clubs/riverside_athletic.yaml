@@ -36,18 +36,19 @@ shape_after_red_card:         # 4-4-1
   order: [RB, RCB, LCB, LB, RW, DM, RCM, LW, LCM, ST]
 
 # Starting XI. Roles mirror: LB <-> RB, LCM <-> RCM, ...
+# style: how he plays it, printed on the team sheet (TUNABLE, owner: Ian).
 players:
-  - {number: 1, name: Odin Marrowby, role: GK}
-  - {number: 2, name: Tevi Ashcombe, role: RB}
-  - {number: 4, name: Bruno Kettleworth, role: RCB}
-  - {number: 5, name: Ilya Stonebridge, role: LCB}
-  - {number: 3, name: Kofi Lindqvane, role: LB}
-  - {number: 6, name: Marek Duvalle, role: DM}
-  - {number: 8, name: Sami Harrowgate, role: RCM}
-  - {number: 10, name: Nico Fernhallow, role: LCM}
-  - {number: 7, name: Jovan Reedmere, role: RW}
-  - {number: 9, name: Ade Wolstenholt, role: ST}
-  - {number: 11, name: Luca Brightwater, role: LW}
+  - {number: 1, name: Odin Marrowby, role: GK, style: sweeper keeper}
+  - {number: 2, name: Tevi Ashcombe, role: RB, style: overlapping full-back}
+  - {number: 4, name: Bruno Kettleworth, role: RCB, style: stopper}
+  - {number: 5, name: Ilya Stonebridge, role: LCB, style: ball-playing centre-back}
+  - {number: 3, name: Kofi Lindqvane, role: LB, style: overlapping full-back}
+  - {number: 6, name: Marek Duvalle, role: DM, style: deep-lying playmaker}
+  - {number: 8, name: Sami Harrowgate, role: RCM, style: box-to-box midfielder}
+  - {number: 10, name: Nico Fernhallow, role: LCM, style: attacking midfielder}
+  - {number: 7, name: Jovan Reedmere, role: RW, style: inverted winger}
+  - {number: 9, name: Ade Wolstenholt, role: ST, style: poacher}
+  - {number: 11, name: Luca Brightwater, role: LW, style: inverted winger}
 
 # Anchors: [depth, y]. depth 0 = back line, 1 = front line.
 # y in metres in our attacking frame: LEFT touchline = 68, right = 0.

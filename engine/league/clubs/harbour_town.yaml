@@ -26,15 +26,16 @@ on_regain:
   channel_probability: 0.7    # first pass into the channel behind the ball-side full-back
   runners: 2                  # the two quick forwards
 
+# style: how he plays it, printed on the team sheet (TUNABLE, owner: Ian).
 players:
   - {number: 1, name: Piet Haldersen}
-  - {number: 2, name: Corin Maywether}
+  - {number: 2, name: Corin Maywether, style: wing-back}
   - {number: 5, name: Ansel Brookfield}
-  - {number: 4, name: Teodor Vass}
+  - {number: 4, name: Teodor Vass, style: stopper}
   - {number: 6, name: Rui Calloway}
-  - {number: 3, name: Emeka Tidewell}
+  - {number: 3, name: Emeka Tidewell, style: wing-back}
   - {number: 7, name: Jory Penhallow}
   - {number: 8, name: Matthias Quill}
   - {number: 10, name: Osei Varnham}
-  - {number: 11, name: Lars Fenmore}
-  - {number: 9, name: Dario Kestrelle}
+  - {number: 11, name: Lars Fenmore, style: second striker}
+  - {number: 9, name: Dario Kestrelle, style: target man}

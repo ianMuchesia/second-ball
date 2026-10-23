@@ -66,6 +66,95 @@
       "title": "Insight",
       "type": "object"
     },
+    "LineupPlayer": {
+      "additionalProperties": false,
+      "description": "One player on the published team sheet (public before kick-off).",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "player_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "position": {
+          "enum": [
+            "GK",
+            "RB",
+            "RCB",
+            "CB",
+            "LCB",
+            "LB",
+            "RWB",
+            "LWB",
+            "DM",
+            "RCM",
+            "CM",
+            "LCM",
+            "RM",
+            "LM",
+            "AM",
+            "RW",
+            "LW",
+            "ST"
+          ],
+          "type": "string"
+        },
+        "shirt_number": {
+          "maximum": 99,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "starting": {
+          "default": true,
+          "type": "boolean"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "enum": [
+                "sweeper keeper",
+                "ball-playing centre-back",
+                "stopper",
+                "inverted full-back",
+                "overlapping full-back",
+                "wing-back",
+                "deep-lying playmaker",
+                "holding midfielder",
+                "box-to-box midfielder",
+                "attacking midfielder",
+                "inverted winger",
+                "touchline winger",
+                "poacher",
+                "target man",
+                "false 9",
+                "creative 9",
+                "second striker"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "team_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "team_id",
+        "name",
+        "shirt_number",
+        "position"
+      ],
+      "title": "LineupPlayer",
+      "type": "object"
+    },
     "Match": {
       "additionalProperties": false,
       "properties": {
@@ -94,6 +183,12 @@
         "kickoff": {
           "format": "date-time",
           "type": "string"
+        },
+        "lineups": {
+          "items": {
+            "$ref": "#/$defs/LineupPlayer"
+          },
+          "type": "array"
         },
         "match_id": {
           "minLength": 1,
@@ -141,7 +236,8 @@
         "weather",
         "mode",
         "home_strength",
-        "away_strength"
+        "away_strength",
+        "lineups"
       ],
       "title": "Match",
       "type": "object"

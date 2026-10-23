@@ -1,4 +1,102 @@
 {
+  "$defs": {
+    "LineupPlayer": {
+      "additionalProperties": false,
+      "description": "One player on the published team sheet (public before kick-off).",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "player_id": {
+          "minLength": 1,
+          "title": "Player Id",
+          "type": "string"
+        },
+        "position": {
+          "enum": [
+            "GK",
+            "RB",
+            "RCB",
+            "CB",
+            "LCB",
+            "LB",
+            "RWB",
+            "LWB",
+            "DM",
+            "RCM",
+            "CM",
+            "LCM",
+            "RM",
+            "LM",
+            "AM",
+            "RW",
+            "LW",
+            "ST"
+          ],
+          "title": "Position",
+          "type": "string"
+        },
+        "shirt_number": {
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Shirt Number",
+          "type": "integer"
+        },
+        "starting": {
+          "default": true,
+          "title": "Starting",
+          "type": "boolean"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "enum": [
+                "sweeper keeper",
+                "ball-playing centre-back",
+                "stopper",
+                "inverted full-back",
+                "overlapping full-back",
+                "wing-back",
+                "deep-lying playmaker",
+                "holding midfielder",
+                "box-to-box midfielder",
+                "attacking midfielder",
+                "inverted winger",
+                "touchline winger",
+                "poacher",
+                "target man",
+                "false 9",
+                "creative 9",
+                "second striker"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "team_id",
+        "name",
+        "shirt_number",
+        "position"
+      ],
+      "title": "LineupPlayer",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "away_strength": {
@@ -32,6 +130,13 @@
       "format": "date-time",
       "title": "Kickoff",
       "type": "string"
+    },
+    "lineups": {
+      "items": {
+        "$ref": "#/$defs/LineupPlayer"
+      },
+      "title": "Lineups",
+      "type": "array"
     },
     "match_id": {
       "minLength": 1,
@@ -85,7 +190,8 @@
     "weather",
     "mode",
     "home_strength",
-    "away_strength"
+    "away_strength",
+    "lineups"
   ],
   "title": "Match",
   "type": "object"

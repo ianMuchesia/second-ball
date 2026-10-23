@@ -9,7 +9,10 @@
 - Comparisons ("halved", "doubled", "up by a third") must be within 10% of a
   real before/after change (Ian, 2026-10-22).
 - Casual lines show no raw index numbers: no decimals at all.
-- Every capitalised name must be a team or a player on the pitch.
+- Every capitalised name must be a team or a player on the team sheet; a
+  position, playing style or shirt number said with a player's name must
+  match the sheet ("left-back Lindqvane", "number 5 Stonebridge").
+- "Last man" only when code found a last-man foul (facts["reason"]).
 - Rejected outright: predictions ("will win", and soft ones that treat the
   match as over: "seal it", "secure the 0-2", "game over"), and blaming one
   event on the weather.
@@ -27,6 +30,12 @@ Returns a Verdict: passed, or the list of reasons (fed back to the Narrator).
 import re
 from collections.abc import Sequence
 
+from agents.pipeline.lineups import (
+    CLAIMS,
+    STYLE_OF,
+    STYLE_WORDS,
+    name_pattern,
+)
 from agents.pipeline.models import Analysis, Verdict
 
 NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(\s*%|\s*per\s*cent)?", re.IGNORECASE)
@@ -101,7 +110,7 @@ COMMON_WORDS = """
     big huge great brilliant superb lovely clinical quick fast sharp clever simple
     unbelievable incredible remarkable another familiar same pattern again lightning
     leading trailing level down half-time full-time halftime fulltime kick-off
-    whistle recap shots xg
+    whistle recap shots xg number no captain
     home away side sides team teams players player everyone nobody somebody
     """
 COMMON = set(COMMON_WORDS.split())
@@ -136,14 +145,24 @@ def on_pitch(analysis: Analysis) -> list[float]:
     return [float(11 - ctx.sent_off.get(t, 0)) for t in (ctx.home, ctx.away)]
 
 
+SHIRT = re.compile(r"\b(?:number|no\.?|#)\s*(\d{1,2})\b", re.IGNORECASE)
+LAST_MAN = re.compile(r"\blast[\s-]man\b", re.IGNORECASE)
+
+
 def allowed_numbers(analysis: Analysis) -> list[float]:
     ctx = analysis.task.context
     moment = analysis.task.moment
-    shirts = [
-        float(pid.rsplit("-", 1)[-1])
-        for pid in ctx.players
-        if pid.rsplit("-", 1)[-1].isdigit()
-    ]
+    # With a team sheet, shirt numbers are checked where they are said
+    # ("number 5"), not allowed anywhere; without one, any shirt on the pitch.
+    shirts = (
+        []
+        if ctx.lineup
+        else [
+            float(pid.rsplit("-", 1)[-1])
+            for pid in ctx.players
+            if pid.rsplit("-", 1)[-1].isdigit()
+        ]
+    )
     return [
         *analysis.values.values(),
         *ctx.score,
@@ -289,7 +308,14 @@ def matches(x: float, decimals: int, percent: bool, v: float) -> bool:
 def known_names(analysis: Analysis) -> set[str]:
     ctx = analysis.task.context
     words = set()
-    for name in [*ctx.team_names.values(), *ctx.players.values(), ctx.home, ctx.away]:
+    sheet = [p.name for p in ctx.lineup]
+    for name in [
+        *ctx.team_names.values(),
+        *ctx.players.values(),
+        *sheet,
+        ctx.home,
+        ctx.away,
+    ]:
         words |= {w.lower() for w in WORD.findall(name.replace("_", " "))}
     return words
 
@@ -443,9 +469,61 @@ def untranslated(translation: str, english: str) -> str | None:
     return None
 
 
+def shirts_said(text: str, analysis: Analysis) -> tuple[str, list[str]]:
+    """Text without the shirt numbers that are on the team sheet, and the
+    reasons for any that are not."""
+    ctx = analysis.task.context
+    if not ctx.lineup:
+        return text, []
+    sheet = {p.shirt_number for p in ctx.lineup}
+    bad = [
+        f"'{m.group(0)}': no player wears number {m.group(1)}"
+        for m in SHIRT.finditer(text)
+        if int(m.group(1)) not in sheet
+    ]
+    return SHIRT.sub(
+        lambda m: "" if int(m.group(1)) in sheet else m.group(0), text
+    ), bad
+
+
+def wrong_players(text: str, analysis: Analysis) -> list[str]:
+    """Position, style or shirt said with a player's name must match the sheet."""
+    ctx = analysis.task.context
+    out = []
+    claim_words = "|".join(sorted(map(re.escape, CLAIMS), key=len, reverse=True))
+    style_words = "|".join(sorted(map(re.escape, STYLE_WORDS), key=len, reverse=True))
+    for p in ctx.lineup:
+        name = name_pattern(p)
+        team = re.escape(ctx.team_names.get(p.team_id, p.team_id))
+        joiner = rf",?\s+(?:(?:the|their|his|{team}'s)\s+)?"
+        for words, check in ((claim_words, "position"), (style_words, "style")):
+            for m in re.finditer(
+                rf"\b(?P<w>{words})\s+{name}\b|\b{name}{joiner}(?P<w2>{words})\b",
+                text,
+                re.IGNORECASE,
+            ):
+                word = (m.group("w") or m.group("w2")).lower()
+                if check == "position" and p.position not in CLAIMS[word]:
+                    out.append(f"{p.name} is not a {word} (team sheet: {p.position})")
+                if check == "style" and STYLE_OF.get(word, word) != p.style:
+                    out.append(
+                        f"{p.name} is not a {word} (team sheet: {p.style or 'no style'})"
+                    )
+        for m in re.finditer(
+            rf"\b(?:number|no\.?|#)\s*(\d{{1,2}})\s+{name}\b"
+            rf"|\b{name}\s*\((?:number\s*|no\.?\s*|#)?(\d{{1,2}})\)",
+            text,
+            re.IGNORECASE,
+        ):
+            n = int(m.group(1) or m.group(2))
+            if n != p.shirt_number:
+                out.append(f"{p.name} wears number {p.shirt_number}, not {n}")
+    return out
+
+
 def wrong_numbers(text: str, analysis: Analysis) -> list[str]:
     allowed = allowed_numbers(analysis)
-    out = []
+    text, out = shirts_said(text, analysis)
     for x, decimals, percent in numbers(text):
         if not any(matches(x, decimals, percent, v) for v in allowed):
             shown = f"{x:g}{'%' if percent else ''}"
@@ -481,9 +559,17 @@ def verify(
             "(e.g. 'halved') from the changes given"
         )
     reasons += wrong_counts(text, analysis)
+    reasons += wrong_players(text, analysis)
+    if LAST_MAN.search(text) and "last-man" not in analysis.task.facts.get(
+        "reason", ""
+    ):
+        reasons.append(
+            "'last man' only when the events show a last-man foul (no other "
+            "outfield defender goal-side); they do not here"
+        )
     reasons += wrong_comparisons(text, analysis)
     for name in unknown_names(text, analysis):
-        reasons.append(f"'{name}' is not a team or a player on the pitch")
+        reasons.append(f"'{name}' is not a team or a player on the team sheet")
     reasons += score_mistakes(text, analysis)
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")

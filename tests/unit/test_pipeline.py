@@ -210,18 +210,34 @@ def test_stale_line_is_dropped():
     assert [o.status for o in p.expired] == ["expired"]
 
 
-def test_one_narrative_per_45_s_most_important_first():
+def test_one_narrative_per_45_match_s_most_important_first():
     p = Producer()
     (first,) = p.offer(narrative("a"), moment_t=100, importance=0.5, now=101)
     assert first.overlay_id == "a"
     # Within 45 s: both wait; the more important one airs when the gap allows.
     assert p.offer(narrative("b"), moment_t=140, importance=0.4, now=141) == []
-    assert p.offer(narrative("c"), moment_t=140, importance=0.9, now=142) == []
+    assert p.offer(narrative("c"), moment_t=140, importance=0.7, now=142) == []
     (next_,) = p.tick(now=146)
     assert next_.overlay_id == "c"
     # "b" (moment at 140) is stale by 149.
     p.tick(now=191.5)
     assert [o.overlay_id for o in p.expired] == ["b"]
+
+
+def test_goals_and_red_cards_preempt_the_gap_and_lower_lines():
+    p = Producer()
+    p.offer(narrative("chance"), moment_t=100, importance=0.7, now=101)
+    p.offer(narrative("waiting"), moment_t=120, importance=0.6, now=121)
+    (goal,) = p.offer(narrative("goal"), moment_t=125, importance=1.0, now=126)
+    assert goal.overlay_id == "goal"  # inside the 45 s gap, airs at once
+    assert [o.overlay_id for o in p.expired] == ["waiting"]  # pushed out
+
+
+def test_the_gap_is_match_time_so_1x_and_10x_air_the_same():
+    for speed in (1, 10):
+        p = Producer(speed=speed)
+        p.offer(narrative("a"), moment_t=100, importance=0.5, now=101)
+        assert p.offer(narrative("b"), moment_t=150, importance=0.5, now=151)
 
 
 def test_risky_line_waits_for_approval():
@@ -278,7 +294,7 @@ def test_prompt_says_who_is_leading_and_who_the_red_card_helps():
 def test_copying_a_style_example_is_rejected():
     example = "Red card for Riverside! Their last man walks while trailing 0-1."
     copy = verify(example.replace("walks", "goes"), analysis(), [example])
-    assert not copy.passed and "style example" in copy.reasons[0]
+    assert not copy.passed and any("style example" in r for r in copy.reasons)
     assert verify("Riverside are a man down at 0-1.", analysis(), [example]).passed
 
 

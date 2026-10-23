@@ -46,9 +46,10 @@ Moment -> Analyst -> Narrator -> Verifier -+-> Localizer -> Overlay (pending) ->
   on the pitch); every capitalised name must be a team or a player on the
   pitch; predictions and blaming one event on the weather are rejected;
   injury/referee talk raises the risk tier (a human approves before it airs).
-- **Producer (code):** stat cards air at once; a narrative must air within
-  8 s of its moment (viewer seconds: x replay speed in match time) or it
-  expires; one narrative per 45 s, most important first.
+- **Producer (code):** stat cards and recaps air at once; a narrative must
+  air within 8 s of its moment (viewer seconds: x replay speed in match time)
+  or it expires; one narrative per 45 match seconds, most important first;
+  goals and red cards preempt (air at once, push out lower lines).
 - **Models:** each agent calls a model through `agents/llm` (budget kill
   switch). `LLM_PROVIDER=fake` is a free, deterministic model for tests, with
   error injection (`FakeProvider(errors=1, error="wrong_number")`).
@@ -70,7 +71,11 @@ Every line, in code, against code-made values, facts and counts
 - persona: no decimals in a casual line;
 - a goal from a counter behind the full-back (the detector's own rule, run on
   the goal's move) must name the counter and the side;
-- names (teams and players on the pitch only), predictions including soft
+- names: teams and players on the team sheet (`Match.lineups`); a position,
+  style or shirt said with a name must match the sheet ("left-back
+  Lindqvane", "number 5 Stonebridge"); "last man" only when the events show
+  a last-man foul;
+- predictions including soft
   ones ("seal it", "game over"), weather blame, copying a style example;
 - injury/referee talk: allowed only after a human approves (risk tier high).
 

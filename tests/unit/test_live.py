@@ -3,6 +3,8 @@ cards, narratives and both recaps out, one trace per narrated moment."""
 
 import asyncio
 
+import pytest
+
 from agents.live import Live
 from agents.telemetry import RECORDER
 from tests.unit.test_narration_report import demo
@@ -125,3 +127,19 @@ def test_through_kafka_end_to_end(kafka_env, tmp_path):
     assert live.stats.transport_s and live.stats.detect_s
     assert any(o.kind == "recap_full_time" and o.status == "aired" for o in out)
     assert any(o.slot == "narrative" and o.status == "aired" for o in out)
+
+
+@pytest.mark.parametrize("speed", [1, 10])
+def test_both_goals_and_the_red_card_always_air(speed):
+    data = demo()
+    out = []
+    live = Live(client(), out.append, languages=[], speed=speed, policy=fast_policy())
+    play(live, data)
+    aired = [o for o in out if o.slot == "narrative" and o.status == "aired"]
+    key = {(o.kind, o.t_in.match.minute) for o in aired}
+    assert {("goal", 34), ("goal", 88)} <= key
+    assert any(k == "red_card_impact" for k, _ in key)
+    for persona in ("casual", "analyst"):
+        assert (
+            sum(o.kind == "goal" and o.overlay_id.endswith(persona) for o in aired) == 2
+        )

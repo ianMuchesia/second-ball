@@ -25,12 +25,63 @@ export interface Match {
   home_strength: number;
   home_team: string;
   kickoff: string;
+  lineups: LineupPlayer[];
   match_id: string;
   mode: "scenario" | "free_simulation";
   schema_version: 1;
   seed: number;
   venue: string;
   weather: "dry" | "rain" | "wind" | "heat";
+}
+/**
+ * One player on the published team sheet (public before kick-off).
+ */
+export interface LineupPlayer {
+  name: string;
+  player_id: string;
+  position:
+    | "GK"
+    | "RB"
+    | "RCB"
+    | "CB"
+    | "LCB"
+    | "LB"
+    | "RWB"
+    | "LWB"
+    | "DM"
+    | "RCM"
+    | "CM"
+    | "LCM"
+    | "RM"
+    | "LM"
+    | "AM"
+    | "RW"
+    | "LW"
+    | "ST";
+  shirt_number: number;
+  starting?: boolean;
+  style?:
+    | (
+        | "sweeper keeper"
+        | "ball-playing centre-back"
+        | "stopper"
+        | "inverted full-back"
+        | "overlapping full-back"
+        | "wing-back"
+        | "deep-lying playmaker"
+        | "holding midfielder"
+        | "box-to-box midfielder"
+        | "attacking midfielder"
+        | "inverted winger"
+        | "touchline winger"
+        | "poacher"
+        | "target man"
+        | "false 9"
+        | "creative 9"
+        | "second striker"
+      )
+    | null;
+  team_id: string;
 }
 /**
  * SPADL convention: coordinates are from the acting team's view, so it attacks

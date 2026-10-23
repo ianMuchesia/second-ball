@@ -504,3 +504,42 @@ Phase 3b-1 B: narration pipeline with a fake model (2026-10-22).
   switch, templates for the rest of the run. Proven live on 2026-10-22: the
   demo through Kafka at 60x with the quota gone aired every stat card, the
   narrative templates and all four recaps; no empty overlay, no crash.
+
+## 2026-10-23: Producer priority, true last-man red card, team sheets
+
+Approved by Ian (advisor's fix list, 2026-10-23).
+
+- Producer: priority queue (most important first). Goals and red cards
+  (importance >= 0.9) preempt: they air at once, inside the gap, and push out
+  any less important line still waiting. The 45 s gap is now MATCH time (how
+  busy the screen is per minute of football), so 1x and 10x air the same
+  lines; both demo goals and the red card air at both speeds (tested).
+  Freshness (8 s) stays VIEWER time, scaled by replay speed: it is about how
+  fast the agents answer, which is wall time. (The advisor asked for both in
+  match time; at 10x that would give a real model 0.8 s per line. Ian's call
+  if he wants it anyway.)
+- Demo 63' beat: the engine's red_card_last_man beat now places the other
+  outfield defenders upfield of the ball (the high line caught out; fixed
+  offsets, no random draws, so the rest of the match is unchanged). Code now
+  finds "last-man foul on a counter". The night-before case (two defenders
+  goal-side) is a test: code does not call it last man and the Verifier
+  rejects a line that does.
+- Verifier: "last man" only when facts["reason"] says last-man.
+- Team sheets: Match.lineups (core contract, approved): player_id, name,
+  shirt_number, position (GK, RB, RCB, CB, LCB, LB, RWB, LWB, DM, RCM, CM,
+  LCM, RM, LM, AM, RW, LW, ST), optional style (Ian's vocabulary: sweeper
+  keeper, ball-playing centre-back, stopper, inverted/overlapping full-back,
+  wing-back, deep-lying playmaker, holding / box-to-box / attacking
+  midfielder, inverted / touchline winger, poacher, target man, false 9,
+  creative 9, second striker), starting. "Number 6/8/10" are left out as
+  styles: they would clash with shirt numbers in the checks.
+- Positions come from a club's roles (Riverside) or its formation, line by
+  line right to left (Harbour's 5-4-1: RWB, RCB, CB, LCB, LWB, RM, RCM, LCM,
+  LM, ST), i.e. where the engine actually plays each player. Styles for
+  Riverside and Harbour are TUNABLE (owner Ian); names stay invented.
+- Players on the pitch = starting XIs minus red cards. Names allowed in a line:
+  the team sheet (a sent-off player may be named). A position, style or shirt
+  said with a name must match the sheet; with a sheet, shirt numbers are only
+  allowed as "number N" with N on the sheet. Facts name the sent-off player
+  ("Riverside's left centre-back Ilya Stonebridge (number 5)") and the
+  full-back a counter went behind ("Kofi Lindqvane, Riverside's left-back").
