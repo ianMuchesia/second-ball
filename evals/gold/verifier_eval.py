@@ -120,10 +120,32 @@ def items(data: MatchData, bundle: Path) -> list[Item]:
     return out
 
 
+def demo_match(tmp: Path) -> Path:
+    """The demo match file: demo/match.jsonl, or made by the engine (it is
+    generated, never committed, so a fresh checkout has none)."""
+    if MATCH.exists():
+        return MATCH
+    from engine.core.sim import simulate_match
+    from engine.generate import write_lines
+    from engine.league import load_league
+    from engine.scenarios import load_scenario
+
+    sc = load_scenario("demo_riverside_harbour")
+    league = load_league()
+    result = simulate_match(
+        league[sc.home], league[sc.away], sc.seed, weather=sc.weather, scenario=sc
+    )
+    path = tmp / "match.jsonl"
+    with path.open("w") as f:
+        write_lines(result, f)
+    return path
+
+
 def run() -> tuple[list[tuple[Item, object]], str]:
-    data = MatchData.from_file(MATCH)
     with tempfile.TemporaryDirectory() as tmp:
-        bundle = record(MATCH, Path(tmp) / "fake", fake_llm())
+        match = demo_match(Path(tmp))
+        data = MatchData.from_file(match)
+        bundle = record(match, Path(tmp) / "fake", fake_llm())
         checked = [
             (i, check(i.row["text"], i.analysis, max_words=i.max_words, final=i.final))
             for i in items(data, bundle)
