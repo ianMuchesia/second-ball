@@ -6,7 +6,10 @@ import type {
   AuditRow,
   Injection,
   Meta,
+  MetricAt,
   MetricInfo,
+  MetricListItem,
+  PlayerCard,
   ProducerView,
   Run,
   ScreenEvent,
@@ -31,9 +34,20 @@ export const serverApi = createApi({
       query: ({ run, ids }) => ({ url: `runs/${run}/evidence`, params: { ids: ids.join(",") } }),
     }),
     metric: b.query<MetricInfo, string>({ query: (name) => `registry/${name}` }),
+    metrics: b.query<MetricListItem[], void>({ query: () => "registry" }),
+    // A registry metric over the match so far at match second t.
+    metricAt: b.query<MetricAt, { run: string; name: string; t: number }>({
+      query: ({ run, name, t }) => ({ url: `runs/${run}/metrics/${name}`, params: { t } }),
+    }),
+    playerCard: b.query<PlayerCard, { run: string; player: string }>({
+      query: ({ run, player }) => `runs/${run}/players/${encodeURIComponent(player)}`,
+    }),
     rule: b.query<Rule, string>({ query: (kind) => `moment-rules/${kind}` }),
-    producer: b.query<ProducerView, string>({
-      query: (run) => `runs/${run}/producer`,
+    producer: b.query<ProducerView, { run: string; favourite?: string | null }>({
+      query: ({ run, favourite }) => ({
+        url: `runs/${run}/producer`,
+        params: favourite ? { favourite } : {},
+      }),
       providesTags: ["Producer"],
     }),
     act: b.mutation<
@@ -60,6 +74,9 @@ export const {
   useEventsQuery,
   useEvidenceQuery,
   useMetricQuery,
+  useMetricsQuery,
+  useMetricAtQuery,
+  usePlayerCardQuery,
   useRuleQuery,
   useProducerQuery,
   useActMutation,

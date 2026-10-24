@@ -1,5 +1,5 @@
-// What the viewer is doing: the playback clock (match seconds), speed,
-// persona, language, tab, and what is selected or highlighted.
+// What the viewer is doing: the playback clock (match seconds), speed, tab,
+// and what is selected or highlighted. Who the viewer is: store/profile.ts.
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 export interface IndicatorPick {
@@ -12,12 +12,11 @@ export interface Playback {
   t: number;
   playing: boolean;
   speed: number;
-  persona: "casual" | "analyst";
-  lang: string;
   tab: "broadcast" | "producer";
-  panel: "moments" | "stats"; // the Match Centre column
+  panel: "moments" | "stats" | "player"; // the Match Centre column
   momentId: string | null; // selected moment (timeline marker or "Why?")
   drawerOpen: boolean;
+  drawerDismissed: string | null; // analyst: the moment whose drawer was closed
   indicator: IndicatorPick | null;
   highlighted: string[]; // player ids lit on the pitch
   focusEventId: string | null; // the clicked evidence event (that instant)
@@ -32,12 +31,11 @@ const initialState: Playback = {
   t: Number.isFinite(linked) && linked > 0 ? linked : 0,
   playing: false,
   speed: 4,
-  persona: "casual",
-  lang: "en",
   tab: "broadcast",
   panel: "moments",
   momentId: null,
   drawerOpen: false,
+  drawerDismissed: null,
   indicator: null,
   highlighted: [],
   focusEventId: null,
@@ -73,12 +71,6 @@ export const playback = createSlice({
     setSpeed(s, a: PayloadAction<number>) {
       s.speed = a.payload;
     },
-    setPersona(s, a: PayloadAction<Playback["persona"]>) {
-      s.persona = a.payload;
-    },
-    setLang(s, a: PayloadAction<string>) {
-      s.lang = a.payload;
-    },
     setTab(s, a: PayloadAction<Playback["tab"]>) {
       s.tab = a.payload;
     },
@@ -101,7 +93,9 @@ export const playback = createSlice({
       s.speed = 1;
       s.playing = a.payload.to > a.payload.from;
     },
-    closeDrawer(s) {
+    closeDrawer(s, a: PayloadAction<string | null>) {
+      // The analyst's drawer opens by default: closing it remembers which moment.
+      s.drawerDismissed = a.payload;
       s.drawerOpen = false;
       s.highlighted = [];
       s.focusEventId = null;

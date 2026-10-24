@@ -14,7 +14,11 @@ Endpoints (all JSON unless noted):
     GET  /api/runs/{run}/stream?speed=10         SSE: the run replayed in match time
     GET  /api/live                               SSE: match-events + overlays (Kafka)
     GET  /api/registry/{metric}                  a metric's registered definition
-    GET  /api/runs/{run}/producer                approval queue, rejected drafts, audit
+    GET  /api/runs/{run}/players/{player_id}     player card: stats by position over
+                                                 time, touch map, omissions
+    GET  /api/runs/{run}/metrics/{name}?t=       a registry metric at match second t
+    GET  /api/runs/{run}/producer?favourite=     approval queue (favourite club first
+                                                 within an importance tier), drafts, audit
     POST /api/runs/{run}/producer/{overlay_id}   {action: approve|reject, who, reason}
     POST /api/runs/{run}/inject-test-error       a wrong claim through the real Verifier
 """
@@ -38,6 +42,7 @@ from pydantic import BaseModel, Field
 from agents.pipeline.models import Analysis, NarrationTask
 from agents.pipeline.verifier import verify
 from agents.pipeline.workflow import checked_claim, values_of
+from core import players
 from core.contracts import Insight, Match, MatchEvent
 from core.metrics import Events, registry
 from core.moments import config as moment_config
@@ -87,6 +92,9 @@ def bundle(path: Path, stamp: float) -> dict:
         "narrations": rows(path / "narrations.jsonl"),
         "indicators": rows(path / "indicators.jsonl"),
         "traces": rows(path / "traces.jsonl"),
+        "player_recaps": rows(path / "player_recaps.jsonl"),
+        "cards": {},  # player_id -> card, built on first request
+        "metrics": {},  # (name, event index) -> values, built on request
     }
 
 
@@ -135,6 +143,7 @@ def get_run(run: str):
             for n in b["narrations"]
         ],
         "indicators": b["indicators"],
+        "player_recaps": b["player_recaps"],
         "audit": rows(run_path(run) / "audit.jsonl"),
     }
 
@@ -183,6 +192,122 @@ def evidence(run: str, ids: str = Query(..., description="comma-separated event 
 @app.get("/api/runs/{run}/traces")
 def traces(run: str, trace_id: str):
     return [s for s in load(run)["traces"] if s["trace_id"] == trace_id]
+
+
+@app.get("/api/runs/{run}/players/{player_id}")
+def player_card(run: str, player_id: str):
+    """A player's card (core/players): the stats for his position, each as
+    snapshots over the match (the screen shows the latest at or before its
+    clock), the events behind them, and his touch map. Fans see `fan` stats;
+    analysts all. Stats the engine has no events for are listed, not shown."""
+    b = load(run)
+    if player_id in b["cards"]:
+        return b["cards"][player_id]
+    player = next((p for p in b["match"].lineups if p.player_id == player_id), None)
+    if player is None:
+        raise HTTPException(404, f"no player {player_id!r}")
+    ev = Events.for_match(b["match"], b["events"])
+    parts = players.contributions(ev, player.player_id, player.team_id)
+    group = players.group_of(player.position)
+    g = players.config()["groups"][group]
+    stats = []
+    for name in [*g["fan"], *g["analyst"]]:
+        stat = players.STATS[name]
+        stats.append(
+            {
+                "name": name,
+                "label": stat.label,
+                "definition": stat.definition.replace(
+                    "long_pass_m metres", f"{players.config()['long_pass_m']} m"
+                ),
+                "unit": stat.unit,
+                "rate": stat.rate,
+                "of": stat.of,
+                "fan": name in g["fan"],
+                "sources": sorted(stat.sources),
+                "snapshots": players.snapshots(stat, parts[name], ev.elapsed),
+                "events": [
+                    {"t": ev.elapsed[c.index], "event_ids": list(c.evidence)}
+                    for c in parts[name]
+                ],
+            }
+        )
+    card = {
+        "player": player.model_dump(mode="json"),
+        "group": group,
+        "group_label": g["label"],
+        "stats": stats,
+        # Where he was involved: every action of his, broadcast frame.
+        "touches": [
+            {
+                "t": b["t"][e.event_id],
+                "event_id": e.event_id,
+                "type": e.type,
+                "xy": absolute(e, b["match"], b["t"][e.event_id])["start"],
+            }
+            for e in b["events"]
+            if e.player_id == player_id
+        ],
+        "omitted": players.config()["omitted"],
+    }
+    b["cards"][player_id] = card
+    return card
+
+
+# Rates of counted successes (k of n): a Wilson interval fits. Not shares of
+# time or of xT (possession_time, field_tilt): those are not k-of-n counts.
+WILSON = {"pass_accuracy", "possession_passes", "counterpress_regains"}
+
+
+@app.get("/api/runs/{run}/metrics/{name}")
+def metric_at(run: str, name: str, t: float = Query(..., ge=0)):
+    """A registry metric over the match so far at match second t (whole
+    match window), for each team or the match: value, evidence, and the
+    counts behind a rate (Wilson 95% interval)."""
+    b = load(run)
+    try:
+        m = registry.get(name)
+    except KeyError:
+        raise HTTPException(404, f"no metric {name!r}") from None
+    n = sum(1 for e in b["events"] if b["t"][e.event_id] <= t)
+    key = (name, n)
+    if key not in b["metrics"]:
+        ev = Events.for_match(b["match"], b["events"][:n])
+        window = None if None in m.windows else m.windows[0]
+        owners = (
+            [b["match"].home_team, b["match"].away_team]
+            if m.grain == "team"
+            else [None]
+        )
+        out = {}
+        for team in owners:
+            v = m.compute(ev, team, window) if n else None
+            out[team or "match"] = (
+                None
+                if v is None
+                else {
+                    "value": v.value,
+                    "evidence_event_ids": v.evidence_event_ids[-30:],
+                    "events": len(v.evidence_event_ids),
+                    "numerator": v.numerator,
+                    "denominator": v.denominator,
+                    "interval": players.wilson(int(v.numerator), int(v.denominator))
+                    if name in WILSON and v.denominator
+                    else None,
+                }
+            )
+        b["metrics"][key] = {"name": name, "window_min": window, "values": out}
+    return b["metrics"][key]
+
+
+@app.get("/api/registry")
+def metrics_list():
+    """Every registry metric a viewer can pin (not per-event ones)."""
+    return [
+        {"name": m.name, "display_name": m.display_name, "grain": m.grain}
+        for m in registry.METRICS.values()
+        if m.grain != "event"
+    ]
 
 
 @app.get("/api/registry/{name}")
@@ -236,13 +361,27 @@ def append_audit(run: str, row: dict) -> dict:
     return row
 
 
+def favourite_first(overlays: list[dict], favourite: str | None, b: dict) -> list:
+    """Order, never content: most important tier first; within a tier the
+    favourite club's lines first; then earliest."""
+    team = {m["moment_id"]: m.get("team") for m in b["moments"]}
+
+    def key(o):
+        mine = team.get(o["overlay_id"].rsplit("-", 1)[0]) == favourite
+        return (-o["priority"], not (favourite and mine), overlay_t(b, o))
+
+    return sorted(overlays, key=key)
+
+
 @app.get("/api/runs/{run}/producer")
-def producer(run: str):
+def producer(run: str, favourite: str | None = None):
     b = load(run)
     latest: dict[str, dict] = {}
     for o in b["overlays"]:
         latest[o["overlay_id"]] = o
-    queue = [o for o in latest.values() if o["status"] == "pending"]
+    queue = favourite_first(
+        [o for o in latest.values() if o["status"] == "pending"], favourite, b
+    )
     drafts = [
         {
             "overlay_id": n["overlay_id"],

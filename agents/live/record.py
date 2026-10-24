@@ -16,6 +16,8 @@ plays it back with zero model calls:
     narrations.jsonl   per line: verdicts incl. rejected drafts, the insight,
                        wall-clock latency and whether it met the 8 s target
     indicators.jsonl   control / openness / momentum each match minute
+    player_recaps.jsonl  half-time and full-time recap of every starter,
+                       both personas (code templates unless --player-recaps model)
     traces.jsonl       every span (one trace per moment)
 
 Recorded offline: the match waits for each line, so what airs is what the
@@ -37,8 +39,11 @@ from agents.llm.fake import FAKE_MODEL, FakeProvider
 from agents.llm.guard import add_flags, confirm, match_requests
 from agents.llm.prices import PRICES
 from agents.mcp_server.data import MatchData
+from agents.pipeline.facts import context_at
+from agents.pipeline.player_recap import player_recap
 from agents.telemetry import RECORDER, setup
 from core.budget import Budget
+from core.contracts import Moment
 from core.metrics import Events, registry
 from evals.gold import caught
 
@@ -92,6 +97,42 @@ def indicators(match, items) -> list[dict]:
     return out
 
 
+def player_recaps(data: MatchData, llm: LLMClient | None, languages) -> list[dict]:
+    """A verified recap paragraph about every starter at half-time and full
+    time, both personas (agents/pipeline/player_recap.py). llm=None: the code
+    templates only (no requests)."""
+    items = data.events.items
+    whistles = [
+        ("half_time", max(i for i, e in enumerate(items) if e.period == 1) + 1),
+        ("full_time", len(items)),
+    ]
+    out = []
+    for when, n in whistles:
+        upto = items[:n]
+        events = Events.for_match(data.match, upto)
+        last = upto[-1]
+        ctx = context_at(
+            MatchData(data.match, upto),
+            Moment(
+                moment_id=f"{data.match.match_id}-{when}",
+                kind=when,
+                team=None,
+                clock=last.model_dump(include={"period", "minute", "second"}),
+                importance=1.0,
+                metrics_before={},
+                metrics_after={},
+                evidence_event_ids=[last.event_id],
+            ),
+        )
+        for player in (p for p in data.match.lineups if p.starting):
+            for persona in ("casual", "analyst"):
+                row = asyncio.run(
+                    player_recap(llm, when, events, ctx, player, persona, languages)
+                )
+                out.append({**row, "t": events.elapsed[-1]})
+    return out
+
+
 def span_row(s) -> dict:
     return {
         "name": s.name,
@@ -123,7 +164,13 @@ async def play(live: Live, data: MatchData) -> None:
     worker.cancel()
 
 
-def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
+def record(
+    match_file: Path,
+    out: Path,
+    llm: LLMClient,
+    languages=None,
+    player_recaps_by: str = "template",
+) -> Path:
     setup()
     RECORDER.clear()
     languages = [x for x in (languages or SHIPPED) if x != "en"]
@@ -152,6 +199,10 @@ def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
     jsonl(out / "overlays.jsonl", overlays)
     jsonl(out / "narrations.jsonl", live.records)
     jsonl(out / "indicators.jsonl", indicators(data.match, data.events.items))
+    players = player_recaps(
+        data, llm if player_recaps_by == "model" else None, languages
+    )
+    jsonl(out / "player_recaps.jsonl", (json.dumps(r) for r in players))
     jsonl(out / "traces.jsonl", (span_row(s) for s in RECORDER.spans))
     b = llm.budget
     meta = {
@@ -174,6 +225,8 @@ def record(match_file: Path, out: Path, llm: LLMClient, languages=None) -> Path:
         "template_lines": sum(1 for r in live.records if r["fallback"]),
         # True if the budget or the model's quota stopped all model calls.
         "kill_switch": llm.killed,
+        # Player recaps: "template" (code, no requests) or "model".
+        "player_recaps": player_recaps_by,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     (out / "audit.jsonl").touch()  # the producer's log for this run, append-only
@@ -192,6 +245,12 @@ def main(argv=None):
         "--force", action="store_true", help="replace a real-model bundle with fake"
     )
     p.add_argument("--languages", help="comma list; default SHIPPED_LANGUAGES")
+    p.add_argument(
+        "--player-recaps",
+        choices=["template", "model"],
+        default="template",
+        help="player recaps by code templates (free) or the model (about 88 more requests)",
+    )
     add_flags(p)
     args = p.parse_args(argv)
     if args.fake:
@@ -207,14 +266,14 @@ def main(argv=None):
             )
     llm = fake_llm() if args.provider == "fake" else from_env(provider=args.provider)
     if args.provider != "fake":
-        n = match_requests(args.match_file, langs)
+        n = match_requests(args.match_file, langs, args.player_recaps)
         confirm(
             llm,
             f"About {n} requests (a free dry run of this match made {n}; "
             f"Verifier retries can add more)",
             args.yes,
         )
-    out = record(args.match_file, args.out, llm, langs)
+    out = record(args.match_file, args.out, llm, langs, args.player_recaps)
     meta = json.loads((out / "meta.json").read_text())
     print(json.dumps(meta))
     # Every draft the Verifier caught is a gold eval item (real mistakes).

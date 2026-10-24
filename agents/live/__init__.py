@@ -95,6 +95,8 @@ class Live:
         # One record per line made (narration or recap): verdicts with the
         # rejected drafts, the insight, and how long it took, for the run bundle.
         self.records: list[dict] = []
+        # One insight per moment, shared by every persona (moment_id -> Insight).
+        self.insights: dict = {}
 
     # ---- input ---------------------------------------------------------------
 
@@ -195,7 +197,13 @@ class Live:
                 return
             task = task_for(data, m, persona, self.languages)
             t0 = time.monotonic()
-            out = await narrate(self.llm, task, self.policy, mcp_tools(build_mcp(data)))
+            out = await narrate(
+                self.llm,
+                task,
+                self.policy,
+                mcp_tools(build_mcp(data)),
+                self.insights,
+            )
             self.stats.narrate_s.append(time.monotonic() - t0)
             oid = out.overlay.overlay_id
             self.tasks[oid], self.moment_t[oid] = task, moment_t

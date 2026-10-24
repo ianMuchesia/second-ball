@@ -45,7 +45,7 @@ export function MomentCard({
         {text}
       </p>
       <footer>
-        {evidenceCounts(item.linkedEvents, item.players.length, item.metrics).map((x) => (
+        {evidenceCounts(item.linkedEvents, item.players.length, item.metrics, recap).map((x) => (
           <span key={x}>{x}</span>
         ))}
         {narration && (

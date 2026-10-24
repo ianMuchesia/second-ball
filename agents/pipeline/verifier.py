@@ -316,6 +316,14 @@ COMPARE_TOLERANCE = 0.10
 
 def counts_of_kind(kind: str, analysis: Analysis) -> set[float]:
     """Code-made counts a 'kind' of count may match."""
+    task = analysis.task
+    c = task.counts
+    # Counts named for this kind ("passes_completed" for passes): a player's.
+    named = {float(v) for k, v in c.items() if kind.rstrip("s") in k}
+    return named | counts_by_kind(kind, analysis)
+
+
+def counts_by_kind(kind: str, analysis: Analysis) -> set[float]:
     task, ctx = analysis.task, analysis.task.context
     c = task.counts
     repeated = {float(v) for k, v in analysis.values.items() if "counters" in k}

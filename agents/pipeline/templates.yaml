@@ -109,3 +109,58 @@ sw:
     stat:
       casual: "Mashuti: {home} {home_shots}, {away} {away_shots}"
       analyst: "xG: {home} {home_xg}, {away} {away_xg}"
+# Player recaps (Phase 5): half-time and full-time, about the followed
+# player, from his stats only (agents/pipeline/player_recap.py). Each stat as
+# [one, many]; {n} the count, {d} the attempts, {v} a value. The Kiswahili is
+# a first draft for Ian to review.
+player:
+  en:
+    line: "{when} · {name} ({team}, {position}): {stats}."
+    when: {half_time: HALF-TIME, full_time: FULL-TIME}
+    none: "no shots, passes or tackles yet"
+    rate: "{label} {pct}% (95% interval {lo}% to {hi}%)"
+    stats:
+      goals: ["{n} goal", "{n} goals"]
+      shots: ["{n} shot", "{n} shots"]
+      chances_created: ["{n} chance created", "{n} chances created"]
+      assists: ["{n} assist", "{n} assists"]
+      shots_on_target: ["{n} shot on target", "{n} shots on target"]
+      xg: ["xG {v}", "xG {v}"]
+      touches_in_box: ["{n} touch in the box", "{n} touches in the box"]
+      passes_completed: ["{n} pass completed", "{n} passes completed"]
+      pass_pct: ["pass completion", "pass completion"]
+      lines_broken: ["{n} line broken", "{n} lines broken"]
+      recoveries: ["{n} ball recovery", "{n} ball recoveries"]
+      tackles: ["{n} tackle", "{n} tackles"]
+      interceptions: ["{n} interception", "{n} interceptions"]
+      clearances: ["{n} clearance", "{n} clearances"]
+      long_passes: ["{n} of {d} long passes completed", "{n} of {d} long passes completed"]
+      crosses: ["{n} of {d} crosses completed", "{n} of {d} crosses completed"]
+      saves: ["{n} save", "{n} saves"]
+      goals_conceded: ["{n} goal conceded", "{n} goals conceded"]
+      xg_faced: ["xG faced {v}", "xG faced {v}"]
+  sw:
+    line: "{when} · {name} ({team}): {stats}."
+    when: {half_time: MAPUMZIKO, full_time: MWISHO WA MCHEZO}
+    none: "bado hajapiga shuti, pasi wala kukaba"
+    rate: "{label} {pct}% (kwa uhakika wa 95%: {lo}% hadi {hi}%)"
+    stats:
+      goals: ["goli {n}", "magoli {n}"]
+      shots: ["shuti {n}", "mashuti {n}"]
+      chances_created: ["nafasi {n} aliyotengeneza", "nafasi {n} alizotengeneza"]
+      assists: ["pasi {n} ya goli", "pasi {n} za magoli"]
+      shots_on_target: ["shuti {n} lililolenga lango", "mashuti {n} yaliyolenga lango"]
+      xg: ["xG {v}", "xG {v}"]
+      touches_in_box: ["mguso {n} ndani ya boksi", "miguso {n} ndani ya boksi"]
+      passes_completed: ["pasi {n} iliyofika", "pasi {n} zilizofika"]
+      pass_pct: ["pasi zilizofika", "pasi zilizofika"]
+      lines_broken: ["safu {n} iliyovukwa", "safu {n} zilizovukwa"]
+      recoveries: ["mpira {n} aliourejesha", "mipira {n} aliyoirejesha"]
+      tackles: ["kukaba {n}", "makabiliano {n}"]
+      interceptions: ["pasi {n} aliyoinasa", "pasi {n} alizozinasa"]
+      clearances: ["kuokoa {n}", "maokoa {n}"]
+      long_passes: ["pasi ndefu {n} kati ya {d} zilizofika", "pasi ndefu {n} kati ya {d} zilizofika"]
+      crosses: ["krosi {n} kati ya {d} zilizofika", "krosi {n} kati ya {d} zilizofika"]
+      saves: ["kuokoa shuti {n}", "kuokoa mashuti {n}"]
+      goals_conceded: ["goli {n} alilofungwa", "magoli {n} aliyofungwa"]
+      xg_faced: ["xG {v} dhidi yake", "xG {v} dhidi yake"]

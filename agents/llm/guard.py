@@ -34,7 +34,7 @@ def dry_run_requests(job: Callable[[LLMClient], object]) -> int:
     return len(llm.budget.ledger)
 
 
-def match_requests(match_file, languages=None) -> int:
+def match_requests(match_file, languages=None, player_recaps="template") -> int:
     """Requests one match makes through the pipeline (a free dry run)."""
     import tempfile
     from pathlib import Path
@@ -43,7 +43,9 @@ def match_requests(match_file, languages=None) -> int:
 
     with tempfile.TemporaryDirectory() as tmp:
         return dry_run_requests(
-            lambda f: record(Path(match_file), Path(tmp) / "dry", f, languages)
+            lambda f: record(
+                Path(match_file), Path(tmp) / "dry", f, languages, player_recaps
+            )
         )
 
 

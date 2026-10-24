@@ -123,9 +123,14 @@ def sequence_lines(seq: dict | None, task: NarrationTask) -> list[str]:
 
 
 class AnalystExecutor(Executor):
-    def __init__(self, llm: LLMClient, policy: Policy, tools=None):
+    """One insight per moment, the same for every persona: `insights` (shared
+    across a run's narrations) keeps the first one made; later personas reuse
+    it, so only the Narrator's wording differs (checked per persona)."""
+
+    def __init__(self, llm: LLMClient, policy: Policy, tools=None, insights=None):
         super().__init__(id="analyst")
         self.llm, self.policy, self.tools = llm, policy, tools
+        self.insights = {} if insights is None else insights
         self.agent = Agent(
             client=AdapterChatClient(llm), instructions=prompts.ANALYST, name="analyst"
         )
@@ -134,8 +139,15 @@ class AnalystExecutor(Executor):
     async def analyse(
         self, task: NarrationTask, ctx: WorkflowContext[Analysis]
     ) -> None:
+        values = values_of(task)
+        shared = self.insights.get(task.moment.moment_id)
+        if shared is not None:
+            with step("analyst", shared=True):
+                await ctx.send_message(
+                    checked_claim(Analysis(task=task, insight=shared, values=values))
+                )
+            return
         with step("analyst") as span:
-            values = values_of(task)
             seq = await call_tool(
                 self.tools,
                 "get_sequence",
@@ -149,6 +161,7 @@ class AnalystExecutor(Executor):
             prompt = prompts.analyst_prompt(task, values, sequence_lines(seq, task))
             reply = await ask(self.llm, self.agent, prompt, "analyst", self.policy)
             insight = parse_insight(reply, task)
+            self.insights[task.moment.moment_id] = insight
             span.set_attributes(
                 {
                     "code_insight": reply is None,
@@ -378,9 +391,9 @@ def overlay(approved: Approved, text: dict[str, str]) -> Overlay:
     )
 
 
-def build(llm: LLMClient, policy: Policy | None = None, tools=None):
+def build(llm: LLMClient, policy: Policy | None = None, tools=None, insights=None):
     policy = policy or Policy()
-    analyst = AnalystExecutor(llm, policy, tools)
+    analyst = AnalystExecutor(llm, policy, tools, insights)
     narrator = NarratorExecutor(llm, policy)
     verifier = VerifierExecutor()
     localizer = LocalizerExecutor(llm, policy)
@@ -412,9 +425,15 @@ def emergency(task: NarrationTask, error: Exception) -> Narration:
 
 
 async def narrate(
-    llm: LLMClient, task: NarrationTask, policy: Policy | None = None, tools=None
+    llm: LLMClient,
+    task: NarrationTask,
+    policy: Policy | None = None,
+    tools=None,
+    insights: dict | None = None,
 ) -> Narration:
-    """Run the workflow for one moment and persona (one `narrate` span)."""
+    """Run the workflow for one moment and persona (one `narrate` span).
+    `insights` (moment_id -> Insight), shared across personas, makes the
+    insight the same for every viewer."""
     m = task.moment
     with step(
         "narrate",
@@ -426,7 +445,7 @@ async def narrate(
     ) as span:
         n = len(llm.budget.ledger)
         try:
-            result = await build(llm, policy, tools).run(task)
+            result = await build(llm, policy, tools, insights).run(task)
             (out,) = result.get_outputs()
         except Exception as e:  # never an empty overlay
             log.exception("narration workflow failed for %s", m.moment_id)

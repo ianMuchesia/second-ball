@@ -102,6 +102,9 @@ b { font-weight: 600; }
 .pitch .player.highlighted .halo { stroke: var(--amber); stroke-width: 0.5; stroke-dasharray: none; }
 .pitch .tag { font-family: var(--display); font-size: 2.1px; font-weight: 700; text-anchor: middle; fill: var(--text); text-transform: uppercase; letter-spacing: 0.04px; paint-order: stroke; stroke: var(--bg); stroke-width: 0.6px; }
 .pitch .tag.highlighted { fill: var(--amber); font-size: 2.5px; }
+.pitch .tag.followed { fill: var(--amber); }
+.pitch .player { cursor: pointer; }
+.pitch .player .follow-ring { fill: none; stroke: var(--amber); stroke-width: 0.45; }
 .pitch .ball { fill: #fff; stroke: var(--bg); stroke-width: 0.25; }
 .possession { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 6px; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; background: rgba(18, 17, 16, 0.85); padding: 3px 10px; border: 1px solid var(--line); }
 .kit { width: 10px; height: 10px; display: inline-block; border-radius: 50%; }
@@ -131,6 +134,7 @@ b { font-weight: 600; }
 /* ---- match centre ---------------------------------------------------------- */
 .centre { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; display: flex; flex-direction: column; min-height: 0; max-height: 640px; }
 .centre-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+.centre-tabs.three { grid-template-columns: 1fr 1fr 1fr; }
 .centre-tabs button { border: none; border-bottom: 3px solid var(--line); border-radius: 0; background: transparent; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 10px; color: var(--muted); }
 .centre-tabs button.on { color: var(--text); border-bottom-color: var(--amber); }
 .centre > .empty { padding: 14px; }
@@ -280,3 +284,44 @@ b { font-weight: 600; }
 .numbers summary b { font-weight: 600; }
 .numbers .value { color: var(--muted); font-variant-numeric: tabular-nums; }
 .freeze { margin-top: 8px; width: 100%; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; background: var(--amber); color: var(--bg); border: none; }
+
+/* ---- Phase 5: who is watching ------------------------------------------- */
+.stat-card.analyst { display: block; }
+.viewer-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 10px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.viewer-bar label { display: flex; gap: 6px; align-items: center; font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.78rem; color: var(--muted); }
+.viewer-bar select { max-width: 220px; text-transform: none; letter-spacing: 0; }
+
+.metric-row { display: grid; grid-template-columns: minmax(120px, auto) 1fr auto; gap: 2px 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+.metric-row.pinned { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 4px; }
+.metric-name { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem; }
+.metric-name .pin { color: var(--amber); margin-right: 8px; }
+.metric-values { display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; }
+.metric-value b { font-family: var(--display); color: var(--muted); margin-right: 2px; }
+.metric-meaning { grid-column: 1 / 3; font-size: 0.75rem; color: var(--muted); }
+.metric-more { grid-column: 3; grid-row: 1 / 3; align-self: center; font-size: 0.75rem; }
+.analyst-metrics h4 { margin: 0; padding: 12px 14px 4px; }
+.analyst-metrics .metric-row { grid-template-columns: 1fr auto; }
+.analyst-metrics .metric-meaning { grid-column: 1 / 2; }
+.analyst-metrics .metric-more { grid-column: 2; }
+
+.player-card { overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.player-card header { display: flex; gap: 10px; align-items: center; }
+.player-card .shirt { font-family: var(--display); font-weight: 800; font-size: 1.6rem; color: var(--amber); min-width: 36px; text-align: center; }
+.player-card .who { display: flex; flex-direction: column; }
+.player-card .who small { color: var(--muted); font-size: 0.78rem; }
+.player-stats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.player-stats button { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 0 10px; text-align: left; background: transparent; border: none; border-bottom: 1px solid var(--line); border-radius: 0; padding: 8px 0; }
+.player-stats button:hover { background: var(--panel-2); }
+.player-stats .label { font-size: 0.85rem; }
+.player-stats .value { font-family: var(--display); font-weight: 800; font-size: 1.15rem; text-align: right; font-variant-numeric: tabular-nums; }
+.player-stats .from { grid-column: 1 / 3; font-size: 0.7rem; color: var(--muted); }
+.touch-map { margin: 0; }
+.touch-map svg { width: 100%; display: block; }
+.touch-map .turf { fill: var(--turf); }
+.touch-map .lines * { fill: none; stroke: var(--line); stroke-width: 0.4; }
+.touch-map .touch { opacity: 0.8; }
+.touch-map .touch.home { fill: var(--home); }
+.touch-map .touch.away { fill: var(--away-kit); }
+.player-recap { border-left: 3px solid var(--amber); padding: 4px 10px; }
+.player-recap p { margin: 6px 0 0; font-size: 0.9rem; line-height: 1.35; }
+.omitted span { text-decoration: underline dotted; cursor: help; }

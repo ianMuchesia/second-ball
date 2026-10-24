@@ -24,7 +24,7 @@ export interface Marker {
 }
 
 export const selectT = (s: RootState) => s.playback.t;
-export const selectPersona = (s: RootState) => s.playback.persona;
+export const selectPersona = (s: RootState) => s.profile.persona;
 
 const CHAIN = 3; // the current possession's last actions drawn on the pitch
 const LINE_SHOWN_S = 45; // a narrative stays up this many match seconds
@@ -104,18 +104,26 @@ export interface FeedItem {
   metrics: number;
 }
 
+export interface Ranking {
+  favouriteClub: string | null; // its moments first within a tier
+  followedPlayer: string | null; // moments he is in, first within a tier
+}
+
 /** Key moments for a persona: every narrative or recap that can be on air,
- * with how much evidence stands behind it (counted from the run, not made up). */
+ * with how much evidence stands behind it (counted from the run, not made
+ * up), ranked: most important tier first; within a tier, the followed
+ * player's moments, then the favourite club's, then the latest. Ranking
+ * changes the order, never the content. */
 export function feedOf(
   run: Run,
   byId: Map<string, ScreenEvent>,
   lineup: Map<string, LineupPlayer>,
   persona: string,
   audit: AuditRow[] = [],
+  rank: Ranking = { favouriteClub: null, followedPlayer: null },
 ): FeedItem[] {
-  return onAir(run, audit)
+  const items = onAir(run, audit)
     .filter((o) => (o.slot === "narrative" || o.slot === "recap") && o.overlay_id.endsWith(`-${persona}`))
-    .sort((a, b) => a.t - b.t)
     .map((o) => {
       const moment = run.moments.find((m) => m.moment_id === momentIdOf(o.overlay_id));
       const narration = run.narrations.find((n) => n.overlay_id === o.overlay_id);
@@ -131,6 +139,18 @@ export function feedOf(
         metrics: moment ? moment.numbers.length : Object.keys(o.values).length,
       };
     });
+  const first = (yes: boolean) => (yes ? 0 : 1);
+  const key = (i: FeedItem) => [
+    -i.overlay.priority,
+    first(!!rank.followedPlayer && i.players.includes(rank.followedPlayer)),
+    first(!!rank.favouriteClub && i.moment?.team === rank.favouriteClub),
+    -i.overlay.t,
+  ];
+  return items.sort((a, b) => {
+    const [x, y] = [key(a), key(b)];
+    for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return x[k] - y[k];
+    return 0;
+  });
 }
 
 /** At playback time t: the current event, the ball path, the line on air,

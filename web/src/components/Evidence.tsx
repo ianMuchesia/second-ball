@@ -36,7 +36,7 @@ export default function EvidenceDrawer({
     dispatch(actions.focusEvent({ t: e.t, eventId: e.event_id, players }));
   const onJump = (e: ScreenEvent) => focus(e, [e.player_id, ...(exposed ? [exposed.player_id] : [])]);
   const regain = events.find((e) => e.event_id === evidence.regainId);
-  const onClose = () => dispatch(actions.closeDrawer());
+  const onClose = () => dispatch(actions.closeDrawer(moment.moment_id));
 
   const mine = narrations.filter((x) => x.overlay_id.startsWith(moment.moment_id));
   const n = mine.find((x) => x.persona === persona) ?? mine[0];

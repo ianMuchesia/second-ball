@@ -13,12 +13,14 @@ interface Props {
   homeTeam: string;
   lineup: Map<string, LineupPlayer>;
   highlighted: Set<string>; // player ids lit by the evidence
+  followed: string | null; // the followed player: his name is always on
+  onPick: (playerId: string) => void; // click a player to follow him
 }
 
 /** The scene: home attacks left to right. Player positions from the event's
  * freeze frame; the current action as a solid arrow, the previous ones faded
  * and numbered; the player on the ball and anyone in the evidence named. */
-export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Props) {
+export function Pitch({ event, frame, path, homeTeam, lineup, highlighted, followed, onPick }: Props) {
   const players = frame?.freeze_frame ?? [];
   const actors = new Set(path.map((e) => e.player_id));
   const y = (v: number) => W - v;
@@ -26,7 +28,13 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Pro
   const possession = holder ? teamName(holder) : null;
   const tags = placeTags(
     players
-      .filter((p) => highlighted.has(p.player_id) || event?.player_id === p.player_id || actors.has(p.player_id))
+      .filter(
+        (p) =>
+          highlighted.has(p.player_id) ||
+          event?.player_id === p.player_id ||
+          actors.has(p.player_id) ||
+          p.player_id === followed,
+      )
       .filter((p) => lineup.has(p.player_id))
       .map((p) => ({ id: p.player_id, x: p.xy[0], y: y(p.xy[1]), text: surname(lineup.get(p.player_id)!).toUpperCase() })),
     players.map((p) => ({ id: p.player_id, x: p.xy[0], y: y(p.xy[1]) })),
@@ -95,15 +103,19 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Pro
           const home = p.team_id === homeTeam;
           const hot = highlighted.has(p.player_id);
           const onBall = event?.player_id === p.player_id;
+          const isFollowed = p.player_id === followed;
           const tag = tags.get(p.player_id);
           const [px, py] = [p.xy[0], y(p.xy[1])];
           return (
             <g
               key={p.player_id}
-              className={`player ${home ? "home" : "away"}${hot ? " highlighted" : ""}${onBall ? " on-ball" : ""}`}
+              className={`player ${home ? "home" : "away"}${hot ? " highlighted" : ""}${onBall ? " on-ball" : ""}${isFollowed ? " followed" : ""}`}
               data-testid={`player-${p.player_id}`}
+              onClick={() => onPick(p.player_id)}
             >
+              <title>{sheet ? `${sheet.name}: click to follow` : p.player_id}</title>
               {(hot || onBall) && <circle cx={px} cy={py} r={2.6} className="halo" />}
+              {isFollowed && <circle cx={px} cy={py} r={2.2} className="follow-ring" />}
               <circle cx={px} cy={py} r={1.55} className="dot" />
               <text x={px} y={py + 0.6} className="shirt">
                 {sheet?.shirt_number ?? ""}
@@ -112,7 +124,7 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted }: Pro
                 <line x1={px} y1={py} x2={tag.tx!} y2={tag.ty! - 0.7} className="leader" />
               )}
               {tag && (
-                <text x={tag.tx} y={tag.ty} className={`tag${hot ? " highlighted" : ""}`} data-testid={`tag-${p.player_id}`}>
+                <text x={tag.tx} y={tag.ty} className={`tag${hot ? " highlighted" : ""}${isFollowed ? " followed" : ""}`} data-testid={`tag-${p.player_id}`}>
                   {tag.text}
                 </text>
               )}
