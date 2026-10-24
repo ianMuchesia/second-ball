@@ -43,6 +43,7 @@ export interface ScreenEvent {
   start: [number, number];
   end: [number, number];
   xg: number | null;
+  ball_speed_kmh?: number | null;
   freeze_frame: FramePlayer[];
   words?: string;
 }

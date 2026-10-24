@@ -576,6 +576,8 @@ async def live(topics: str = "match-events,overlays"):
 DIST = ROOT / "web" / "dist"
 if DIST.exists():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+    if (DIST / "models").exists():  # the 3D view's player model, loaded on demand
+        app.mount("/models", StaticFiles(directory=DIST / "models"), name="models")
 
     @app.get("/{path:path}", include_in_schema=False)
     def index(path: str):

@@ -12,6 +12,7 @@ export interface Profile {
   favouriteClub: string | null; // team_id: ranks its moments first, wording neutral
   followedPlayer: string | null; // player_id: name tag on, his card and moments
   pinnedMetric: string | null; // registry metric, always on screen
+  view: "2d" | "3d"; // the pitch: 2D by default; 3D only where the device can
 }
 
 const KEY = "second-ball.profile.v1";
@@ -22,6 +23,7 @@ export const defaults: Profile = {
   favouriteClub: null,
   followedPlayer: null,
   pinnedMetric: null,
+  view: "2d",
 };
 
 export function loadProfile(): Profile {
@@ -59,6 +61,9 @@ export const profile = createSlice({
     },
     pin(s, a: PayloadAction<string | null>) {
       s.pinnedMetric = a.payload;
+    },
+    setView(s, a: PayloadAction<Profile["view"]>) {
+      s.view = a.payload;
     },
   },
 });

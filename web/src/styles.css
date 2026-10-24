@@ -325,3 +325,13 @@ b { font-weight: 600; }
 .player-recap { border-left: 3px solid var(--amber); padding: 4px 10px; }
 .player-recap p { margin: 6px 0 0; font-size: 0.9rem; line-height: 1.35; }
 .omitted span { text-decoration: underline dotted; cursor: help; }
+
+/* ---- the 3D pitch (on demand) --------------------------------------------- */
+.pitch-scene.three { position: relative; aspect-ratio: 16 / 9; background: #0c1524; }
+.pitch-scene.three canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pitch-scene.three .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-family: var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.pitch-scene.three.loading { display: grid; place-items: center; color: var(--muted); }
+.pitch-scene.three .interpolated { position: absolute; left: 12px; bottom: 6px; margin: 0; font-size: 0.7rem; color: var(--muted); background: rgba(18, 17, 16, 0.7); padding: 2px 8px; border-radius: 2px; }
+.pitch-scene.three .cameras { position: absolute; right: 10px; bottom: 6px; display: flex; gap: 4px; }
+.pitch-scene.three .cameras button { font-size: 0.7rem; padding: 2px 8px; background: rgba(18, 17, 16, 0.75); }
+.pitch-scene.three .cameras button.on { background: var(--amber); color: var(--bg); }
