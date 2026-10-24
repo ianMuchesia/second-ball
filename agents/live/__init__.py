@@ -267,6 +267,7 @@ class Live:
                 "attempts": out.attempts,
                 "verdicts": [v.model_dump(mode="json") for v in out.verdicts],
                 "insight": out.insight.model_dump(mode="json") if out.insight else None,
+                "claim_reasons": out.claim_reasons,
                 "latency_s": round(latency, 3),
                 "met_target": latency <= FRESH_S,
                 "trace_id": f"{span.get_span_context().trace_id:032x}",

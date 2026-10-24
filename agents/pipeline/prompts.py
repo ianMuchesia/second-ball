@@ -43,7 +43,9 @@ otherwise; when facts has build_up and exploited_zone, name both the action
 (not even "seal it" or "secure the win": the match is not over); do not blame one event
 on the weather; no injury or referee talk. Write the score, the standing and a
 chance exactly as "say" gives them (digits, leader first: "Harbour lead 1-0",
-never "zero to one"); counts are whole numbers ("13 shots", never "13.0");
+never "zero to one"); counts are whole numbers ("13 shots", never "13.0"), and a count in "say"
+is said exactly as given ("Harbour's second goal on the counter"); the score
+at most once;
 xG as "xG 0.30", never "0.3 goals"."""
 
 STYLE = {

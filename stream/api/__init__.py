@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field
 
 from agents.pipeline.models import Analysis, NarrationTask
 from agents.pipeline.verifier import verify
-from agents.pipeline.workflow import values_of
+from agents.pipeline.workflow import checked_claim, values_of
 from core.contracts import Insight, Match, MatchEvent
 from core.metrics import Events, registry
 from core.moments import config as moment_config
@@ -130,11 +130,31 @@ def get_run(run: str):
                 # What code knew (facts, counts): the evidence drawer shows them.
                 "facts": (n.get("task") or {}).get("facts", {}),
                 "counts": (n.get("task") or {}).get("counts", {}),
+                **checked(n),
             }
             for n in b["narrations"]
         ],
         "indicators": b["indicators"],
         "audit": rows(run_path(run) / "audit.jsonl"),
+    }
+
+
+def checked(n: dict) -> dict:
+    """Nothing reaches the screen unchecked: the claim is verified again as
+    served (older bundles recorded claims without the check)."""
+    if not n.get("task") or not n.get("insight"):
+        return {"claim_reasons": n.get("claim_reasons", [])}
+    task = NarrationTask.model_validate(n["task"])
+    analysis = checked_claim(
+        Analysis(
+            task=task,
+            insight=Insight.model_validate(n["insight"]),
+            values=values_of(task),
+        )
+    )
+    return {
+        "insight": analysis.insight.model_dump(mode="json"),
+        "claim_reasons": n.get("claim_reasons") or analysis.claim_reasons,
     }
 
 

@@ -54,6 +54,9 @@ class Analysis(Part):
     task: NarrationTask
     insight: Insight
     values: dict[str, float]  # code-made: name -> number the line may quote
+    # Why the Analyst's own claim failed the Verifier and code's replaced it
+    # (the claim is shown on screen, so it is checked like a line).
+    claim_reasons: list[str] = Field(default_factory=list)
 
 
 class Draft(Part):
@@ -99,6 +102,7 @@ class Narration(Part):
     attempts: int
     verdicts: list[Verdict]
     insight: Insight | None = None  # the Analyst's claim and why (or code's)
+    claim_reasons: list[str] = Field(default_factory=list)  # see Analysis
 
 
 Draft.model_rebuild()

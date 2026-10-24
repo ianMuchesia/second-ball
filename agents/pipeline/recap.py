@@ -65,6 +65,21 @@ def slug(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
+def stat_phrases(ctx: MatchContext, stats: dict[str, MetricValue]) -> dict:
+    """Recap counts with what they count: "Riverside's 13 shots"."""
+    out = {}
+    for team in (ctx.home, ctx.away):
+        name = ctx.team_names[team]
+        for metric, noun in (("shots", "shot"), ("big_chances", "big chance")):
+            mv = stats.get(f"{slug(name)}_{metric}")
+            if mv is not None:
+                n = int(mv.value)
+                out[f"{slug(name)}_{metric}"] = (
+                    f"{name}'s {n} {noun}{'' if n == 1 else 's'}"
+                )
+    return out
+
+
 def recap_task(
     when: When,
     events: Events,
@@ -111,7 +126,11 @@ def recap_task(
         persona=persona,
         languages=languages,
         counts=counts,
-        display={"score": score_line(ctx), "standing": standing(ctx)},
+        display={
+            "score": score_line(ctx),
+            "standing": standing(ctx),
+            **stat_phrases(ctx, stats),
+        },
     )
     values = {k: mv.value for k, mv in stats.items()}
     for i, a in enumerate(aired):

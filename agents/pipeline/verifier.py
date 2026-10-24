@@ -354,6 +354,49 @@ def wrong_counts(text: str, analysis: Analysis) -> list[str]:
     return out
 
 
+COUNTED = re.compile(
+    r"\b(?P<n>\d+|" + "|".join([*CARDINALS, *ORDINALS]) + r")\b"
+    r"(?:\s+[\w'\-]+){0,2}?\s+(?P<noun>goal|pass|shot|chance)(?:e?s)?\b",
+    re.IGNORECASE,
+)
+
+
+def as_number(word: str) -> float | None:
+    word = word.lower()
+    if word.isdigit():
+        return float(word)
+    n = CARDINALS.get(word, ORDINALS.get(word))
+    return None if n is None else float(n)
+
+
+def unphrased_counts(text: str, analysis: Analysis) -> list[str]:
+    """A count code phrased ("Harbour's second goal on the counter") must be
+    said as that phrase: "a counter creates 2 counter goals" attaches the
+    right number to the wrong thing."""
+    out = []
+    for phrase in analysis.task.display.values():
+        m = COUNTED.search(phrase)
+        if m is None or phrase.lower() in text.lower():
+            continue
+        n, noun = as_number(m.group("n")), m.group("noun").lower()
+        if n is None or n < 2:
+            continue  # "one pass" is ordinary English; the error is 2+ misattached
+        for said in COUNTED.finditer(text):
+            if as_number(said.group("n")) == n and said.group("noun").lower() == noun:
+                out.append(f"say this count as given: '{phrase}'")
+                break
+    return list(dict.fromkeys(out))
+
+
+SCORES = re.compile(rf"\b\d+\s*[-–]\s*\d+\b|{SPELLED_SCORE.pattern}", re.IGNORECASE)
+
+
+def score_repeated(text: str) -> list[str]:
+    """Style: the score at most once per line."""
+    n = len(SCORES.findall(text))
+    return [f"give the score once (it appears {n} times)"] if n > 1 else []
+
+
 def pairs(values: dict[str, float]) -> list[tuple[str, float, float]]:
     """(metric, before, after) for every metric with both."""
     return [
@@ -657,6 +700,8 @@ def verify(
     reasons += score_mistakes(text, analysis)
     reasons += number_style(text, analysis)
     reasons += wrong_direction(text)
+    reasons += unphrased_counts(text, analysis)
+    reasons += score_repeated(text)
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):

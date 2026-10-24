@@ -7,6 +7,9 @@ written differs (fan or analyst). A line quotes these strings as given:
   first: "Harbour lead 1-0" ("level at 0-0"); never "zero to one"
 - counts as whole numbers: "13 shots", never "13.0"
 - a chance as "xG 0.45" for analysts, in words for fans ("a big chance")
+- a count with its meaning: "Harbour's second goal on the counter", "1 pass
+  in the move", "Riverside's 13 shots"; a line uses it as given, so the model
+  cannot attach it to the wrong thing ("one counter creates 2 goals")
 """
 
 from agents.mcp_server.data import MatchData
@@ -53,10 +56,32 @@ def shot_xg(data: MatchData, moment: Moment) -> float | None:
     return None
 
 
+ORDINAL_WORDS = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth"}
+
+
+def count_phrases(counts: dict[str, int], team: str | None) -> dict[str, str]:
+    """Each count with what it counts (keys match NarrationTask.counts)."""
+    out = {}
+    n = counts.get("counter_goals")
+    if n and team:
+        out["counter_goals"] = (
+            f"{team}'s {ORDINAL_WORDS.get(n, f'{n}th')} goal on the counter"
+        )
+    n = counts.get("passes_in_move")
+    if n is not None:
+        out["passes_in_move"] = f"{n} pass{'' if n == 1 else 'es'} in the move"
+    return out
+
+
 def display_for(
-    data: MatchData, moment: Moment, ctx: MatchContext, persona: Persona
+    data: MatchData,
+    moment: Moment,
+    ctx: MatchContext,
+    persona: Persona,
+    counts: dict[str, int] | None = None,
 ) -> dict[str, str]:
     out = {"score": score_line(ctx), "standing": standing(ctx)}
+    out |= count_phrases(counts or {}, ctx.team_names.get(moment.team or ""))
     xg = shot_xg(data, moment)
     if xg is not None:
         out["chance"] = f"xG {xg:.2f}" if persona == "analyst" else chance_words(xg)

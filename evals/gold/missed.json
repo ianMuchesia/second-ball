@@ -8,8 +8,40 @@
   "minute": 63,
   "persona": "analyst",
   "text": "Harbour lead 1-0: Riverside drop control from 0.71 to 0.80 after the red card, allowing Harbour to press deeper.",
-  "errors": ["wrong_direction"],
+  "errors": [
+   "wrong_direction"
+  ],
   "why": "Aired: every number was right, but control rose (0.71 -> 0.80). The Verifier had no direction check; added in b5fe292 (wrong_direction).",
+  "caught_now": true
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-24T02:25:14",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo066-analyst",
+  "kind": "goal",
+  "minute": 88,
+  "persona": "analyst",
+  "text": "Harbour lead 2-0: a counter-attack behind Riverside's left-back Kofi Lindqvane creates 2 counter goals, adding xG 0.45.",
+  "errors": [
+   "wrong_relation"
+  ],
+  "why": "Aired: the 2 is right (Harbour's second goal on the counter), but the sentence says one counter created two goals. Counts are now phrased by code and must be said as given (unphrased_counts).",
+  "caught_now": true
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-24T02:25:14",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo022-casual",
+  "kind": "goal",
+  "minute": 34,
+  "persona": "casual",
+  "text": "Harbour scored a goal in the thirty-fourth minute to take a one-nil lead.",
+  "errors": [
+   "wrong_score"
+  ],
+  "why": "The Analyst's claim, shown in the evidence drawer, skipped the Verifier; 'one-nil' breaks the score format. Claims are now verified (checked_claim), also when served.",
   "caught_now": true
  }
 ]

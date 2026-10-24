@@ -62,6 +62,7 @@ export interface Narration {
   attempts: number;
   verdicts: Verdict[];
   insight: { claim: string; mechanism: string; confidence: number } | null;
+  claim_reasons?: string[]; // the model's claim failed the Verifier: code's is shown
   latency_s: number;
   met_target: boolean;
   trace_id: string;

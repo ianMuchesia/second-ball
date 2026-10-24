@@ -8,7 +8,7 @@ from agents.pipeline.facts import task_for
 from agents.pipeline.models import Analysis
 from agents.pipeline.prompts import values_block
 from agents.pipeline.verifier import number_style, verify, wrong_direction
-from agents.pipeline.workflow import values_of
+from agents.pipeline.workflow import checked_claim, values_of
 from core.contracts import Insight
 from tests.unit.test_narration_report import demo
 
@@ -90,3 +90,84 @@ def test_well_written_numbers_pass(goal, line):
 )
 def test_the_direction_word_must_agree_with_the_numbers(line, ok):
     assert (not wrong_direction(line)) is ok
+
+
+def goal_88(data):
+    return next(m for m in data.moments if m.kind == "goal" and m.clock.minute == 88)
+
+
+def test_counts_come_phrased_by_code(goal):
+    data, _ = goal
+    t = task_for(data, goal_88(data), "analyst")
+    assert t.display["counter_goals"] == "Harbour's second goal on the counter"
+    assert t.display["passes_in_move"] == "1 pass in the move"
+
+
+@pytest.mark.parametrize(
+    ("line", "why"),
+    [
+        # Aired 24 Oct: the right number attached to the wrong thing.
+        (
+            (
+                "Harbour lead 2-0: a counter-attack behind Riverside's left-back "
+                "creates 2 counter goals, adding xG 0.45."
+            ),
+            "Harbour's second goal on the counter",
+        ),
+        (
+            "Harbour lead 2-0, their second counter goal behind the left-back.",
+            "as given",
+        ),
+        (
+            (
+                "Harbour strike behind Riverside's left-back to make it "
+                "Riverside 0-2 Harbour, and Harbour lead 2-0!"
+            ),
+            "score once",
+        ),
+    ],
+)
+def test_wrong_relations_and_repeated_scores_are_rejected(goal, line, why):
+    data, _ = goal
+    reasons = verify(line, analysis(data, goal_88(data), "analyst")).reasons
+    assert any(why in r for r in reasons), reasons
+
+
+def test_one_is_ordinary_english(goal):
+    data, m = goal
+    line = "One pass behind Riverside's left-back on the counter, and Harbour lead 1-0!"
+    assert verify(line, analysis(data, m, "casual")).passed
+
+
+def test_a_count_said_as_given_passes(goal):
+    data, _ = goal
+    line = (
+        "Harbour's second goal on the counter, behind Riverside's left-back: "
+        "a chance worth xG 0.45. Harbour lead 2-0."
+    )
+    assert verify(line, analysis(data, goal_88(data), "analyst")).passed
+
+
+def test_a_claim_on_screen_is_verified_too(goal):
+    data, m = goal
+    a = analysis(data, m, "casual")
+    bad = a.model_copy(
+        update={
+            "insight": a.insight.model_copy(
+                update={"claim": "Harbour scored to take a one-nil lead."}
+            )
+        }
+    )
+    out = checked_claim(bad)
+    assert out.claim_reasons and "digits" in out.claim_reasons[0]
+    assert out.insight.claim.startswith("GOAL, 34'.")
+    assert verify(out.insight.claim, out).passed
+    # A correct claim is kept, even without the zone a line must name.
+    ok = a.model_copy(
+        update={
+            "insight": a.insight.model_copy(
+                update={"claim": "Harbour score on the counter."}
+            )
+        }
+    )
+    assert checked_claim(ok).insight.claim == "Harbour score on the counter."

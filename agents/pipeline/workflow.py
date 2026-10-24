@@ -36,7 +36,14 @@ from agents.pipeline.models import (
 from agents.pipeline.resilience import Policy, ask, call_tool
 from agents.pipeline.templates import LANGUAGES as TEMPLATE_LANGUAGES
 from agents.pipeline.templates import template
-from agents.pipeline.verifier import lock, unlock, untranslated, verify, wrong_numbers
+from agents.pipeline.verifier import (
+    lock,
+    missing_cause,
+    unlock,
+    untranslated,
+    verify,
+    wrong_numbers,
+)
 from agents.telemetry import step
 from core.contracts import Insight, Overlay
 from core.contracts.overlay import OverlayTime
@@ -76,6 +83,31 @@ def parse_insight(text: str | None, task: NarrationTask) -> Insight:
         mechanism=mechanism or "-",
         evidence_event_ids=task.moment.evidence_event_ids,
         confidence=confidence,
+    )
+
+
+CLAIM_WORDS = 40
+
+
+def checked_claim(analysis: Analysis) -> Analysis:
+    """The claim is shown on screen (the evidence drawer), so the Verifier
+    checks it like a line; if it fails, code's template is the claim."""
+    claim = analysis.insight.claim
+    # Errors only: a claim need not name the cause and zone like a line must.
+    incomplete = set(missing_cause(claim, analysis))
+    reasons = [
+        r
+        for r in verify(claim, analysis, max_words=CLAIM_WORDS).reasons
+        if r not in incomplete
+    ]
+    if not reasons:
+        return analysis
+    claim = template(analysis, "en")
+    return analysis.model_copy(
+        update={
+            "insight": analysis.insight.model_copy(update={"claim": claim}),
+            "claim_reasons": reasons,
+        }
     )
 
 
@@ -124,7 +156,9 @@ class AnalystExecutor(Executor):
                     "confidence": insight.confidence,
                 }
             )
-        await ctx.send_message(Analysis(task=task, insight=insight, values=values))
+        await ctx.send_message(
+            checked_claim(Analysis(task=task, insight=insight, values=values))
+        )
 
 
 class NarratorExecutor(Executor):
@@ -319,6 +353,7 @@ class LocalizerExecutor(Executor):
                 attempts=approved.attempts,
                 verdicts=approved.history,
                 insight=approved.analysis.insight,
+                claim_reasons=approved.analysis.claim_reasons,
             )
         )
 

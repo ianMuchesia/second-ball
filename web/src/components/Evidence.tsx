@@ -66,7 +66,12 @@ export default function EvidenceDrawer({
       {n ? (
         <section>
           <h4>Claim</h4>
-          <p>{n.insight?.claim ?? "–"}</p>
+          <p data-testid="claim">{n.insight?.claim ?? "–"}</p>
+          {n.claim_reasons && n.claim_reasons.length > 0 && (
+            <p className="small" data-testid="claim-replaced">
+              The model's claim failed the Verifier ({n.claim_reasons.join("; ")}), so code's claim is shown.
+            </p>
+          )}
           <h4>Verdict</h4>
           <p data-testid="verdict">
             {n.fallback

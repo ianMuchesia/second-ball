@@ -218,12 +218,13 @@ def task_for(
 ) -> NarrationTask:
     extra = {} if languages is None else {"languages": languages}
     ctx = context_at(data, moment)
+    counts = counts_for(data, moment)
     return NarrationTask(
         moment=moment,
         context=ctx,
         persona=persona,
         facts=facts_for(data, moment),
-        counts=counts_for(data, moment),
-        display=display_for(data, moment, ctx, persona),
+        counts=counts,
+        display=display_for(data, moment, ctx, persona, counts),
         **extra,
     )
