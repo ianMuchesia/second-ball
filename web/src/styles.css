@@ -332,3 +332,6 @@ b { font-weight: 600; }
 .pitch-scene.three .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-family: var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .pitch-scene.three.loading { display: grid; place-items: center; color: var(--muted); }
 .pitch-scene.three .interpolated { position: absolute; left: 12px; bottom: 6px; margin: 0; font-size: 0.7rem; color: var(--muted); background: rgba(18, 17, 16, 0.7); padding: 2px 8px; border-radius: 2px; }
+.pitch-scene.three .cameras { position: absolute; right: 10px; bottom: 6px; display: flex; gap: 4px; }
+.pitch-scene.three .cameras button { font-size: 0.7rem; padding: 2px 8px; background: rgba(18, 17, 16, 0.75); }
+.pitch-scene.three .cameras button.on { background: var(--amber); color: var(--bg); }
