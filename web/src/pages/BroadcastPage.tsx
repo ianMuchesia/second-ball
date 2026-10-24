@@ -9,6 +9,7 @@ import { ScoreBug } from "../components/ScoreBug";
 import { Timeline } from "../components/Timeline";
 import { ViewerBar } from "../components/ViewerBar";
 import { useRun } from "../hooks/useRun";
+import { can3d } from "../device";
 import { useAppDispatch, useAppSelector } from "../store";
 import { actions } from "../store/playback";
 import { profileActions } from "../store/profile";
@@ -28,6 +29,8 @@ import { useTicker } from "../useTicker";
 // Opened on demand: separate chunks.
 const EvidenceDrawer = lazy(() => import("../components/Evidence"));
 const IndicatorModal = lazy(() => import("../components/IndicatorModal"));
+// three.js and the player model: only for viewers who switch to 3D.
+const Pitch3D = lazy(() => import("../components/Pitch3D"));
 
 export default function BroadcastPage() {
   const run = useRun();
@@ -114,19 +117,25 @@ export default function BroadcastPage() {
     <main className="broadcast">
       <div className="stage">
         <div className="screen">
-          <Pitch
-            event={view.event}
-            frame={view.frame}
-            path={view.path}
-            homeTeam={match.home_team}
-            lineup={lineup}
-            highlighted={new Set(pb.highlighted)}
-            followed={me.followedPlayer}
-            onPick={(id) => {
-              dispatch(profileActions.follow(id));
-              dispatch(actions.setPanel("player"));
-            }}
-          />
+          {me.view === "3d" && can3d().ok ? (
+            <Suspense fallback={<div className="pitch-scene three loading">Loading the 3D pitch…</div>}>
+              <Pitch3D match={match} events={events} />
+            </Suspense>
+          ) : (
+            <Pitch
+              event={view.event}
+              frame={view.frame}
+              path={view.path}
+              homeTeam={match.home_team}
+              lineup={lineup}
+              highlighted={new Set(pb.highlighted)}
+              followed={me.followedPlayer}
+              onPick={(id) => {
+                dispatch(profileActions.follow(id));
+                dispatch(actions.setPanel("player"));
+              }}
+            />
+          )}
           <ScoreBug
             events={events}
             upto={view.index}

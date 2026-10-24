@@ -70,6 +70,7 @@ def absolute(e: MatchEvent, match: Match, t: float | None = None) -> dict:
         "start": point(e.start_x, e.start_y, turn),
         "end": point(e.end_x, e.end_y, turn),
         "xg": e.qualifiers.get("xg"),
+        "ball_speed_kmh": e.ball_speed_kmh,  # the 3D ball's flight time
         "freeze_frame": [
             {
                 "player_id": p.player_id,

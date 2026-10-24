@@ -1,5 +1,13 @@
 # Second Ball 3D: handoff
 
+> **Integrated (24 Oct 2026).** The 3D pitch now lives in the main screen as
+> an on-demand view: `web/src/three3d/` (scene), `web/src/components/Pitch3D.tsx`
+> (the canvas), the "Pitch: 2D / 3D" choice in the viewer bar. It reads run
+> bundles from the broadcast API (already in the broadcast frame: no second
+> flip), follows the screen's clock, and snaps to the engine's exact positions
+> when paused or on a clicked evidence event. Assets: `docs/ASSETS.md`. The
+> standalone `web3d/` app below is history (in git).
+
 How this 3D match viewer came about, what it does, what was decided and why, and what is still open. It is written so you, or a coding assistant on another machine, can pick the work up cold. The full build conversation (the user's messages and Claude's replies) is in [CONVERSATION.md](CONVERSATION.md).
 
 ## 1. What it is

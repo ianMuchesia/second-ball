@@ -65,3 +65,17 @@ test("review screenshots: personalization (analyst and fan)", async ({ page, req
   }
 });
 
+test("review screenshots: the 3D pitch at 63'", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const events: { t: number; minute: number; outcome: string }[] = await (
+    await request.get(`/api/runs/${RUN}/events`)
+  ).json();
+  const red = events.find((e) => e.outcome === "red_card")!.t;
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(() => localStorage.setItem("second-ball.profile.v1", JSON.stringify({ view: "3d" })));
+  await page.goto(`/runs/${RUN}?t=${red}`);
+  await page.getByTestId("pitch-3d").and(page.locator("[data-ready=yes]")).waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: "../docs/screens/3d-63.png" });
+});
+

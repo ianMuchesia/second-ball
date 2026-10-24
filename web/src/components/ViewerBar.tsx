@@ -1,5 +1,6 @@
 import type { LineupPlayer } from "../api";
 import { teamName } from "../api";
+import { can3d } from "../device";
 import { useAppDispatch, useAppSelector } from "../store";
 import { type Persona, profileActions } from "../store/profile";
 import { useMetricsQuery } from "../store/serverApi";
@@ -22,8 +23,22 @@ export function ViewerBar({
   const p = useAppSelector((s) => s.profile);
   const { data: metrics = [] } = useMetricsQuery();
   const label = (d: Record<string, string>) => (p.persona === "casual" ? (d.casual ?? d.analyst) : d.analyst);
+  const three = can3d();
   return (
     <div className="viewer-bar" data-testid="viewer-bar">
+      <label title="2D shows the engine's exact positions; 3D animates between them.">
+        Pitch
+        <select
+          value={three.ok ? p.view : "2d"}
+          onChange={(e) => dispatch(profileActions.setView(e.target.value as "2d" | "3d"))}
+          data-testid="view"
+        >
+          <option value="2d">2D</option>
+          <option value="3d" disabled={!three.ok}>
+            {three.ok ? "3D" : `3D (${three.why})`}
+          </option>
+        </select>
+      </label>
       <label>
         Viewer
         <select

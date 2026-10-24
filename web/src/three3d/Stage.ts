@@ -1,11 +1,13 @@
-// The 3D match. It owns the playback clock and the animation frame; React only
-// hears about the clock ~10 times a second (onTick), so the HUD never slows the
-// picture down. Each frame: the engine's path for every player at this instant
-// (a curve through the freeze frames), then each footballer steers along it.
+// The 3D match. It follows the screen's own clock (the Redux playback state,
+// read each animation frame), so 2D and 3D always show the same instant, and
+// React re-renders nothing for it. Playing: the engine's path for every player
+// (a curve through the freeze frames), each footballer steering along it.
+// Paused, or at a clicked evidence event: every player and the ball exactly
+// where the engine put them, as on the 2D pitch.
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { ballAt, type BallState, DRIBBLES, indexAt, isGoal, SHOTS, teamCode, teamName, type Timeline } from "../match";
+import { ballAt, type BallState, DRIBBLES, indexAt, isGoal, playbackAt, SHOTS, teamCode, teamName, type Timeline } from "./match";
 import { Footballer, loadRig } from "./Footballer";
 import { GK_KITS, matchKits, REF_KIT } from "./kits";
 import { Stadium, wx, wz } from "./stadium";
@@ -14,6 +16,20 @@ import { ballTexture } from "./textures";
 export type CameraMode = "broadcast" | "tactical" | "behind" | "free";
 
 const BALL_R = 0.16; // a little over life size (0.11) so it reads from the gantry
+
+/** The screen's playback state: match seconds, playing, a clicked event. */
+export interface Clock {
+  t: number;
+  playing: boolean;
+  focusEventId: string | null;
+}
+
+/** A player where the 3D scene has him, in pitch metres (broadcast frame). */
+export interface Placed {
+  player_id: string;
+  x: number;
+  y: number;
+}
 
 export interface Tick {
   t: number;
@@ -59,11 +75,19 @@ export class Stage {
   private ballOff = new THREE.Vector2();
   private feet = new THREE.Vector2();
 
-  static async create(canvas: HTMLCanvasElement, tl: Timeline): Promise<Stage> {
-    return new Stage(canvas, tl, await loadRig());
+  /** Exact engine positions this frame (paused or a clicked event). */
+  exact = true;
+
+  static async create(canvas: HTMLCanvasElement, tl: Timeline, clock: () => Clock): Promise<Stage> {
+    return new Stage(canvas, tl, await loadRig(), clock);
   }
 
-  private constructor(private canvas: HTMLCanvasElement, private tl: Timeline, rig: GLTF) {
+  private constructor(
+    private canvas: HTMLCanvasElement,
+    private tl: Timeline,
+    rig: GLTF,
+    private clock: () => Clock,
+  ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -98,7 +122,7 @@ export class Stage {
     rim.position.set(55, 60, -70);
     this.scene.add(rim);
 
-    this.stadium = new Stadium(this.renderer, tl.meta.weather, this.kits.home, this.kits.away, { home: teamName(tl.home), away: teamName(tl.away) });
+    this.stadium = new Stadium(this.renderer, tl.weather, this.kits.home, this.kits.away, { home: teamName(tl.home), away: teamName(tl.away) });
     this.scene.add(this.stadium.group);
 
     for (const p of tl.slots) {
@@ -173,6 +197,19 @@ export class Stage {
     return { x: ((p.x + 1) / 2) * this.canvas.clientWidth, y: ((1 - p.y) / 2) * this.canvas.clientHeight };
   }
 
+  /** Every player where the scene has him now, in pitch metres. */
+  positions(): Placed[] {
+    return this.players
+      .map((f, k) => ({ player_id: this.tl.slots[k].player_id, x: f.x + 52.5, y: 34 - f.z, shown: f.root.visible }))
+      .filter((p) => p.shown)
+      .map(({ player_id, x, y }) => ({ player_id, x, y }));
+  }
+
+  /** The ball, in pitch metres. */
+  ballAt(): { x: number; y: number } {
+    return { x: this.ball.position.x + 52.5, y: 34 - this.ball.position.z };
+  }
+
   dispose() {
     this.gone = true;
     cancelAnimationFrame(this.raf);
@@ -233,15 +270,19 @@ export class Stage {
     }
     const dtReal = this.last ? Math.min(0.1, (now - this.last) / 1000) : 1 / 60;
     this.last = now;
-    let dtMatch = 0;
-    if (this.playing) {
-      dtMatch = dtReal * this.speed;
-      this.t += dtMatch;
-      if (this.t >= this.tl.end) {
-        this.t = this.tl.end;
-        this.playing = false;
-      }
+    // Follow the screen's clock: a small step forward is played, anything else
+    // (a jump, a step back) is a seek.
+    const c = this.clock();
+    const target = playbackAt(this.tl, c.t, c.focusEventId);
+    this.playing = c.playing;
+    this.exact = !c.playing || c.focusEventId !== null;
+    let dtMatch = target - this.t;
+    if (dtMatch < 0 || dtMatch > 3 || (this.exact && dtMatch !== 0)) {
+      this.snapNext = true;
+      this.celebrating = null;
+      dtMatch = 0;
     }
+    this.t = target;
     this.frame(dtMatch, dtReal);
     this.raf = requestAnimationFrame(this.loop);
   };
@@ -281,6 +322,12 @@ export class Stage {
       const id = this.tl.slots[k].player_id;
       let x = p1[2 * k];
       let y = p1[2 * k + 1];
+      if (this.exact) {
+        // The engine's freeze frame itself: no curve, no pull to the ball.
+        f.step(wx(x), wz(y), wx(e.ex), wz(e.ey), 0, dtReal, -1, true);
+        f.lit = id === e.player;
+        continue;
+      }
       if (!Number.isNaN(x) && !Number.isNaN(p2[2 * k])) {
         x = cr(or(p0[2 * k], x), x, p2[2 * k], or(p3[2 * k], p2[2 * k]));
         y = cr(or(p0[2 * k + 1], y), y, p2[2 * k + 1], or(p3[2 * k + 1], p2[2 * k + 1]));
@@ -317,9 +364,11 @@ export class Stage {
     this.referee.step(wx(rx), wz(ry), wx(b.x), wz(b.y), dtMatch, dtReal, -1, snap);
 
     // The ball belongs to feet, not to the engine's line: glued to a dribbler,
-    // leaving the passer's boot, and arriving at the receiver's.
-    let bwx = wx(b.x);
-    let bwz = wz(b.y);
+    // leaving the passer's boot, and arriving at the receiver's. Exact: where
+    // the event's action ended, as on the 2D pitch.
+    let bwx = wx(this.exact ? e.ex : b.x);
+    let bwz = wz(this.exact ? e.ey : b.y);
+    if (this.exact) b.h = 0;
     const us = t - e.t;
     const kE = this.tl.slotOf.get(e.player);
     const kN = this.tl.slotOf.get(n.player);
@@ -330,7 +379,7 @@ export class Stage {
         this.ballOff.set(this.feet.x - wx(e.sx), this.feet.y - wz(e.sy));
       } else this.ballOff.set(0, 0);
     }
-    if (!b.inNet && kE !== undefined) {
+    if (!this.exact && !b.inNet && kE !== undefined) {
       if (DRIBBLES.has(e.type)) {
         this.players[kE].feet(this.feet, 0.45 + 0.4 * Math.abs(Math.sin(us * 4.5)));
         bwx = this.feet.x;
