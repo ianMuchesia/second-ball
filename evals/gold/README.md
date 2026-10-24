@@ -2,9 +2,11 @@
 
 - `caught/` — every draft the Verifier sent back in a real-model recording,
   saved by the recorder (`evals/gold/caught.py`): the text, the reasons, the
-  moment and the kind of error. `human_label` is for a person to say whether
-  the Verifier was right (the name check also flags ordinary words that start
-  a sentence, e.g. "Meanwhile").
+  moment and the kind of error. Labelled by Ian (`human_label`):
+  `real_mistake` (right to block), `false_alarm` (the line was fine),
+  `style_only` (facts right, blocked by a format rule), `wrong_reason`
+  (wrong reason, but a real error it did not name); `missed` lists real
+  errors the Verifier did not catch.
 - `missed.json` — lines that aired wrong because no check existed yet, each
   with the fix that now catches it.
 - `agents/narrator/examples.yaml` — Ian's lines; the first gold items.

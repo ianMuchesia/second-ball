@@ -15,7 +15,9 @@
   "errors": [
    "unknown_name"
   ],
-  "human_label": null
+  "human_label": "false_alarm",
+  "human_note": "Only reason was 'Patient', an ordinary word.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -33,7 +35,9 @@
   "errors": [
    "unknown_name"
   ],
-  "human_label": null
+  "human_label": "false_alarm",
+  "human_note": "'Patient' is an ordinary word.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -53,7 +57,9 @@
    "unknown_name",
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "real_mistake",
+  "human_note": "'Harbour lead Riverside 0-1' contradicts itself; 'Meanwhile' was a false alarm.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -71,7 +77,11 @@
   "errors": [
    "unknown_name"
   ],
-  "human_label": null
+  "human_label": "wrong_reason",
+  "human_note": "'Meanwhile' was a false alarm, but the line was wrong: 'turning xG 0.16 into an xG 0.45 chance' links two unrelated numbers.",
+  "missed": [
+   "wrong_relation"
+  ]
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -89,7 +99,9 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "real_mistake",
+  "human_note": "'Harbour lead Riverside 0-1' contradicts itself.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -107,7 +119,9 @@
   "errors": [
    "wrong_owner"
   ],
-  "human_label": null
+  "human_label": "real_mistake",
+  "human_note": "The 0.71 -> 0.80 control is Riverside's.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -125,7 +139,9 @@
   "errors": [
    "unknown_name"
   ],
-  "human_label": null
+  "human_label": "false_alarm",
+  "human_note": "'Things' is an ordinary word.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -143,7 +159,9 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Facts correct; blocked by a style rule only (spelled-out score in the right order). Should be auto-formatted, not blocked.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -163,7 +181,9 @@
    "unknown_name",
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Score in fixture order is style only; 'Despite' was a false alarm; facts correct.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -181,7 +201,11 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Style only; MISSED 'converting 4 big chances' (Harbour scored 2).",
+  "missed": [
+   "chances_as_goals"
+  ]
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -199,6 +223,10 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Style only; borderline overstatement 'capitalizing on 4 big chances' (2 goals).",
+  "missed": [
+   "chances_as_goals"
+  ]
  }
 ]

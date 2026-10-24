@@ -118,16 +118,9 @@ def test_counts_come_phrased_by_code(goal):
             "Harbour lead 2-0, their second counter goal behind the left-back.",
             "as given",
         ),
-        (
-            (
-                "Harbour strike behind Riverside's left-back to make it "
-                "Riverside 0-2 Harbour, and Harbour lead 2-0!"
-            ),
-            "score once",
-        ),
     ],
 )
-def test_wrong_relations_and_repeated_scores_are_rejected(goal, line, why):
+def test_wrong_relations_are_rejected(goal, line, why):
     data, _ = goal
     reasons = verify(line, analysis(data, goal_88(data), "analyst")).reasons
     assert any(why in r for r in reasons), reasons
@@ -158,8 +151,19 @@ def test_a_claim_on_screen_is_verified_too(goal):
             )
         }
     )
+    # Format is fixed in code ("one-nil" -> "1-0"); a wrong fact is replaced.
     out = checked_claim(bad)
-    assert out.claim_reasons and "digits" in out.claim_reasons[0]
+    assert not out.claim_reasons
+    assert out.insight.claim == "Harbour scored to take a 1-0 lead."
+    wrong = a.model_copy(
+        update={
+            "insight": a.insight.model_copy(
+                update={"claim": "Harbour lead Riverside 0-1 after the counter."}
+            )
+        }
+    )
+    out = checked_claim(wrong)
+    assert out.claim_reasons and "leader's score goes first" in out.claim_reasons[0]
     assert out.insight.claim.startswith("GOAL, 34'.")
     assert verify(out.insight.claim, out).passed
     # A correct claim is kept, even without the zone a line must name.

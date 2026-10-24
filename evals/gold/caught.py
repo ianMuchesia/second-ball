@@ -16,6 +16,8 @@ OUT = Path(__file__).resolve().parent / "caught"
 # The kind of error, from the Verifier's reason (first match wins).
 KINDS = [
     ("wrong_direction", ["' but the number goes"]),
+    ("chances_as_goals", ["chances converted"]),
+    ("wrong_relation", ["say this count as given", "separate numbers"]),
     ("wrong_owner", ["'s, not "]),
     (
         "wrong_score",

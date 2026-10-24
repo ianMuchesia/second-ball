@@ -37,6 +37,7 @@ from agents.pipeline.resilience import Policy, ask, call_tool
 from agents.pipeline.templates import LANGUAGES as TEMPLATE_LANGUAGES
 from agents.pipeline.templates import template
 from agents.pipeline.verifier import (
+    check,
     lock,
     missing_cause,
     unlock,
@@ -92,16 +93,17 @@ CLAIM_WORDS = 40
 def checked_claim(analysis: Analysis) -> Analysis:
     """The claim is shown on screen (the evidence drawer), so the Verifier
     checks it like a line; if it fails, code's template is the claim."""
-    claim = analysis.insight.claim
+    verdict = check(analysis.insight.claim, analysis, max_words=CLAIM_WORDS)
+    claim = verdict.text  # format fixed in code ("one-nil" -> "1-0")
     # Errors only: a claim need not name the cause and zone like a line must.
     incomplete = set(missing_cause(claim, analysis))
-    reasons = [
-        r
-        for r in verify(claim, analysis, max_words=CLAIM_WORDS).reasons
-        if r not in incomplete
-    ]
+    reasons = [r for r in verdict.reasons if r not in incomplete]
     if not reasons:
-        return analysis
+        if claim == analysis.insight.claim:
+            return analysis
+        return analysis.model_copy(
+            update={"insight": analysis.insight.model_copy(update={"claim": claim})}
+        )
     claim = template(analysis, "en")
     return analysis.model_copy(
         update={
@@ -252,9 +254,10 @@ class VerifierExecutor(Executor):
             if draft.unavailable:
                 verdict = Verdict(passed=False, reasons=[UNAVAILABLE])
             else:
-                verdict = verify(
+                # Format fixes in code, then the truth rules (verifier tiers).
+                verdict = check(
                     draft.text, draft.analysis, examples(draft.analysis.task.persona)
-                ).model_copy(update={"text": draft.text})
+                )
             span.set_attributes(
                 {
                     "passed": verdict.passed,
@@ -267,7 +270,7 @@ class VerifierExecutor(Executor):
             await ctx.send_message(
                 Approved(
                     analysis=draft.analysis,
-                    text=draft.text,
+                    text=verdict.text,
                     verdict=verdict,
                     fallback=False,
                     attempts=draft.attempt,

@@ -22,7 +22,7 @@ from agents.pipeline.models import Analysis, MatchContext, NarrationTask, Person
 from agents.pipeline.resilience import Policy, ask
 from agents.pipeline.templates import LANGUAGES as TEMPLATE_LANGUAGES
 from agents.pipeline.templates import wording
-from agents.pipeline.verifier import verify
+from agents.pipeline.verifier import check, verify
 from agents.pipeline.workflow import UNAVAILABLE, localize
 from core.contracts import Clock, Insight, LineupPlayer, MetricValue, Moment
 from core.metrics import Events
@@ -214,12 +214,17 @@ async def player_recap(
             if reply is None:
                 history.append({"passed": False, "reasons": [UNAVAILABLE], "text": ""})
                 break
-            v = verify(reply.strip(), analysis, max_words=MAX_WORDS, final=final)
+            v = check(reply.strip(), analysis, max_words=MAX_WORDS, final=final)
             history.append(
-                {"passed": v.passed, "reasons": v.reasons, "text": reply.strip()}
+                {
+                    "passed": v.passed,
+                    "reasons": v.reasons,
+                    "text": v.text,
+                    "fixes": v.fixes,
+                }
             )
             if v.passed:
-                text = reply.strip()
+                text = v.text  # with any format fixes made in code
                 break
     fallback = text is None
     if fallback:

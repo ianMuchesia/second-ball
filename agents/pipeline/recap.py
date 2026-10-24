@@ -27,7 +27,7 @@ from agents.pipeline.models import (
 )
 from agents.pipeline.resilience import Policy, ask
 from agents.pipeline.templates import recap_template
-from agents.pipeline.verifier import verify
+from agents.pipeline.verifier import check, verify
 from agents.pipeline.workflow import UNAVAILABLE, localize
 from agents.telemetry import step
 from core.contracts import Insight, MetricValue, Moment, Overlay
@@ -87,7 +87,7 @@ def recap_task(
     aired: list[Aired],
     persona: Persona,
     languages: list[str],
-) -> tuple[NarrationTask, dict[str, float]]:
+) -> tuple[NarrationTask, dict[str, float], dict[str, str]]:
     """The recap as a match-wide moment: stats from the MatchState as its
     values, plus the aired lines' values (so the recap may quote them)."""
     state = match_state(events)
@@ -119,6 +119,9 @@ def recap_task(
         for k, v in a.task.counts.items():
             counts[k] = max(counts.get(k, v), v)
     counts.pop("passes_in_move", None)  # about one move, not the match
+    # The minutes of the lines that aired ("the 34th-minute counter").
+    for i, a in enumerate(aired):
+        counts[f"aired{i}_minute"] = a.overlay.t_in.match.minute
     ctx = context.model_copy(update={"minute": state.clock.minute})
     task = NarrationTask(
         moment=moment,
@@ -133,9 +136,17 @@ def recap_task(
         },
     )
     values = {k: mv.value for k, mv in stats.items()}
+    # Whose each number is: a team's stats, an aired line's moment team.
+    owners = {
+        f"{slug(context.team_names[t])}_{n}": t
+        for t in (context.home, context.away)
+        for n in RECAP_METRICS
+    }
     for i, a in enumerate(aired):
         values |= {f"aired{i}_{k}": v for k, v in a.overlay.values.items()}
-    return task, values
+        if a.task.moment.team:
+            owners |= {f"aired{i}_{k}": a.task.moment.team for k in a.overlay.values}
+    return task, values, owners
 
 
 def fallback(when: When, task: NarrationTask, values, aired: list[Aired]) -> str:
@@ -171,7 +182,9 @@ async def recap(
     policy: Policy | None = None,
 ) -> Narration:
     policy = policy or Policy()
-    task, values = recap_task(when, events, context, aired, persona, list(languages))
+    task, values, owners = recap_task(
+        when, events, context, aired, persona, list(languages)
+    )
     analysis = Analysis(
         task=task,
         insight=Insight(
@@ -181,6 +194,7 @@ async def recap(
             confidence=1.0,
         ),
         values=values,
+        owners=owners,
     )
     agent = Agent(
         client=AdapterChatClient(llm),
@@ -206,15 +220,15 @@ async def recap(
                 history.append(Verdict(passed=False, reasons=[UNAVAILABLE]))
                 break
             with step("verifier", attempt=attempt) as v_span:
-                verdict = verify(
+                verdict = check(
                     reply.strip(), analysis, max_words=MAX_WORDS, final=final
-                ).model_copy(update={"text": reply.strip()})
+                )
                 v_span.set_attributes(
                     {"passed": verdict.passed, "reasons": verdict.reasons}
                 )
             history.append(verdict)
             if verdict.passed:
-                text = reply.strip()
+                text = verdict.text  # with any format fixes made in code
                 break
         is_fallback = text is None
         if is_fallback:

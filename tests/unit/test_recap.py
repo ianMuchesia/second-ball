@@ -51,7 +51,7 @@ def test_full_time_recap_is_verified_and_has_evidence():
 
 def test_recap_may_quote_aired_lines_and_stats_but_nothing_else():
     ctx = context_at(DATA, GOALS[-1])
-    task, values = recap_task("full_time", DATA.events, ctx, aired(), "analyst", [])
+    task, values, _ = recap_task("full_time", DATA.events, ctx, aired(), "analyst", [])
     from agents.pipeline.models import Analysis
     from core.contracts import Insight
 

@@ -57,6 +57,9 @@ class Analysis(Part):
     # Why the Analyst's own claim failed the Verifier and code's replaced it
     # (the claim is shown on screen, so it is checked like a line).
     claim_reasons: list[str] = Field(default_factory=list)
+    # Whose number each value is (value name -> team_id), when not all the
+    # moment's team's (recaps quote both teams' stats and aired lines).
+    owners: dict[str, str] = Field(default_factory=dict)
 
 
 class Draft(Part):
@@ -72,6 +75,10 @@ class Verdict(Part):
     reasons: list[str] = Field(default_factory=list)
     risk_tier: RiskTier = "low"  # high = a human must approve before airing
     text: str = ""  # the draft this verdict is about (kept for evals)
+    # Format tier: what code fixed in the draft before checking ("two-nil ->
+    # 2-0"). Tone tier: logged, never blocks.
+    fixes: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
 
 
 class Retry(Part):

@@ -15,7 +15,9 @@
   "errors": [
    "unknown_name"
   ],
-  "human_label": null
+  "human_label": "false_alarm",
+  "human_note": "'Patient' is an ordinary word; the cross matches the 30' move.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -37,7 +39,9 @@
    "wrong_number",
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "real_mistake",
+  "human_note": "'Harbour lead Riverside 0-1' contradicts itself; '34th minute' and '1 pass' were false alarms (both true).",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -55,7 +59,9 @@
   "errors": [
    "wrong_owner"
   ],
-  "human_label": null
+  "human_label": "real_mistake",
+  "human_note": "Wrong owner (the 0.71 -> 0.80 control is Riverside's); 'Riverside drop deeper' is wrong too: Harbour dropped deeper.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -73,7 +79,9 @@
   "errors": [
    "wrong_direction"
   ],
-  "human_label": null
+  "human_label": "real_mistake",
+  "human_note": "Wrong direction ('drops' for a rise), and the 'because' is wrong.",
+  "missed": []
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -91,7 +99,11 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Style only; MISSED 'converted 4 big chances' (2 goals).",
+  "missed": [
+   "chances_as_goals"
+  ]
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -109,7 +121,11 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Style only; MISSED wrong owner: 'control rose to 0.8' implied Harbour's; it is Riverside's.",
+  "missed": [
+   "wrong_owner"
+  ]
  },
  {
   "model": "gemini-3.5-flash-lite",
@@ -127,6 +143,10 @@
   "errors": [
    "wrong_score"
   ],
-  "human_label": null
+  "human_label": "style_only",
+  "human_note": "Style only; MISSED wrong owner: 'Harbour's control rose to 0.8' is Riverside's.",
+  "missed": [
+   "wrong_owner"
+  ]
  }
 ]
