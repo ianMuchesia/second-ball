@@ -36,6 +36,12 @@ ROOT = Path(__file__).resolve().parents[2]
 CAUGHT = Path(__file__).resolve().parent / "caught"
 MATCH = ROOT / "demo" / "match.jsonl"
 BLOCK = {"real_mistake", "wrong_reason"}
+# The same 18 drafts through the Verifier before the tiers (24 Oct 2026).
+BEFORE = """**Before the tiers (24 Oct, same 18 drafts):** 18 blocked, 6 of them false
+alarms (precision 67%); 12 real errors, but 5 blocked only for a style reason
+while the real error went unnamed (chances counted as goals, a recap's wrong
+owner). **After:** below. Ian's labels found the misses; each is now a test
+(`tests/unit/test_verifier_tiers.py`)."""
 
 
 @dataclass
@@ -143,6 +149,8 @@ def render(checked) -> str:
     missed = [i for i, v in checked if i.should_block and not right_reason(i, v)]
     lines = [
         "# Verifier accuracy on real caught drafts",
+        "",
+        BEFORE,
         "",
         f"{len(checked)} drafts the Verifier blocked in real Gemini runs, labelled by",
         "Ian (`evals/gold/caught/`), run through today's Verifier (format fixes in",
