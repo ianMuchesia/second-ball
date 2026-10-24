@@ -8,6 +8,7 @@ __pycache__/
 
 node_modules/
 web/dist/
+web3d/dist/
 
 # never commit data
 data/
