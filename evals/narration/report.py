@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from agents.llm import LLMClient, from_env
+from agents.llm.guard import add_flags, confirm, dry_run_requests
 from agents.mcp_server.data import MatchData
 from agents.pipeline import prompts
 from agents.pipeline.facts import task_for
@@ -165,9 +166,15 @@ def main():
     p.add_argument("--match-file", type=Path, default=Path("demo/match.jsonl"))
     p.add_argument("--runs", type=int, default=10)
     p.add_argument("--translation-runs", type=int, default=2)
+    add_flags(p)
     args = p.parse_args()
-    llm = from_env()
+    llm = from_env(provider=args.provider)
     data = MatchData.from_file(args.match_file)
+    if args.provider != "fake":
+        n = dry_run_requests(
+            lambda f: asyncio.run(run(data, f, args.runs, args.translation_runs))
+        )
+        confirm(llm, f"About {n} requests (a free dry run of this eval)", args.yes)
     start = time.monotonic()
     tallies, kept = asyncio.run(run(data, llm, args.runs, args.translation_runs))
     body = render(

@@ -106,6 +106,38 @@ Full JSON Schema: `docs/schemas/` (generated from `core/contracts`).
 - **Freeze frames** are generated around the ball each event (anchors + noise +
   smoothing), not tracked continuously; movement between events is not modelled.
 
+## Player stats: what the data supports (Phase 5)
+
+Player cards (`core/players`, groups in `core/players/stat_groups.yaml`,
+owner Ian) count every number from events; each stat lists the event types it
+comes from, and `tests/unit/test_players.py` checks the engine produces them.
+
+| Card | Fan | Analyst adds |
+|---|---|---|
+| Attacker (ST, wingers, LM/RM, AM) | goals, shots, chances created | assists, shots on target, xG, touches in the box |
+| Midfielder (DM, CM) | passes completed, interceptions, tackles | pass completion (Wilson 95%), lines broken, ball recoveries |
+| Defender (full-backs, wing-backs, centre-backs) | tackles, interceptions, clearances | passes completed, pass completion, long passes, crosses |
+| Goalkeeper | saves, goals conceded | long passes, xG faced |
+
+**Asked for, omitted: the data has no events for them** (never shown, never
+estimated):
+
+- **Distance covered.** Needs tracking data (every player's position many
+  times a second). Events carry positions only at each action, a few seconds
+  apart; a distance would be invented. A **touch map** (where he was involved)
+  is shown instead.
+- **Headers** (for defenders). The engine marks a header only on shots from
+  crosses and set pieces (10 of 10 headers in three free matches were shots);
+  it has no aerial duels and no headed clearances or passes, so a defender's
+  headers would always read 0.
+
+Definitions: a **chance created** is a pass to a teammate who then shot, with
+no other pass in between; an **assist** is one that was scored; **shots on
+target** scored or were saved (the engine emits a keeper save right after);
+a **long pass** is at least 30 m (`long_pass_m`); **ball recoveries** are the
+open-play regains of `core/metrics/play.regains`; **goals conceded** and **xG
+faced** count only while the keeper is in the freeze frame (on the pitch).
+
 ## Licence and contact
 
 MIT (see `LICENSE`). Synthetic data only; any resemblance of club or player

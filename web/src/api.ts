@@ -62,6 +62,7 @@ export interface Narration {
   attempts: number;
   verdicts: Verdict[];
   insight: { claim: string; mechanism: string; confidence: number } | null;
+  claim_reasons?: string[]; // the model's claim failed the Verifier: code's is shown
   latency_s: number;
   met_target: boolean;
   trace_id: string;
@@ -70,6 +71,14 @@ export interface Narration {
 }
 
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** The same counting words on the lower third, the feed and the drawer. A
+ * recap is about the match so far: its events, not one move. */
+export const evidenceCounts = (actions: number, players: number, numbers: number, recap = false) => [
+  recap ? plural(actions, "event") : `${plural(actions, "action")} in the move`,
+  plural(players, "player"),
+  plural(numbers, "number"),
+];
 
 /** How a line's timing reads: honest about templates and missed targets. */
 export function latencyText(n: Narration): { text: string; ok: boolean } {
@@ -116,6 +125,7 @@ export interface Move {
 /** A metric the moment quotes, summarised: never merged into the move. */
 export interface NumberRow {
   metric: string;
+  label: string; // the registry's name for it ("xG", "Control index")
   when: "before" | "after";
   value: number;
   events: number; // how many events it was computed over
@@ -132,7 +142,72 @@ export interface Run {
   overlays: Timed<Overlay>[];
   narrations: Narration[];
   indicators: IndicatorRow[];
+  player_recaps: PlayerRecap[];
   audit: AuditRow[];
+}
+
+/** A verified half-time / full-time paragraph about one player. */
+export interface PlayerRecap {
+  player_id: string;
+  when: "half_time" | "full_time";
+  persona: string;
+  t: number;
+  text: Record<string, string>;
+  fallback: boolean;
+  passed: boolean;
+  evidence_event_ids: string[];
+}
+
+/** One stat's value after a change (core/players), from match second t. */
+export interface StatSnapshot {
+  t: number;
+  value: number | null;
+  numerator: number | null;
+  denominator: number | null;
+  interval: [number, number] | null; // Wilson 95%, rates only
+}
+
+export interface PlayerStat {
+  name: string;
+  label: string;
+  definition: string;
+  unit: string;
+  rate: boolean;
+  of: boolean; // shown "completed of attempted"
+  fan: boolean; // a fan's top three
+  sources: string[]; // event types it is counted from
+  snapshots: StatSnapshot[];
+  events: { t: number; event_ids: string[] }[];
+}
+
+export interface PlayerCard {
+  player: LineupPlayer;
+  group: string;
+  group_label: string;
+  stats: PlayerStat[];
+  touches: { t: number; event_id: string; type: string; xy: [number, number] }[];
+  omitted: Record<string, string>; // asked for, but no events: never shown
+}
+
+export interface MetricValueAt {
+  value: number;
+  evidence_event_ids: string[];
+  events: number;
+  numerator: number | null;
+  denominator: number | null;
+  interval: [number, number] | null;
+}
+
+export interface MetricAt {
+  name: string;
+  window_min: number | null;
+  values: Record<string, MetricValueAt | null>; // team_id or "match"
+}
+
+export interface MetricListItem {
+  name: string;
+  display_name: Record<string, string>;
+  grain: string;
 }
 
 export interface MetricInfo {
@@ -202,3 +277,15 @@ export function momentIdOf(overlayId: string): string {
 export function clockText(minute: number, second: number): string {
   return `${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
 }
+
+/** The latest snapshot at or before t (snapshots sorted by t). */
+export function latestAt<T extends { t: number }>(xs: T[], t: number): T | undefined {
+  let best: T | undefined;
+  for (const x of xs) if (x.t <= t) best = x;
+  return best;
+}
+
+export const pct = (v: number) => `${Math.round(v * 100)}%`;
+
+/** A rate's 95% range in words, e.g. "61–85%". */
+export const range = ([lo, hi]: [number, number]) => `${Math.round(lo * 100)}–${Math.round(hi * 100)}%`;

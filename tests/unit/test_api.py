@@ -95,6 +95,8 @@ def test_evidence_is_the_move_not_the_metric_windows(client):
         i for n in goal["metrics_after"].values() for i in n["evidence_event_ids"]
     }
     assert {n["events"] for n in goal["numbers"]} and not windows - set(events)
+    # Labels are the registry's names, not the keys: "xG", never "Xg".
+    assert {n["label"] for n in goal["numbers"]} == {"xG", "xG of the chance"}
 
     (red,) = [m for m in r["moments"] if m["kind"] == "red_card_impact"]
     ids = red["move"]["ids"]

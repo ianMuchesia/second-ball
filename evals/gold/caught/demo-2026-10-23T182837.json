@@ -1,0 +1,232 @@
+[
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo018-casual",
+  "kind": "big_chance",
+  "minute": 30,
+  "persona": "casual",
+  "attempt": 1,
+  "text": "Patient passing from Riverside carves open Harbour's defence with a cross into the box, leaving them level at 0-0!",
+  "reasons": [
+   "'Patient' is not a team or a player on the team sheet"
+  ],
+  "errors": [
+   "unknown_name"
+  ],
+  "human_label": "false_alarm",
+  "human_note": "Only reason was 'Patient', an ordinary word.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo018-casual",
+  "kind": "big_chance",
+  "minute": 30,
+  "persona": "casual",
+  "attempt": 2,
+  "text": "Riverside carve it open! Patient passing and a cross create a big chance, keeping it level at 0-0.",
+  "reasons": [
+   "'Patient' is not a team or a player on the team sheet"
+  ],
+  "errors": [
+   "unknown_name"
+  ],
+  "human_label": "false_alarm",
+  "human_note": "'Patient' is an ordinary word.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-half_time-analyst",
+  "kind": "recap_half_time",
+  "minute": 46,
+  "persona": "analyst",
+  "attempt": 1,
+  "text": "Harbour lead Riverside 0-1 at half-time, despite generating just 3 shots to Riverside's 13. Harbour's efficiency is highlighted by a counter-attack yielding a chance worth xG 0.45 from xG 0.16. Meanwhile, Riverside's sustained passing created an xG 0.42 opportunity, but they trail.",
+  "reasons": [
+   "'Meanwhile' is not a team or a player on the team sheet",
+   "the leader's score goes first: Harbour lead 1-0"
+  ],
+  "errors": [
+   "unknown_name",
+   "wrong_score"
+  ],
+  "human_label": "real_mistake",
+  "human_note": "'Harbour lead Riverside 0-1' contradicts itself; 'Meanwhile' was a false alarm.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-half_time-analyst",
+  "kind": "recap_half_time",
+  "minute": 46,
+  "persona": "analyst",
+  "attempt": 2,
+  "text": "Harbour lead 1-0 at half-time. Harbour capitalized on a counter-attack behind Riverside's left-back, turning xG 0.16 into an xG 0.45 chance. Meanwhile, Riverside built a sustained passing sequence worth xG 0.42.",
+  "reasons": [
+   "'Meanwhile' is not a team or a player on the team sheet"
+  ],
+  "errors": [
+   "unknown_name"
+  ],
+  "human_label": "wrong_reason",
+  "human_note": "'Meanwhile' was a false alarm, but the line was wrong: 'turning xG 0.16 into an xG 0.45 chance' links two unrelated numbers.",
+  "missed": [
+   "wrong_relation"
+  ]
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-half_time-analyst",
+  "kind": "recap_half_time",
+  "minute": 46,
+  "persona": "analyst",
+  "attempt": 3,
+  "text": "Harbour lead Riverside 0-1 at half-time. Harbour capitalized on a counter-attack behind Riverside's left-back, converting a chance worth xG 0.45 from xG 0.16. Riverside's sustained passing sequence earlier generated a shot worth xG 0.42.",
+  "reasons": [
+   "the leader's score goes first: Harbour lead 1-0"
+  ],
+  "errors": [
+   "wrong_score"
+  ],
+  "human_label": "real_mistake",
+  "human_note": "'Harbour lead Riverside 0-1' contradicts itself.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo048-analyst",
+  "kind": "red_card_impact",
+  "minute": 63,
+  "persona": "analyst",
+  "attempt": 1,
+  "text": "Harbour lead 1-0: Riverside lose their left centre-back, dropping ball pressure from 0.52 to 0.25 and raising Harbour's control index to 0.80.",
+  "reasons": [
+   "the control numbers are Riverside's, not Harbour's"
+  ],
+  "errors": [
+   "wrong_owner"
+  ],
+  "human_label": "real_mistake",
+  "human_note": "The 0.71 -> 0.80 control is Riverside's.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-full_time-casual",
+  "kind": "recap_full_time",
+  "minute": 92,
+  "persona": "casual",
+  "attempt": 1,
+  "text": "Harbour stunned Riverside with a sharp counter-attack to take the lead. Things worsened when Riverside lost a player to a red card. Harbour sealed the win with a second late goal, ending the match with Harbour beating Riverside 2-0.",
+  "reasons": [
+   "'Things' is not a team or a player on the team sheet"
+  ],
+  "errors": [
+   "unknown_name"
+  ],
+  "human_label": "false_alarm",
+  "human_note": "'Things' is an ordinary word.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-full_time-casual",
+  "kind": "recap_full_time",
+  "minute": 92,
+  "persona": "casual",
+  "attempt": 2,
+  "text": "Harbour grabbed a quick counter-attack goal in the first half to take the lead. Riverside fought hard but went down a player after a red card. Harbour added a late goal to seal a two-nil victory over Riverside.",
+  "reasons": [
+   "write scores in digits, e.g. Harbour lead 2-0"
+  ],
+  "errors": [
+   "wrong_score"
+  ],
+  "human_label": "style_only",
+  "human_note": "Facts correct; blocked by a style rule only (spelled-out score in the right order). Should be auto-formatted, not blocked.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-full_time-analyst",
+  "kind": "recap_full_time",
+  "minute": 92,
+  "persona": "analyst",
+  "attempt": 1,
+  "text": "Harbour defeated Riverside 0-2, capitalizing on space behind the left-back with multiple counter-attacks. Despite Riverside generating 27 shots and 2.68 xG compared to Harbour's 7 shots and 1.73 xG, Harbour's clinical transition play secured the win.",
+  "reasons": [
+   "'Despite' is not a team or a player on the team sheet",
+   "the leader's score goes first: Harbour lead 2-0"
+  ],
+  "errors": [
+   "unknown_name",
+   "wrong_score"
+  ],
+  "human_label": "style_only",
+  "human_note": "Score in fixture order is style only; 'Despite' was a false alarm; facts correct.",
+  "missed": []
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-full_time-analyst",
+  "kind": "recap_full_time",
+  "minute": 92,
+  "persona": "analyst",
+  "attempt": 2,
+  "text": "Harbour defeated Riverside 0-2, converting 4 big chances from 7 shots. Riverside managed 2 big chances from 27 shots but failed to score, hampered by structural space behind their left-back exploited on counter-attacks.",
+  "reasons": [
+   "the leader's score goes first: Harbour lead 2-0"
+  ],
+  "errors": [
+   "wrong_score"
+  ],
+  "human_label": "style_only",
+  "human_note": "Style only; MISSED 'converting 4 big chances' (Harbour scored 2).",
+  "missed": [
+   "chances_as_goals"
+  ]
+ },
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37.884543+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-recap-full_time-analyst",
+  "kind": "recap_full_time",
+  "minute": 92,
+  "persona": "analyst",
+  "attempt": 3,
+  "text": "Harbour defeated Riverside 0-2, capitalizing on 4 big chances. Harbour exploited the space behind Riverside's left-back to generate efficient counter-attacks, securing the win despite Riverside registering 27 shots.",
+  "reasons": [
+   "the leader's score goes first: Harbour lead 2-0"
+  ],
+  "errors": [
+   "wrong_score"
+  ],
+  "human_label": "style_only",
+  "human_note": "Style only; borderline overstatement 'capitalizing on 4 big chances' (2 goals).",
+  "missed": [
+   "chances_as_goals"
+  ]
+ }
+]

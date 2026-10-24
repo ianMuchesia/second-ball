@@ -34,7 +34,17 @@ from agents.pipeline.models import (
     Verdict,
 )
 from agents.pipeline.resilience import Policy, ask, call_tool
-from agents.pipeline.verifier import lock, unlock, untranslated, verify, wrong_numbers
+from agents.pipeline.templates import LANGUAGES as TEMPLATE_LANGUAGES
+from agents.pipeline.templates import template
+from agents.pipeline.verifier import (
+    check,
+    lock,
+    missing_cause,
+    unlock,
+    untranslated,
+    verify,
+    wrong_numbers,
+)
 from agents.telemetry import step
 from core.contracts import Insight, Overlay
 from core.contracts.overlay import OverlayTime
@@ -77,6 +87,32 @@ def parse_insight(text: str | None, task: NarrationTask) -> Insight:
     )
 
 
+CLAIM_WORDS = 40
+
+
+def checked_claim(analysis: Analysis) -> Analysis:
+    """The claim is shown on screen (the evidence drawer), so the Verifier
+    checks it like a line; if it fails, code's template is the claim."""
+    verdict = check(analysis.insight.claim, analysis, max_words=CLAIM_WORDS)
+    claim = verdict.text  # format fixed in code ("one-nil" -> "1-0")
+    # Errors only: a claim need not name the cause and zone like a line must.
+    incomplete = set(missing_cause(claim, analysis))
+    reasons = [r for r in verdict.reasons if r not in incomplete]
+    if not reasons:
+        if claim == analysis.insight.claim:
+            return analysis
+        return analysis.model_copy(
+            update={"insight": analysis.insight.model_copy(update={"claim": claim})}
+        )
+    claim = template(analysis, "en")
+    return analysis.model_copy(
+        update={
+            "insight": analysis.insight.model_copy(update={"claim": claim}),
+            "claim_reasons": reasons,
+        }
+    )
+
+
 def sequence_lines(seq: dict | None, task: NarrationTask) -> list[str]:
     """The MCP sequence as short lines (no coordinates: nothing to misquote)."""
     if not seq:
@@ -89,9 +125,14 @@ def sequence_lines(seq: dict | None, task: NarrationTask) -> list[str]:
 
 
 class AnalystExecutor(Executor):
-    def __init__(self, llm: LLMClient, policy: Policy, tools=None):
+    """One insight per moment, the same for every persona: `insights` (shared
+    across a run's narrations) keeps the first one made; later personas reuse
+    it, so only the Narrator's wording differs (checked per persona)."""
+
+    def __init__(self, llm: LLMClient, policy: Policy, tools=None, insights=None):
         super().__init__(id="analyst")
         self.llm, self.policy, self.tools = llm, policy, tools
+        self.insights = {} if insights is None else insights
         self.agent = Agent(
             client=AdapterChatClient(llm), instructions=prompts.ANALYST, name="analyst"
         )
@@ -100,8 +141,15 @@ class AnalystExecutor(Executor):
     async def analyse(
         self, task: NarrationTask, ctx: WorkflowContext[Analysis]
     ) -> None:
+        values = values_of(task)
+        shared = self.insights.get(task.moment.moment_id)
+        if shared is not None:
+            with step("analyst", shared=True):
+                await ctx.send_message(
+                    checked_claim(Analysis(task=task, insight=shared, values=values))
+                )
+            return
         with step("analyst") as span:
-            values = values_of(task)
             seq = await call_tool(
                 self.tools,
                 "get_sequence",
@@ -115,6 +163,7 @@ class AnalystExecutor(Executor):
             prompt = prompts.analyst_prompt(task, values, sequence_lines(seq, task))
             reply = await ask(self.llm, self.agent, prompt, "analyst", self.policy)
             insight = parse_insight(reply, task)
+            self.insights[task.moment.moment_id] = insight
             span.set_attributes(
                 {
                     "code_insight": reply is None,
@@ -122,23 +171,30 @@ class AnalystExecutor(Executor):
                     "confidence": insight.confidence,
                 }
             )
-        await ctx.send_message(Analysis(task=task, insight=insight, values=values))
+        await ctx.send_message(
+            checked_claim(Analysis(task=task, insight=insight, values=values))
+        )
 
 
 class NarratorExecutor(Executor):
     def __init__(self, llm: LLMClient, policy: Policy):
         super().__init__(id="narrator")
         self.llm, self.policy = llm, policy
-        self.agents: dict[str, Agent] = {}
+        self.agents: dict[tuple, Agent] = {}
 
-    def agent(self, persona: str) -> Agent:
-        if persona not in self.agents:
-            self.agents[persona] = Agent(
+    def agent(self, task: NarrationTask) -> Agent:
+        """One narrator per persona and moment: its style examples leave out
+        the one written for this moment (leave-one-out)."""
+        key = (task.persona, *prompts.holdout(task))
+        if key not in self.agents:
+            self.agents[key] = Agent(
                 client=AdapterChatClient(self.llm),
-                instructions=prompts.narrator_system(persona),
-                name=f"narrator_{persona}",
+                instructions=prompts.narrator_system(
+                    task.persona, prompts.holdout(task)
+                ),
+                name=f"narrator_{task.persona}",
             )
-        return self.agents[persona]
+        return self.agents[key]
 
     async def write(
         self, analysis: Analysis, attempt: int, reasons, history, ctx
@@ -146,7 +202,7 @@ class NarratorExecutor(Executor):
         with step("narrator", attempt=attempt) as span:
             reply = await ask(
                 self.llm,
-                self.agent(analysis.task.persona),
+                self.agent(analysis.task),
                 prompts.narrator_prompt(analysis, reasons),
                 "narrator",
                 self.policy,
@@ -198,9 +254,10 @@ class VerifierExecutor(Executor):
             if draft.unavailable:
                 verdict = Verdict(passed=False, reasons=[UNAVAILABLE])
             else:
-                verdict = verify(
+                # Format fixes in code, then the truth rules (verifier tiers).
+                verdict = check(
                     draft.text, draft.analysis, examples(draft.analysis.task.persona)
-                ).model_copy(update={"text": draft.text})
+                )
             span.set_attributes(
                 {
                     "passed": verdict.passed,
@@ -213,7 +270,7 @@ class VerifierExecutor(Executor):
             await ctx.send_message(
                 Approved(
                     analysis=draft.analysis,
-                    text=draft.text,
+                    text=verdict.text,
                     verdict=verdict,
                     fallback=False,
                     attempts=draft.attempt,
@@ -236,13 +293,27 @@ class VerifierExecutor(Executor):
 
 
 async def localize(
-    llm: LLMClient, policy: Policy, text: str, analysis: Analysis, languages
+    llm: LLMClient,
+    policy: Policy,
+    text: str,
+    analysis: Analysis,
+    languages,
+    templated: bool = False,
+    kind=None,
 ) -> dict[str, str]:
     """{"en": text, lang: translation, ...}. Numbers and names are locked as
     typed tokens; each translation is checked in code (tokens intact, numbers
     allowed, not still English); one retry with the reason, then that language
-    is dropped (English always airs)."""
+    is dropped (English always airs). A code template (`templated`) takes its
+    own wording where it has one (Kiswahili), checked the same way; `kind`
+    gives that wording per language (default: the moment template)."""
     out = {"en": text}
+    if templated:  # a code template has its own wording in these languages
+        for lang in [x for x in languages if x in TEMPLATE_LANGUAGES]:
+            t = template(analysis, lang) if kind is None else kind(lang)
+            if not untranslated(t, text) and not wrong_numbers(t, analysis):
+                out[lang] = t
+        languages = [x for x in languages if x not in TEMPLATE_LANGUAGES]
     masked, slots = lock(text, analysis)
     for lang in languages:
         with step(f"localizer.{lang}") as span:
@@ -289,6 +360,7 @@ class LocalizerExecutor(Executor):
             approved.text,
             approved.analysis,
             approved.analysis.task.languages,
+            templated=approved.fallback,
         )
         await ctx.yield_output(
             Narration(
@@ -297,6 +369,7 @@ class LocalizerExecutor(Executor):
                 attempts=approved.attempts,
                 verdicts=approved.history,
                 insight=approved.analysis.insight,
+                claim_reasons=approved.analysis.claim_reasons,
             )
         )
 
@@ -321,9 +394,9 @@ def overlay(approved: Approved, text: dict[str, str]) -> Overlay:
     )
 
 
-def build(llm: LLMClient, policy: Policy | None = None, tools=None):
+def build(llm: LLMClient, policy: Policy | None = None, tools=None, insights=None):
     policy = policy or Policy()
-    analyst = AnalystExecutor(llm, policy, tools)
+    analyst = AnalystExecutor(llm, policy, tools, insights)
     narrator = NarratorExecutor(llm, policy)
     verifier = VerifierExecutor()
     localizer = LocalizerExecutor(llm, policy)
@@ -355,9 +428,15 @@ def emergency(task: NarrationTask, error: Exception) -> Narration:
 
 
 async def narrate(
-    llm: LLMClient, task: NarrationTask, policy: Policy | None = None, tools=None
+    llm: LLMClient,
+    task: NarrationTask,
+    policy: Policy | None = None,
+    tools=None,
+    insights: dict | None = None,
 ) -> Narration:
-    """Run the workflow for one moment and persona (one `narrate` span)."""
+    """Run the workflow for one moment and persona (one `narrate` span).
+    `insights` (moment_id -> Insight), shared across personas, makes the
+    insight the same for every viewer."""
     m = task.moment
     with step(
         "narrate",
@@ -369,7 +448,7 @@ async def narrate(
     ) as span:
         n = len(llm.budget.ledger)
         try:
-            result = await build(llm, policy, tools).run(task)
+            result = await build(llm, policy, tools, insights).run(task)
             (out,) = result.get_outputs()
         except Exception as e:  # never an empty overlay
             log.exception("narration workflow failed for %s", m.moment_id)

@@ -9,12 +9,16 @@
 #   63': Riverside's red card (last man, left centre-back)
 #   88': Harbour's 2nd counter goal behind the left-back, 0-2
 
+# Leave-one-out: narrating a moment, the Narrator never sees the example
+# written for that same moment (match, kind, minute), so it cannot copy it.
+match: m-riverside_athletic-harbour_town-1
+
 examples:
   - moment: counter_goal_34
     kind: goal
     minute: 34
-    casual: "Lightning from Harbour! One pass behind Riverside's left-back on the counter, and Harbour lead 0-1!"
-    analyst: "Harbour counter into the space behind Riverside's left-back, pushing their xG from 0.16 to 0.61 with that single chance."
+    casual: "Lightning from Harbour! One pass behind Riverside's left-back on the counter, and Harbour lead 1-0!"
+    analyst: "Harbour counter into the space behind Riverside's left-back: one chance worth xG 0.45, after only xG 0.16 before it."
   - moment: red_card_63
     kind: red_card_impact
     minute: 63
@@ -24,4 +28,4 @@ examples:
     kind: goal
     minute: 88
     casual: "Harbour strike on the break again! Right behind Riverside's left-back once more to make it 0-2!"
-    analyst: "Another sharp counter behind Riverside's left-back lifts Harbour's xG from 1.28 to 1.73 as that open channel is punished again."
+    analyst: "Another sharp counter behind Riverside's left-back: a chance worth xG 0.45 punishes that open channel again."

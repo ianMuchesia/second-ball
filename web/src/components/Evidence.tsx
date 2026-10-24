@@ -1,5 +1,6 @@
 import type { LineupPlayer, Narration, NumberRow, Overlay, RunMoment, ScreenEvent, Timed } from "../api";
-import { clockText, latencyText, plural, surname } from "../api";
+import { clockText, evidenceCounts, latencyText, plural, surname } from "../api";
+import { kindLabel } from "./MomentCard";
 import { useRun } from "../hooks/useRun";
 import { useAppDispatch } from "../store";
 import { actions } from "../store/playback";
@@ -35,7 +36,7 @@ export default function EvidenceDrawer({
     dispatch(actions.focusEvent({ t: e.t, eventId: e.event_id, players }));
   const onJump = (e: ScreenEvent) => focus(e, [e.player_id, ...(exposed ? [exposed.player_id] : [])]);
   const regain = events.find((e) => e.event_id === evidence.regainId);
-  const onClose = () => dispatch(actions.closeDrawer());
+  const onClose = () => dispatch(actions.closeDrawer(moment.moment_id));
 
   const mine = narrations.filter((x) => x.overlay_id.startsWith(moment.moment_id));
   const n = mine.find((x) => x.persona === persona) ?? mine[0];
@@ -56,16 +57,21 @@ export default function EvidenceDrawer({
         <span className={n && !n.fallback ? "status verified" : "status template"}>
           {n ? (n.fallback ? "Template" : "✓ Verified") : "Stat card"}
         </span>
-        <span>{plural(evidence.ids.length, "action")} in the move</span>
-        <span>{plural(evidence.players.length, "player")}</span>
-        <span>{plural(moment.numbers.length, "number")}</span>
+        {evidenceCounts(evidence.ids.length, evidence.players.length, moment.numbers.length).map((x) => (
+          <span key={x}>{x}</span>
+        ))}
         {latency && <span className={latency.ok ? "latency ok" : "latency late"}>{latency.text}</span>}
       </div>
 
       {n ? (
         <section>
           <h4>Claim</h4>
-          <p>{n.insight?.claim ?? "–"}</p>
+          <p data-testid="claim">{n.insight?.claim ?? "–"}</p>
+          {n.claim_reasons && n.claim_reasons.length > 0 && (
+            <p className="small" data-testid="claim-replaced">
+              The model's claim failed the Verifier ({n.claim_reasons.join("; ")}), so code's claim is shown.
+            </p>
+          )}
           <h4>Verdict</h4>
           <p data-testid="verdict">
             {n.fallback
@@ -138,8 +144,15 @@ export default function EvidenceDrawer({
       </ul>
       {rule && (
         <p className="small">
-          Detector rule <code>{moment.kind}</code> (importance {String(rule.importance)}), thresholds{" "}
-          <code>{JSON.stringify(rule.thresholds)}</code> from <code>{String(rule.source)}</code>.
+          Detector rule <code>{moment.kind}</code> (importance {String(rule.importance)}):{" "}
+          {Object.keys(rule.thresholds).length ? (
+            <>
+              thresholds <code>{JSON.stringify(rule.thresholds)}</code>
+            </>
+          ) : (
+            `${kindLabel(moment.kind).toLowerCase()}s always fire (no threshold)`
+          )}{" "}
+          from <code>{String(rule.source)}</code>.
         </p>
       )}
       {n && <p className="small">Trace: {n.trace_id}</p>}
@@ -155,7 +168,7 @@ function Number({ row }: { row: NumberRow }) {
   return (
     <details>
       <summary>
-        <b>{row.metric.replace(/_/g, " ")}</b> ({row.when}) <span className="value">{row.value.toFixed(3)}</span>
+        <b>{row.label}</b> ({row.when}) <span className="value">{row.value.toFixed(3)}</span>
       </summary>
       <p className="small">
         Computed by code over {plural(row.events, "event")}, {span} of match time. These events are its window, not

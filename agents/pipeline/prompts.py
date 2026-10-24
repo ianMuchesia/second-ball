@@ -5,6 +5,7 @@ import json
 import re
 
 from agents.narrator import examples
+from agents.pipeline.display import shown
 from agents.pipeline.lineups import describe
 from agents.pipeline.models import Analysis, MatchContext, NarrationTask
 from core.metrics import registry
@@ -40,7 +41,12 @@ moment helps and "numbers_are_for" whose numbers they are, so never say
 otherwise; when facts has build_up and exploited_zone, name both the action
 (counter, break) and the zone (e.g. behind the left-back); no predictions
 (not even "seal it" or "secure the win": the match is not over); do not blame one event
-on the weather; no injury or referee talk."""
+on the weather; no injury or referee talk. Write the score, the standing and a
+chance exactly as "say" gives them (digits, leader first: "Harbour lead 1-0",
+never "zero to one"); counts are whole numbers ("13 shots", never "13.0"), and a count in "say"
+is said exactly as given ("Harbour's second goal on the counter"); the score
+at most once;
+xG as "xG 0.30", never "0.3 goals"."""
 
 STYLE = {
     "casual": "Casual fan: short, a little emotion, plain words, no jargon. "
@@ -52,7 +58,7 @@ STYLE = {
 
 LOCALIZER = """ROLE: LOCALIZER
 Translate the line into {language}. Tokens stand for locked text: [T1] a team
-name, [S1] a score (home-away), [N1] a number, [X1] a term like xG. Copy each
+name, [S1] a score (keep its order), [N1] a number, [X1] a term like xG. Copy each
 token exactly once, unchanged, and write no other digits or number words of
 your own.
 Use football meanings: "clinical" means
@@ -173,10 +179,12 @@ def values_block(task: NarrationTask, values: dict[str, float]) -> str:
         if whole:
             block["numbers"] = {k: int(v) for k, v in whole.items()}
     else:
-        block["numbers"] = {k: round(v, 2) for k, v in values.items()}
+        block["numbers"] = {k: shown(v) for k, v in values.items()}
         block["units"] = units(values)
     if task.counts:
         block["counts"] = task.counts
+    if task.display:
+        block["say"] = task.display
     if task.facts:
         block["facts"] = {
             k: v for k, v in task.facts.items() if k not in ("side", "claim")
@@ -202,8 +210,13 @@ def analyst_prompt(
     return f"Moment: {task.moment.kind}.\n{seq}{values_block(task, values)}"
 
 
-def narrator_system(persona: str) -> str:
-    shots = examples(persona)
+def holdout(task: NarrationTask) -> tuple[str, str, int]:
+    """The moment being narrated: its own example is left out."""
+    return (task.context.match_id, task.moment.kind, task.moment.clock.minute)
+
+
+def narrator_system(persona: str, held_out: tuple[str, str, int] | None = None) -> str:
+    shots = examples(persona, held_out)
     tail = (
         (
             "\nSTYLE EXAMPLES ONLY - DO NOT COPY PHRASING OR NUMBERS FROM THESE "
@@ -226,29 +239,8 @@ def narrator_prompt(analysis: Analysis, reasons: list[str]) -> str:
 
 
 def fallback(analysis: Analysis) -> str:
-    """A plain sentence built only from code values (used after 2 failed retries)."""
-    task = analysis.task
-    ctx = task.context
-    who = ctx.team_names.get(task.moment.team or "", "The match")
-    words = KIND_WORDS.get(task.moment.kind, task.moment.kind.replace("_", " "))
-    pairs = [
-        (
-            name[: -len("_before")],
-            v,
-            analysis.values.get(name[: -len("_before")] + "_after"),
-        )
-        for name, v in analysis.values.items()
-        if name.endswith("_before")
-    ]
-    detail = ""
-    if "exploited_zone" in analysis.task.facts:
-        words += f", a counter {analysis.task.facts['exploited_zone']}"
-    if task.persona == "casual":
-        changes = casual_changes(analysis.values)
-        if changes:
-            name, word = next(iter(changes.items()))
-            detail = f" {name.lower()}: {word}."
-    elif pairs and pairs[0][2] is not None:
-        name, before, after = pairs[0]
-        detail = f" {name.replace('_', ' ')} {before:.2f} to {after:.2f}."
-    return f"{who}, {task.moment.clock.minute}': {words}.{detail}"
+    """The English code template (agents/pipeline/templates.py), used after
+    two failed retries or when the model gives no answer."""
+    from agents.pipeline.templates import template
+
+    return template(analysis, "en")

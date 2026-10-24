@@ -1,0 +1,40 @@
+# Player cards by position (Phase 5). TUNABLE, owner: Ian.
+# A fan sees `fan` (three numbers); an analyst sees `fan` + `analyst` (rates
+# with Wilson 95% intervals). Every stat is counted by code from match events
+# (core/players/__init__.py); its event sources are listed there.
+
+long_pass_m: 30          # a pass this long or longer is a long pass
+
+groups:
+  attacker:              # forwards, wingers, creative midfielders
+    label: Attacker
+    positions: [ST, LW, RW, AM, LM, RM]
+    fan: [goals, shots, chances_created]
+    analyst: [assists, shots_on_target, xg, touches_in_box]
+  midfielder:            # deep and central midfielders
+    label: Midfielder
+    positions: [DM, CM, LCM, RCM]
+    fan: [passes_completed, interceptions, tackles]
+    analyst: [pass_pct, lines_broken, recoveries]
+  defender:
+    label: Defender
+    positions: [RB, RCB, CB, LCB, LB, RWB, LWB]
+    fan: [tackles, interceptions, clearances]
+    analyst: [passes_completed, pass_pct, long_passes, crosses]
+  goalkeeper:
+    label: Goalkeeper
+    positions: [GK]
+    fan: [saves, goals_conceded]
+    analyst: [long_passes, xg_faced]
+
+# Asked for, but the engine produces no events for them: never shown, never
+# estimated. Listed in docs/DATASHEET.md.
+omitted:
+  headers: >-
+    The engine marks a header only on shots from crosses and set pieces; it
+    has no aerial duels and no headed clearances or passes, so a defender's
+    headers would always read 0.
+  distance_covered: >-
+    Needs tracking data (every player's position many times a second). Events
+    carry positions only at each action, a few seconds apart; any distance
+    would be invented.

@@ -22,7 +22,9 @@ def test_goal_is_a_moment_with_evidence():
     goal = event(1, 10, H, "shot", "success", at=(95, 34), pid="p1", xg=0.4)
     (m,) = [m for m in run([goal]) if m.kind == "goal"]
     assert (m.team, m.importance, m.evidence_event_ids) == (H, 1.0, ["e1"])
-    assert m.metrics_after["xg"].value == 0.4
+    # The goal's own chance, as its own number: never a circular "xG after".
+    assert m.metrics_after["shot_xg"].value == 0.4
+    assert "xg" not in m.metrics_after
 
 
 def test_big_chance_threshold_and_cooldown():

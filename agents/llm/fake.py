@@ -105,12 +105,18 @@ class FakeProvider:
             )
         if "ROLE: RECAP" in system:
             return f"That is how it stands: {v.get('score', 'level')}."
+        if "ROLE: PLAYER RECAP" in system:  # his stats, said as given
+            name = prompt.split("PLAYER: ", 1)[-1].split(",", 1)[0]
+            say = v.get("say", {})
+            stats = [x for k, x in say.items() if k not in ("score", "standing")]
+            return f"{name}: " + (", ".join(stats) or "a quiet game") + "."
         if "ROLE: LOCALIZER" in system:
             words = prompt.split("TEXT:", 1)[-1].split()
             return "[sw] " + " ".join(SWAHILI.get(w.lower(), w) for w in words)
         line = self.echo_line(v)
         narrated = sum(1 for s, _ in self.calls if s and "ROLE: NARRATOR" in s)
-        if narrated <= self.errors:
+        # Error injection is for the Narrator's lines only.
+        if "ROLE: NARRATOR" in system and narrated <= self.errors:
             return ERRORS[self.error](line)
         return line
 

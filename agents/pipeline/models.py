@@ -45,12 +45,21 @@ class NarrationTask(Part):
     # Code-made counts a line may quote (digits or words): passes_in_move,
     # counter_goals, shirt_number.
     counts: dict[str, int] = Field(default_factory=dict)
+    # How numbers are written for this persona (agents/pipeline/display.py):
+    # score, standing, a chance's xG or words. Facts are the same for everyone.
+    display: dict[str, str] = Field(default_factory=dict)
 
 
 class Analysis(Part):
     task: NarrationTask
     insight: Insight
     values: dict[str, float]  # code-made: name -> number the line may quote
+    # Why the Analyst's own claim failed the Verifier and code's replaced it
+    # (the claim is shown on screen, so it is checked like a line).
+    claim_reasons: list[str] = Field(default_factory=list)
+    # Whose number each value is (value name -> team_id), when not all the
+    # moment's team's (recaps quote both teams' stats and aired lines).
+    owners: dict[str, str] = Field(default_factory=dict)
 
 
 class Draft(Part):
@@ -66,6 +75,10 @@ class Verdict(Part):
     reasons: list[str] = Field(default_factory=list)
     risk_tier: RiskTier = "low"  # high = a human must approve before airing
     text: str = ""  # the draft this verdict is about (kept for evals)
+    # Format tier: what code fixed in the draft before checking ("two-nil ->
+    # 2-0"). Tone tier: logged, never blocks.
+    fixes: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
 
 
 class Retry(Part):
@@ -96,6 +109,7 @@ class Narration(Part):
     attempts: int
     verdicts: list[Verdict]
     insight: Insight | None = None  # the Analyst's claim and why (or code's)
+    claim_reasons: list[str] = Field(default_factory=list)  # see Analysis
 
 
 Draft.model_rebuild()

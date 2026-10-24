@@ -51,8 +51,10 @@ Moment -> Analyst -> Narrator -> Verifier -+-> Localizer -> Overlay (pending) ->
   or it expires; one narrative per 45 match seconds, most important first;
   goals and red cards preempt (air at once, push out lower lines).
 - **Models:** each agent calls a model through `agents/llm` (budget kill
-  switch). `LLM_PROVIDER=fake` is a free, deterministic model for tests, with
-  error injection (`FakeProvider(errors=1, error="wrong_number")`).
+  switch). The free fake model is the default everywhere; a real one needs
+  `--provider gemini|foundry` (`make record PROVIDER=gemini`), prints a request
+  estimate from a fake dry run and asks first (`agents/llm/guard.py`). The fake
+  model is deterministic, with error injection (`FakeProvider(errors=1, error="wrong_number")`).
 - **Narrator voice:** `agents/narrator/examples.yaml` (Ian's lines).
 
 ## What the Verifier checks (Phases 3b-2, 3b-3)

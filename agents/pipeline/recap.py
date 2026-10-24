@@ -16,6 +16,7 @@ from agent_framework import Agent
 from agents.llm import LLMClient
 from agents.pipeline import prompts
 from agents.pipeline.client import AdapterChatClient
+from agents.pipeline.display import score_line, standing
 from agents.pipeline.models import (
     Analysis,
     MatchContext,
@@ -25,7 +26,8 @@ from agents.pipeline.models import (
     Verdict,
 )
 from agents.pipeline.resilience import Policy, ask
-from agents.pipeline.verifier import verify
+from agents.pipeline.templates import recap_template
+from agents.pipeline.verifier import check, verify
 from agents.pipeline.workflow import UNAVAILABLE, localize
 from agents.telemetry import step
 from core.contracts import Insight, MetricValue, Moment, Overlay
@@ -63,6 +65,21 @@ def slug(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
+def stat_phrases(ctx: MatchContext, stats: dict[str, MetricValue]) -> dict:
+    """Recap counts with what they count: "Riverside's 13 shots"."""
+    out = {}
+    for team in (ctx.home, ctx.away):
+        name = ctx.team_names[team]
+        for metric, noun in (("shots", "shot"), ("big_chances", "big chance")):
+            mv = stats.get(f"{slug(name)}_{metric}")
+            if mv is not None:
+                n = int(mv.value)
+                out[f"{slug(name)}_{metric}"] = (
+                    f"{name}'s {n} {noun}{'' if n == 1 else 's'}"
+                )
+    return out
+
+
 def recap_task(
     when: When,
     events: Events,
@@ -70,7 +87,7 @@ def recap_task(
     aired: list[Aired],
     persona: Persona,
     languages: list[str],
-) -> tuple[NarrationTask, dict[str, float]]:
+) -> tuple[NarrationTask, dict[str, float], dict[str, str]]:
     """The recap as a match-wide moment: stats from the MatchState as its
     values, plus the aired lines' values (so the recap may quote them)."""
     state = match_state(events)
@@ -102,34 +119,39 @@ def recap_task(
         for k, v in a.task.counts.items():
             counts[k] = max(counts.get(k, v), v)
     counts.pop("passes_in_move", None)  # about one move, not the match
+    # The minutes of the lines that aired ("the 34th-minute counter").
+    for i, a in enumerate(aired):
+        counts[f"aired{i}_minute"] = a.overlay.t_in.match.minute
+    ctx = context.model_copy(update={"minute": state.clock.minute})
     task = NarrationTask(
         moment=moment,
-        context=context.model_copy(update={"minute": state.clock.minute}),
+        context=ctx,
         persona=persona,
         languages=languages,
         counts=counts,
+        display={
+            "score": score_line(ctx),
+            "standing": standing(ctx),
+            **stat_phrases(ctx, stats),
+        },
     )
     values = {k: mv.value for k, mv in stats.items()}
+    # Whose each number is: a team's stats, an aired line's moment team.
+    owners = {
+        f"{slug(context.team_names[t])}_{n}": t
+        for t in (context.home, context.away)
+        for n in RECAP_METRICS
+    }
     for i, a in enumerate(aired):
         values |= {f"aired{i}_{k}": v for k, v in a.overlay.values.items()}
-    return task, values
+        if a.task.moment.team:
+            owners |= {f"aired{i}_{k}": a.task.moment.team for k in a.overlay.values}
+    return task, values, owners
 
 
 def fallback(when: When, task: NarrationTask, values, aired: list[Aired]) -> str:
-    ctx = task.context
-    home, away = ctx.team_names[ctx.home], ctx.team_names[ctx.away]
-    text = f"{WORDS[when]}: {home} {ctx.score[0]}-{ctx.score[1]} {away}."
-    metric = "shots" if task.persona == "casual" else "xg"
-    a, b = values.get(f"{slug(home)}_{metric}"), values.get(f"{slug(away)}_{metric}")
-    if a is not None and b is not None:
-        shown = (lambda v: f"{v:.0f}") if metric == "shots" else (lambda v: f"{v:.2f}")
-        label = "Shots" if metric == "shots" else "xG"
-        text += f" {label}: {home} {shown(a)}, {away} {shown(b)}."
-    mine = [x for x in aired if x.task.persona == task.persona]
-    if mine:
-        best = max(mine, key=lambda x: x.overlay.priority)
-        text += " " + best.overlay.text["en"]
-    return text
+    """The English code template: score and one stat (templates.yaml)."""
+    return recap_template(when, task, values, "en")
 
 
 def prompt(task: NarrationTask, values, aired: list[Aired], reasons) -> str:
@@ -160,7 +182,9 @@ async def recap(
     policy: Policy | None = None,
 ) -> Narration:
     policy = policy or Policy()
-    task, values = recap_task(when, events, context, aired, persona, list(languages))
+    task, values, owners = recap_task(
+        when, events, context, aired, persona, list(languages)
+    )
     analysis = Analysis(
         task=task,
         insight=Insight(
@@ -170,6 +194,7 @@ async def recap(
             confidence=1.0,
         ),
         values=values,
+        owners=owners,
     )
     agent = Agent(
         client=AdapterChatClient(llm),
@@ -195,22 +220,30 @@ async def recap(
                 history.append(Verdict(passed=False, reasons=[UNAVAILABLE]))
                 break
             with step("verifier", attempt=attempt) as v_span:
-                verdict = verify(
+                verdict = check(
                     reply.strip(), analysis, max_words=MAX_WORDS, final=final
-                ).model_copy(update={"text": reply.strip()})
+                )
                 v_span.set_attributes(
                     {"passed": verdict.passed, "reasons": verdict.reasons}
                 )
             history.append(verdict)
             if verdict.passed:
-                text = reply.strip()
+                text = verdict.text  # with any format fixes made in code
                 break
         is_fallback = text is None
         if is_fallback:
             text = fallback(when, task, values, aired)
         verdict = verify(text, analysis, max_words=MAX_WORDS, final=final)
         span.set_attributes({"fallback": is_fallback, "attempts": len(history)})
-        translated = await localize(llm, policy, text, analysis, task.languages)
+        translated = await localize(
+            llm,
+            policy,
+            text,
+            analysis,
+            task.languages,
+            templated=is_fallback,
+            kind=lambda lang: recap_template(when, task, values, lang),
+        )
     overlay = Overlay(
         overlay_id=f"{task.moment.moment_id}-{persona}",
         match_id=context.match_id,

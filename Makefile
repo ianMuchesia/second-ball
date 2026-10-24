@@ -17,12 +17,12 @@ help:
 	@echo "          timeline CSV + PNG -> docs/timelines/ (needs make up)"
 	@echo "  eval-moments  moment detector vs the demo's answer key + 50 free matches -> docs/EVAL.md"
 	@echo "  mcp     football MCP server (stdio) over demo/match.jsonl"
-	@echo "  narrate  demo big moments through the real model in .env (set MAX_RUN_USD)"
+	@echo "  narrate  demo big moments through the pipeline (PROVIDER=gemini for a real model)"
 	@echo "  live    live narrator + replay: MATCH=demo SPEED=10 -> overlays topic + docs/overlays/"
 	@echo "  jaeger  start Jaeger for traces (then OTEL_EXPORTER=otlp), UI :16686"
 	@echo "  eval-narration  repeat runs: first-pass/retry/fallback rates -> docs/EVAL.md"
 	@echo "  eval-latency    live demo at SPEED, p50/p95 per stage -> docs/EVAL.md"
-	@echo "  record  MATCH=demo: the full pipeline once -> runs/<name>/ (judge mode bundle)"
+	@echo "  record  MATCH=demo: the full pipeline once -> runs/demo-fake/ (PROVIDER=gemini: runs/demo/, asks first)"
 	@echo "  api     broadcast API + built screen on :8000 (cd web && npm run build first)"
 	@echo "  e2e     Playwright smoke test (fake-model bundle, no network)"
 
@@ -64,6 +64,8 @@ realism-reference:
 
 MATCH ?= demo
 SPEED ?= 10
+# The model: the free fake one unless asked (PROVIDER=gemini); real ones ask first.
+PROVIDER ?= fake
 MATCH_FILE = $(if $(filter demo,$(MATCH)),demo/match.jsonl,$(MATCH))
 TIMELINE = docs/timelines/$(basename $(notdir $(if $(filter demo,$(MATCH)),demo,$(MATCH)))).csv
 
@@ -83,11 +85,11 @@ mcp:
 
 narrate:
 	@test -f demo/match.jsonl || $(MAKE) demo
-	uv run python -m scripts.narrate_demo
+	uv run python -m scripts.narrate_demo --provider $(PROVIDER)
 
 live:
 	@test "$(MATCH)" != demo || test -f demo/match.jsonl || $(MAKE) demo
-	uv run python -m agents.live --speed $(SPEED) --exit-on-end \
+	uv run python -m agents.live --speed $(SPEED) --exit-on-end --provider $(PROVIDER) \
 		--out docs/overlays/$(basename $(notdir $(MATCH_FILE))).jsonl & pid=$$!; \
 		uv run python -m stream.replayer $(MATCH_FILE) --speed $(SPEED) \
 			--wait-for-group narrator && wait $$pid
@@ -96,17 +98,17 @@ jaeger:
 	docker compose --profile tracing up -d jaeger
 
 eval-narration:
-	uv run python -m evals.narration.report --runs 10 --translation-runs 2
+	uv run python -m evals.narration.report --runs 10 --translation-runs 2 --provider $(PROVIDER)
 
 eval-latency:
 	@test -f demo/match.jsonl || $(MAKE) demo
-	uv run python -m evals.latency.report --speed $(SPEED)
+	uv run python -m evals.latency.report --speed $(SPEED) --provider $(PROVIDER)
 
 RUN ?= $(basename $(notdir $(MATCH_FILE)))
 
 record:
 	@test "$(MATCH)" != demo || test -f demo/match.jsonl || $(MAKE) demo
-	uv run python -m agents.live.record --match-file $(MATCH_FILE) --out runs/$(if $(filter demo,$(MATCH)),demo,$(RUN))
+	uv run python -m agents.live.record --provider $(PROVIDER) --match-file $(MATCH_FILE) --out runs/$(if $(filter demo,$(MATCH)),$(if $(filter fake,$(PROVIDER)),demo-fake,demo),$(RUN))
 
 api:
 	uv run uvicorn stream.api:app --port 8000

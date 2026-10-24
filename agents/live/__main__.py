@@ -3,7 +3,8 @@
     uv run python -m agents.live --speed 10 [--exit-on-end] [--out overlays.jsonl]
 
 Run it, then replay a match at the same speed (make live does both). The
-model comes from .env (LLM_PROVIDER, MAX_RUN_USD); traces go where
+model is the free fake one unless --provider says otherwise (a real one asks
+first; MAX_RUN_USD from .env); traces go where
 OTEL_EXPORTER says (make jaeger, then OTEL_EXPORTER=otlp).
 """
 
@@ -15,6 +16,7 @@ from pathlib import Path
 
 from agents.live import Live
 from agents.llm import from_env
+from agents.llm.guard import add_flags, confirm, match_requests
 from agents.telemetry import flush, setup
 from core.contracts import Match, MatchEvent, Overlay
 from stream import kafka
@@ -112,6 +114,7 @@ def main(argv=None):
     p.add_argument(
         "--from-start", action="store_true", help="read the topic from the start"
     )
+    add_flags(p)
     args = p.parse_args(argv)
 
     setup()
@@ -132,7 +135,17 @@ def main(argv=None):
     sinks = [kafka_sink(args.overlay_topic)]
     if args.out:
         sinks.append(file_sink(args.out))
-    llm = from_env()
+    llm = from_env(provider=args.provider)
+    if args.provider != "fake":
+        n = match_requests(
+            "demo/match.jsonl", [x for x in args.languages.split(",") if x]
+        )
+        confirm(
+            llm,
+            f"About {n} requests per match (a free dry run of the demo match); "
+            "a live run keeps narrating until the match ends",
+            args.yes,
+        )
     live = Live(
         llm,
         fan_out(*sinks),

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Narration, Overlay, Timed } from "../api";
 import { useRun } from "../hooks/useRun";
+import { useAppSelector } from "../store";
 import { decisionsOf } from "../store/selectors";
 import { useActMutation, useInjectMutation, useProducerQuery, useRunQuery } from "../store/serverApi";
 import { kindLabel } from "./MomentCard";
@@ -10,7 +11,9 @@ import { kindLabel } from "./MomentCard";
  * the append-only audit log. Approve/reject/inject refetch the view (RTK tags). */
 export default function ProducerTab({ narrations }: { narrations: Narration[] }) {
   const run = useRun();
-  const { data: view } = useProducerQuery(run);
+  // The favourite club's held lines first within a priority (order only).
+  const favourite = useAppSelector((s) => s.profile.favouriteClub);
+  const { data: view } = useProducerQuery({ run, favourite });
   const { data: runData } = useRunQuery(run);
   const [actOn, { isLoading: acting }] = useActMutation();
   const [inject, { data: test, isLoading: injecting }] = useInjectMutation();

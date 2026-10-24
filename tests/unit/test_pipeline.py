@@ -273,7 +273,7 @@ def test_saying_the_wrong_team_leads_is_rejected(line):
 
 
 @pytest.mark.parametrize(
-    "line", ["Harbour lead 0-1.", "Riverside trail 0-1.", "Harbour's lead holds."]
+    "line", ["Harbour lead 1-0.", "Riverside trail 0-1.", "Harbour's lead holds."]
 )
 def test_saying_the_right_team_leads_passes(line):
     assert verify(line, analysis()).passed
@@ -372,7 +372,7 @@ def test_soft_predictions_are_rejected(line):
     assert not verdict.passed and "not over" in " ".join(verdict.reasons)
 
 
-@pytest.mark.parametrize("line", ["Harbour make it 0-1.", "Harbour lead 0-1 now."])
+@pytest.mark.parametrize("line", ["Harbour make it 0-1.", "Harbour lead 1-0 now."])
 def test_stating_the_score_is_not_a_prediction(line):
     assert verify(line, analysis()).passed
 
@@ -409,7 +409,7 @@ def test_counter_goal_facts_reach_the_prompt_and_the_fallback():
         a.task, a.values
     )
     text = prompts.fallback(a)
-    assert "counter behind Riverside's left-back" in text
+    assert "on the counter, in behind Riverside's left-back" in text
     assert verify(text, a).passed
 
 

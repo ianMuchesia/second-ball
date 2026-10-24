@@ -27,9 +27,14 @@ Returns a Verdict: passed, or the list of reasons (fed back to the Narrator).
 `untranslated` checks the Localizer's reply the same way: plain code.
 """
 
+import difflib
+import gzip
 import re
 from collections.abc import Sequence
+from functools import cache
+from pathlib import Path
 
+from agents.pipeline.display import score_line
 from agents.pipeline.lineups import (
     CLAIMS,
     STYLE_OF,
@@ -49,11 +54,11 @@ PREDICTION = re.compile(
 SOFT_PREDICTIONS = [
     (
         r"\b(seal|seals|sealed|sealing)\s+"
-        r"(it|the\s+(win|game|match|points|victory|result|\d+-\d+))\b"
+        r"(it|(the|a)\s+(\d+-\d+\s+)?(win|game|match|points|victory|result|\d+-\d+))\b"
     ),
     (
         r"\b(secure|secures|secured|securing)\s+"
-        r"(it|the\s+(win|game|match|points|victory|result|\d+-\d+))\b"
+        r"(it|(the|a)\s+(\d+-\d+\s+)?(win|game|match|points|victory|result|\d+-\d+))\b"
     ),
     r"\b(wrap|wraps|wrapped)\s+(it\s+up|up\s+the\s+(win|points|game|match|victory))\b",
     (
@@ -123,7 +128,7 @@ TRAILS = r"\s+(?:(?:now|still)\s+)?(trail|trails|(?:are|is)\s+(?:now\s+|still\s+
 # Riverside's is wrong. (Pressure is left out: pressure on Riverside's ball is
 # applied by Harbour, so either team's name can be right.)
 OWNED = {"control": "control", "xg": "xG", "threat": "threat", "momentum": "momentum"}
-COPY_LIMIT = 0.8  # word overlap (Jaccard) with a style example that counts as a copy
+COPY_LIMIT = 0.6  # share of a line's word 3-grams found in one example = a copy
 # Common English words that should not survive a translation; 2 or more means
 # the Localizer answered (partly) in English.
 ENGLISH_HINTS = {"the", "and", "behind", "from", "with", "their", "again", "is"}
@@ -171,7 +176,84 @@ def allowed_numbers(analysis: Analysis) -> list[float]:
         *shirts,
         *on_pitch(analysis),
         *map(float, analysis.task.counts.values()),
+        # Numbers in code's display strings ("xG 0.45", "Harbour lead 1-0").
+        *(x for v in analysis.task.display.values() for x, _, _ in numbers(v)),
     ]
+
+
+SPELLED = r"(?:nil|zero|one|two|three|four|five|six|seven|eight|nine)"
+SPELLED_SCORE = re.compile(rf"\b{SPELLED}\s*(?:-|to|–)\s*{SPELLED}\b", re.IGNORECASE)
+XG_AS_GOALS = re.compile(r"\b\d+\.\d+\s+goals?\b", re.IGNORECASE)
+WHOLE_WITH_DECIMALS = re.compile(r"(?<![\w.])(\d+)\.0+(?![\d])")
+SCORE = r"(\d+)\s*[-–]\s*(\d+)"
+
+
+RISE = r"ris\w*|rais\w*|up|increas\w*|climb\w*|grow\w*|grew|lift\w*|boost\w*|jump\w*|doubl\w*"
+FALL = r"drop\w*|fall\w*|fell|down|decreas\w*|slip\w*|sink\w*|sank|dip\w*|lower\w*|cut\w*|halv\w*"
+FROM_TO = re.compile(
+    rf"\b(?:({RISE})|({FALL}))\b(?:\W+\w+){{0,5}}?\W+from\s+(?:xG\s+)?(\d+(?:\.\d+)?)\s*"
+    rf"(?:%|m)?\s+to\s+(?:xG\s+)?(\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+
+
+def wrong_direction(text: str) -> list[str]:
+    """'drop from 0.71 to 0.80' says down while the numbers go up (and the
+    reverse): the word must agree with the numbers."""
+    out = []
+    for m in FROM_TO.finditer(text):
+        rise, fall, a, b = m.groups()
+        a, b = float(a), float(b)
+        if (fall and b > a) or (rise and b < a):
+            word = (fall or rise).lower()
+            out.append(
+                f"'{word}' but the number goes from {a:g} to {b:g}: "
+                f"say it {'rose' if b > a else 'fell'}"
+            )
+    return out
+
+
+def number_style(text: str, analysis: Analysis) -> list[str]:
+    """Numbers written the way code writes them: counts whole, scores in
+    digits with the right team's goals first, xG as 'xG 0.30'."""
+    out = []
+    for m in WHOLE_WITH_DECIMALS.finditer(text):
+        if not re.search(r"xG\s*$", text[: m.start()]):
+            out.append(
+                f"counts are whole numbers: write {m.group(1)}, not {m.group(0)}"
+            )
+    if XG_AS_GOALS.search(text):
+        out.append("write xG as 'xG 0.30', never '0.3 goals'")
+    if SPELLED_SCORE.search(text):
+        out.append(
+            "write scores in digits, e.g. "
+            + analysis.task.display.get("standing", "Riverside 0-1 Harbour")
+        )
+    ctx = analysis.task.context
+    goals = dict(zip((ctx.home, ctx.away), ctx.score, strict=True))
+    for team in (ctx.home, ctx.away):
+        name = re.escape(ctx.team_names[team])
+        other = ctx.away if team == ctx.home else ctx.home
+        # "Harbour 1-0 Riverside": the number next to a team is its goals.
+        for m in re.finditer(
+            rf"\b{name}\s+{SCORE}\s+{re.escape(ctx.team_names[other])}\b",
+            text,
+            re.IGNORECASE,
+        ):
+            if (int(m.group(1)), int(m.group(2))) != (goals[team], goals[other]):
+                out.append(f"score the wrong way round: it is {score_line(ctx)}")
+        # "Harbour lead 1-0" / "Harbour beat Riverside 2-0": the leader's goals first.
+        for m in re.finditer(
+            rf"\b{name}(?:{LEADS}|\s+(?:beat|beats|defeated|won|win)\b)[^.!?\d]{{0,30}}?{SCORE}",
+            text,
+            re.IGNORECASE,
+        ):
+            a, b = int(m.group(m.lastindex - 1)), int(m.group(m.lastindex))
+            if a < b:
+                out.append(
+                    f"the leader's score goes first: {analysis.task.display.get('standing', score_line(ctx))}"
+                )
+    return list(dict.fromkeys(out))
 
 
 CARDINALS = {
@@ -238,6 +320,14 @@ COMPARE_TOLERANCE = 0.10
 
 def counts_of_kind(kind: str, analysis: Analysis) -> set[float]:
     """Code-made counts a 'kind' of count may match."""
+    task = analysis.task
+    c = task.counts
+    # Counts named for this kind ("passes_completed" for passes): a player's.
+    named = {float(v) for k, v in c.items() if kind.rstrip("s") in k}
+    return named | counts_by_kind(kind, analysis)
+
+
+def counts_by_kind(kind: str, analysis: Analysis) -> set[float]:
     task, ctx = analysis.task, analysis.task.context
     c = task.counts
     repeated = {float(v) for k, v in analysis.values.items() if "counters" in k}
@@ -274,6 +364,56 @@ def wrong_counts(text: str, analysis: Analysis) -> list[str]:
         if n not in counts_of_kind("times", analysis):
             out.append(f"'{m.group(1)}': nothing in the evidence happened {n} times")
     return out
+
+
+COUNTED = re.compile(
+    r"\b(?P<n>\d+|" + "|".join([*CARDINALS, *ORDINALS]) + r")\b"
+    r"(?:\s+[\w'\-]+){0,2}?\s+(?P<noun>goal|pass|shot|chance)(?:e?s)?\b",
+    re.IGNORECASE,
+)
+
+
+def as_number(word: str) -> float | None:
+    word = word.lower()
+    if word.isdigit():
+        return float(word)
+    n = CARDINALS.get(word, ORDINALS.get(word))
+    return None if n is None else float(n)
+
+
+def unphrased_counts(text: str, analysis: Analysis) -> list[str]:
+    """A count code phrased ("Harbour's second goal on the counter") must be
+    said as that phrase: "a counter creates 2 counter goals" attaches the
+    right number to the wrong thing."""
+    out = []
+    for phrase in analysis.task.display.values():
+        m = COUNTED.search(phrase)
+        if m is None or phrase.lower() in text.lower():
+            continue
+        n, noun = as_number(m.group("n")), m.group("noun").lower()
+        if n is None or n < 2:
+            continue  # "one pass" is ordinary English; the error is 2+ misattached
+        owner = re.match(r"(.+?)'s \d", phrase)  # "Riverside's 27 shots"
+        for said in COUNTED.finditer(text):
+            if as_number(said.group("n")) != n or said.group("noun").lower() != noun:
+                continue
+            if owner and owner.group(1) in (
+                team_before(text, said.start(), analysis),
+                subject(text, said.start(), analysis),
+            ):
+                continue  # "Riverside ... 27 shots": the right team's count
+            out.append(f"say this count as given: '{phrase}'")
+            break
+    return list(dict.fromkeys(out))
+
+
+SCORES = re.compile(rf"\b\d+\s*[-–]\s*\d+\b|{SPELLED_SCORE.pattern}", re.IGNORECASE)
+
+
+def score_repeated(text: str) -> list[str]:
+    """Style: the score at most once per line."""
+    n = len(SCORES.findall(text))
+    return [f"give the score once (it appears {n} times)"] if n > 1 else []
 
 
 def pairs(values: dict[str, float]) -> list[tuple[str, float, float]]:
@@ -321,16 +461,48 @@ def known_names(analysis: Analysis) -> set[str]:
 
 
 def unknown_names(text: str, analysis: Analysis) -> list[str]:
+    """Capitalised words that are not a team, a player or a common word. A
+    sentence's first word is capitalised anyway ("Patient passing",
+    "Meanwhile"): an English word there is ordinary, unless it looks like a
+    name (close to a real one, "Kestrel" for Kestrelle, or capitalised
+    elsewhere too). "Okafor makes it happen" still blocks: not English."""
     known = known_names(analysis)
     out = []
-    for sentence in re.split(r"(?<=[.!?:;])\s+|\n", text):
-        for m in WORD.finditer(sentence):
+    sentences = re.split(r"(?<=[.!?:;])\s+|\n", text)
+    later = {
+        re.sub(r"'s?$", "", m.group(0))
+        for sentence in sentences
+        for k, m in enumerate(WORD.finditer(sentence))
+        if k > 0
+    }
+    for sentence in sentences:
+        for k, m in enumerate(WORD.finditer(sentence)):
             w = re.sub(r"'s?$", "", m.group(0))  # Riverside's -> Riverside
             if not w[0].isupper() or w.isupper():
                 continue  # lower case, or an acronym (xG, PPDA)
-            if w.lower() not in known and w.lower() not in COMMON:
-                out.append(w)
+            if w.lower() in known or w.lower() in COMMON:
+                continue
+            if (
+                k == 0
+                and w.lower() in english()
+                and w not in later
+                and not close_to_a_name(w, known)
+            ):
+                continue  # an ordinary English word starting the sentence
+            out.append(w)
     return out
+
+
+@cache
+def english() -> frozenset[str]:
+    """Lowercase English words (SCOWL, agents/pipeline/words/README.md)."""
+    path = Path(__file__).with_name("words") / "english.txt.gz"
+    with gzip.open(path, "rt") as f:
+        return frozenset(f.read().split())
+
+
+def close_to_a_name(word: str, known: set[str]) -> bool:
+    return bool(difflib.get_close_matches(word.lower(), known, n=1, cutoff=0.75))
 
 
 def score_mistakes(text: str, analysis: Analysis) -> list[str]:
@@ -381,6 +553,132 @@ def wrong_owner(text: str, analysis: Analysis) -> list[str]:
     return out
 
 
+def team_before(text: str, at: int, analysis: Analysis) -> str | None:
+    """The team named last before position `at`, in the same sentence."""
+    start = max(text.rfind(c, 0, at) for c in ".!?;:") + 1
+    names = analysis.task.context.team_names.values()
+    found = [
+        (m.start(), name)
+        for name in names
+        for m in re.finditer(rf"\b{re.escape(name)}\b", text[start:at])
+    ]
+    return max(found)[1] if found else None
+
+
+def owner_of(key: str, analysis: Analysis) -> str | None:
+    return analysis.owners.get(key) or (
+        None if analysis.owners else analysis.task.moment.team
+    )
+
+
+def sentence_start(text: str, at: int) -> int:
+    return max(text.rfind(c, 0, at) for c in ".!?;:") + 1
+
+
+def subject(text: str, at: int, analysis: Analysis) -> str | None:
+    """The team a sentence (or clause after ':') starts with: its subject."""
+    seg = text[sentence_start(text, at) : at].lstrip()
+    return next(
+        (n for n in analysis.task.context.team_names.values() if seg.startswith(n)),
+        None,
+    )
+
+
+def credited(text: str, at: int, word: str, analysis: Analysis) -> str | None:
+    """Whose `word` (control, xG) the number at `at` is said to be: a
+    possessive on it ("Harbour's control index ... 0.8"), else the sentence's
+    subject ("Harbour sealed it as control rose to 0.8"). A team named only
+    as an object ("behind Riverside's left-back") credits nothing."""
+    seg = text[sentence_start(text, at) : at]
+    if word.lower() not in seg.lower():
+        return None
+    names = "|".join(re.escape(n) for n in analysis.task.context.team_names.values())
+    owned = list(
+        re.finditer(
+            rf"\b({names})'s\s+(?:[\w-]+\s+){{0,2}}?{re.escape(word)}\b",
+            seg,
+            re.IGNORECASE,
+        )
+    )
+    if owned:
+        return owned[-1].group(1)
+    return subject(text, at, analysis)
+
+
+def wrong_owners(text: str, analysis: Analysis) -> list[str]:
+    """A team's number credited to the other team, in any sentence, also as
+    an implied subject: "Harbour sealed it as control rose to 0.8" when the
+    control is Riverside's."""
+    ctx = analysis.task.context
+    out = []
+    for m in NUMBER.finditer(text):
+        raw = m.group(1)
+        decimals = len(raw.split(".")[1]) if "." in raw else 0
+        x, percent = float(raw), bool(m.group(2))
+        for key, v in analysis.values.items():
+            word = next((w for k, w in OWNED.items() if k in key.lower()), None)
+            team = owner_of(key, analysis)
+            if not word or team is None or not matches(x, decimals, percent, v):
+                continue
+            said = credited(text, m.start(), word, analysis)
+            if said is not None and said != ctx.team_names[team]:
+                out.append(
+                    f"the {word} {raw} is {ctx.team_names[team]}'s, not {said}'s"
+                )
+    return list(dict.fromkeys(out))
+
+
+CONVERTED = re.compile(
+    r"\b(?:convert\w*|capitali[sz]\w*\s+on|tak(?:e|es|ing)|put\s+away|scor\w*\s+from)\s+"
+    r"(?:all\s+|just\s+|only\s+)?(?P<n>\d+|"
+    + "|".join(CARDINALS)
+    + r")\s+(?:\w+\s+)?chances?\b",
+    re.IGNORECASE,
+)
+
+
+def chances_as_goals(text: str, analysis: Analysis) -> list[str]:
+    """'Converted 4 big chances' means 4 goals: the number must be goals scored."""
+    goals = {float(x) for x in analysis.task.context.score}
+    out = []
+    for m in CONVERTED.finditer(text):
+        n = as_number(m.group("n"))
+        if n is not None and n not in goals:
+            out.append(
+                f"'{m.group(0)}' says {n:g} chances converted (goals); "
+                f"the score is {score_line(analysis.task.context)}"
+            )
+    return out
+
+
+def xg_relation(text: str, analysis: Analysis) -> list[str]:
+    """xG before a move and the chance's own xG are separate numbers: never
+    'from 0.16 to 0.45' or 'turning 0.16 into 0.45'."""
+    v = analysis.values
+    pairs = [
+        (v[k], v[k.replace("xg_before", "shot_xg")])
+        for k in v
+        if k.endswith("xg_before") and k.replace("xg_before", "shot_xg") in v
+    ]
+    out = []
+    for before, chance in pairs:
+        a, b = as_written(before), as_written(chance)
+        if re.search(rf"{a}.{{0,30}}?\b(?:to|into)\b.{{0,20}}?{b}", text) or re.search(
+            rf"{b}.{{0,15}}?\bfrom\b.{{0,10}}?{a}", text
+        ):
+            out.append(
+                f"xG {before:.2f} before the move and the chance's xG {chance:.2f} "
+                "are separate numbers, not one becoming the other"
+            )
+    return out
+
+
+def as_written(x: float) -> str:
+    """A pattern for x as a line may write it: 0.16, 0.162 or 0.2 (xG optional)."""
+    forms = {f"{x:.1f}", f"{x:.2f}", f"{x:.3f}".rstrip("0")}
+    return r"(?:xG\s+)?(?:" + "|".join(re.escape(f) for f in sorted(forms)) + r")\b"
+
+
 def missing_cause(text: str, analysis: Analysis) -> list[str]:
     """A goal code knows came from a counter behind a full-back must say so."""
     facts = analysis.task.facts
@@ -401,13 +699,19 @@ def words_of(text: str) -> set[str]:
     return {w.lower() for w in WORD.findall(text)}
 
 
+def trigrams(text: str) -> set[tuple[str, ...]]:
+    words = [w.lower() for w in WORD.findall(text)]
+    return set(zip(words, words[1:], words[2:], strict=False))
+
+
 def copied(text: str, examples: Sequence[str]) -> bool:
-    mine = words_of(text)
-    for line in examples:
-        theirs = words_of(line)
-        if mine and len(mine & theirs) / len(mine | theirs) > COPY_LIMIT:
-            return True
-    return False
+    """A backstop to leave-one-out: the line shares at least COPY_LIMIT of
+    its word 3-grams with an example (single shared words like "Harbour lead"
+    are fine; whole phrases are not)."""
+    mine = trigrams(text)
+    return bool(mine) and any(
+        len(mine & trigrams(line)) / len(mine) >= COPY_LIMIT for line in examples
+    )
 
 
 LOCKED_NUMBER = re.compile(r"\d+(?:\.\d+)?(?:-\d+)?(?:\s*%)?")
@@ -571,6 +875,14 @@ def verify(
     for name in unknown_names(text, analysis):
         reasons.append(f"'{name}' is not a team or a player on the team sheet")
     reasons += score_mistakes(text, analysis)
+    reasons += number_style(text, analysis)
+    reasons += wrong_direction(text)
+    reasons += unphrased_counts(text, analysis)
+    reasons += wrong_owners(text, analysis)
+    reasons += chances_as_goals(text, analysis)
+    reasons += xg_relation(text, analysis)
+    reasons = list(dict.fromkeys(reasons))
+    notes = score_repeated(text)  # tone: logged only
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):
@@ -586,5 +898,75 @@ def verify(
         reasons.append("do not blame a single event on the weather")
     risky = bool(RISKY.search(text))
     return Verdict(
-        passed=not reasons, reasons=reasons, risk_tier="high" if risky else "low"
+        passed=not reasons,
+        reasons=reasons,
+        risk_tier="high" if risky else "low",
+        notes=notes,
     )
+
+
+WORD_GOALS = {"nil": 0, **{w: n for w, n in CARDINALS.items() if n <= 9}}
+SPELLED_PAIR = re.compile(
+    rf"\b(?P<a>{SPELLED})(?P<sep>\s*(?:-|to|–)\s*)(?P<b>{SPELLED})\b", re.IGNORECASE
+)
+WON = r"(?:beat|beats|defeated|defeat|defeats|overcame|edged|edge|edges)"
+
+
+def normalise(text: str, analysis: Analysis) -> tuple[str, list[str]]:
+    """The format tier: fixes code makes itself, with no retry, when the
+    meaning is clear. A spelled-out score becomes digits in the same order
+    ("two-nil" -> "2-0"; the truth rules then check that order), a count's
+    decimals go ("13.0 shots" -> "13 shots"), and a win written in fixture
+    order ("Harbour defeated Riverside 0-2") is put leader first ("2-0").
+    "Harbour lead Riverside 0-1" is not fixed: it says Harbour lead with 0."""
+    fixes = []
+
+    def digits(m):
+        out = f"{WORD_GOALS[m.group('a').lower()]}-{WORD_GOALS[m.group('b').lower()]}"
+        fixes.append(f"'{m.group(0)}' -> '{out}'")
+        return out
+
+    text = SPELLED_PAIR.sub(digits, text)
+
+    def whole(m):
+        if re.search(r"xG\s*$", text[: m.start()]):
+            return m.group(0)
+        fixes.append(f"'{m.group(0)}' -> '{m.group(1)}'")
+        return m.group(1)
+
+    text = WHOLE_WITH_DECIMALS.sub(whole, text)
+    ctx = analysis.task.context
+    goals = dict(zip((ctx.home, ctx.away), ctx.score, strict=True))
+    for team in (ctx.home, ctx.away):
+        other = ctx.away if team == ctx.home else ctx.home
+        if goals[team] <= goals[other]:
+            continue  # only the winner "beat" anyone
+        w, lose = (re.escape(ctx.team_names[x]) for x in (team, other))
+        pattern = rf"\b({w}\s+{WON}\s+{lose}\s+){SCORE}"
+
+        def leader_first(m, won=goals[team], lost=goals[other]):
+            a, b = int(m.group(2)), int(m.group(3))
+            if (a, b) == (lost, won) and a < b:  # fixture order
+                fixes.append(f"'{a}-{b}' -> '{b}-{a}' (leader first)")
+                return f"{m.group(1)}{b}-{a}"
+            return m.group(0)
+
+        text = re.sub(pattern, leader_first, text, flags=re.IGNORECASE)
+    return text, fixes
+
+
+def check(
+    text: str,
+    analysis: Analysis,
+    examples: Sequence[str] = (),
+    *,
+    max_words: int = MAX_WORDS,
+    final: bool = False,
+) -> Verdict:
+    """How the pipeline checks a draft, tier by tier: format fixes in code
+    (no retry), then the truth rules (block and retry); tone is only noted.
+    The verdict's `text` is what would air."""
+    fixed, fixes = normalise(text, analysis)
+    return verify(
+        fixed, analysis, examples, max_words=max_words, final=final
+    ).model_copy(update={"text": fixed, "fixes": fixes})

@@ -71,6 +71,15 @@ def at_window(fn, ev: Events, t0: float, t1: float, team=None):
     return fn(view, lo, team)
 
 
+def move_start(ev: Events, i: int) -> int:
+    """Index of the first event of event i's possession (where its move began)."""
+    pid = ev.items[i].possession_id
+    k = i
+    while k > 0 and ev.items[k - 1].possession_id == pid:
+        k -= 1
+    return k
+
+
 def mv(v: float, evidence: list[str]) -> MetricValue:
     return MetricValue(value=v, evidence_event_ids=evidence)
 
@@ -152,15 +161,22 @@ class MomentDetector:
         c = config()
         if is_goal(e):
             scorer = ev.opponent(e.team_id) if e.outcome == "owngoal" else e.team_id
-            before = basic.xg(ev.upto(i), 0, scorer) if i else None
-            after = basic.xg(ev.upto(i + 1), 0, scorer)
+            # Not circular: "before" stops where this move began, and the
+            # goal's own chance is its own number, never added into a change.
+            k = move_start(ev, i)
+            before = basic.xg(ev.upto(k), 0, scorer) if k else None
+            chance = (
+                {"shot_xg": mv(float(e.qualifiers["xg"]), [e.event_id])}
+                if e.type in SHOTS and e.qualifiers.get("xg") is not None
+                else {}
+            )
             yield self.fire(
                 ev,
                 "goal",
                 scorer,
                 i,
                 {"xg": before} if before else {},
-                {"xg": after} if after else {},
+                chance,
                 [e.event_id],
             )
         elif (
@@ -174,7 +190,7 @@ class MomentDetector:
                 e.team_id,
                 i,
                 {},
-                {"xg": mv(xg, [e.event_id])},
+                {"shot_xg": mv(xg, [e.event_id])},
                 [e.event_id],
             )
         if e.outcome == "red_card":

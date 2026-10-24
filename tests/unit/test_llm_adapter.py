@@ -68,8 +68,14 @@ def test_unpriced_model_is_blocked():
 ENV = {"LLM_PROVIDER": "gemini", "GEMINI_API_KEY": "fake-key", "MAX_RUN_USD": "0.5"}
 
 
+def test_real_models_only_with_an_explicit_provider():
+    # .env saying gemini is not enough: without a flag, the free fake model.
+    assert from_env(ENV).provider.model == "fake-model"
+    assert from_env({}).provider.model == "fake-model"
+
+
 def test_from_env_builds_gemini_client_with_kill_switch():
-    client = from_env(ENV)
+    client = from_env(ENV, provider="gemini")
     assert client.provider.name == "gemini"
     assert client.provider.model == MODEL
     assert client.budget.usd_limit == 0.5
@@ -77,26 +83,26 @@ def test_from_env_builds_gemini_client_with_kill_switch():
 
 def test_from_env_requires_max_run_usd():
     with pytest.raises(ValueError, match="MAX_RUN_USD"):
-        from_env({k: v for k, v in ENV.items() if k != "MAX_RUN_USD"})
+        from_env({k: v for k, v in ENV.items() if k != "MAX_RUN_USD"}, "gemini")
 
 
 def test_from_env_rejects_unknown_provider():
-    with pytest.raises(ValueError, match="LLM_PROVIDER"):
-        from_env(ENV | {"LLM_PROVIDER": "openai"})
+    with pytest.raises(ValueError, match="unknown provider"):
+        from_env(ENV, provider="openai")
 
 
 def test_foundry_is_a_stub():
     with pytest.raises(NotImplementedError):
-        from_env(ENV | {"LLM_PROVIDER": "foundry"})
+        from_env(ENV, provider="foundry")
 
 
 def test_gemini_requires_api_key():
     with pytest.raises(ValueError, match="GEMINI_API_KEY"):
-        from_env(ENV | {"GEMINI_API_KEY": ""})
+        from_env(ENV | {"GEMINI_API_KEY": ""}, provider="gemini")
 
 
 def test_default_gemini_model_is_priced():
-    assert from_env(ENV).provider.model in PRICES
+    assert from_env(ENV, provider="gemini").provider.model in PRICES
 
 
 class FakeGenaiModels:

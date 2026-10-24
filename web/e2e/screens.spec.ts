@@ -38,3 +38,30 @@ test("review screenshots", async ({ page, request }) => {
   await page.waitForTimeout(400);
   await page.screenshot({ path: "../docs/screens/34-phone.png", fullPage: true });
 });
+
+test("review screenshots: personalization (analyst and fan)", async ({ page, request }) => {
+  const events: { t: number; minute: number; type: string; outcome: string }[] = await (
+    await request.get(`/api/runs/${RUN}/events`)
+  ).json();
+  const at = (minute: number) => events.find((e) => e.minute >= minute)!.t;
+  const views: [string, Record<string, unknown>, number][] = [
+    [
+      "p5-analyst",
+      { persona: "analyst", favouriteClub: "harbour_town", followedPlayer: "harbour_town-8", pinnedMetric: "pass_accuracy" },
+      at(47),
+    ],
+    ["p5-fan", { persona: "casual", followedPlayer: "harbour_town-11", pinnedMetric: "xg" }, at(47)],
+  ];
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  for (const [name, profile, t] of views) {
+    await page.addInitScript((p) => localStorage.setItem("second-ball.profile.v1", JSON.stringify(p)), profile);
+    await page.goto(`/runs/${RUN}?t=${t}`);
+    await page.getByTestId("scoreboard").waitFor();
+    await page.getByTestId("tab-player").click();
+    await page.getByTestId("player-card").waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `../docs/screens/${name}.png`, fullPage: true });
+  }
+});
+

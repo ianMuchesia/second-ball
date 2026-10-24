@@ -1,13 +1,19 @@
 import type { IndicatorRow, IndicatorValue } from "../api";
-import { latencyText, plural, teamName } from "../api";
+import { evidenceCounts, latencyText, teamName } from "../api";
 import { useAppDispatch, useAppSelector } from "../store";
 import { actions, type IndicatorPick } from "../store/playback";
 import type { FeedItem } from "../store/selectors";
 import { useMetricQuery } from "../store/serverApi";
 import { teamCode } from "../theme";
 import { kindLabel } from "./MomentCard";
+import { MetricRow } from "./PinnedMetric";
 
-/** The right column: verified key moments so far, and the three stats. */
+// An analyst's extra indicators, over the match so far (registry metrics).
+const ANALYST_METRICS = ["xg", "shots", "big_chances", "possession_passes", "pass_accuracy", "field_tilt", "ppda"];
+
+/** The right column: verified key moments so far (most important first),
+ * the stats (a fan: three in plain words; an analyst: also values with units
+ * and Wilson ranges), and the followed player's card. */
 export function MatchCentre(props: {
   feed: FeedItem[];
   t: number;
@@ -16,26 +22,37 @@ export function MatchCentre(props: {
   away: string;
   momentumScale: number;
   onOpen: (item: FeedItem) => void;
+  player: React.ReactNode | null; // the followed player's card
 }) {
   const dispatch = useAppDispatch();
-  const panel = useAppSelector((s) => s.playback.panel);
+  const stored = useAppSelector((s) => s.playback.panel);
+  const panel = stored === "player" && !props.player ? "moments" : stored;
+  const tab = (id: typeof stored, label: string) => (
+    <button
+      role="tab"
+      aria-selected={panel === id}
+      className={panel === id ? "on" : ""}
+      onClick={() => dispatch(actions.setPanel(id))}
+      data-testid={`tab-${id}`}
+    >
+      {label}
+    </button>
+  );
   return (
     <aside className="centre">
-      <nav className="centre-tabs" role="tablist">
-        <button role="tab" aria-selected={panel === "moments"} className={panel === "moments" ? "on" : ""} onClick={() => dispatch(actions.setPanel("moments"))}>
-          Key moments
-        </button>
-        <button role="tab" aria-selected={panel === "stats"} className={panel === "stats" ? "on" : ""} onClick={() => dispatch(actions.setPanel("stats"))} data-testid="tab-stats">
-          Match stats
-        </button>
+      <nav className={props.player ? "centre-tabs three" : "centre-tabs"} role="tablist">
+        {tab("moments", "Key moments")}
+        {tab("stats", "Match stats")}
+        {props.player && tab("player", "Player")}
       </nav>
-      {panel === "moments" ? <Moments {...props} /> : <Stats {...props} />}
+      {panel === "moments" ? <Moments {...props} /> : panel === "stats" ? <Stats {...props} /> : props.player}
     </aside>
   );
 }
 
 function Moments({ feed, t, onOpen }: { feed: FeedItem[]; t: number; onOpen: (i: FeedItem) => void }) {
-  const sofar = feed.filter((i) => i.overlay.t <= t).reverse();
+  // Ranked by the feed (store/selectors.ts feedOf): most important first.
+  const sofar = feed.filter((i) => i.overlay.t <= t);
   if (!sofar.length) return <p className="empty">No key moment yet. Lines appear here once the Verifier passes them.</p>;
   return (
     <ol className="feed" data-testid="feed">
@@ -52,7 +69,7 @@ function Moments({ feed, t, onOpen }: { feed: FeedItem[]; t: number; onOpen: (i:
               </span>
               <span className="text">{i.overlay.text.en}</span>
               <span className="facts">
-                {plural(i.linkedEvents, "event")} · {plural(i.players.length, "player")} · {plural(i.metrics, "metric")}
+                {evidenceCounts(i.linkedEvents, i.players.length, i.metrics, i.overlay.slot === "recap").join(" · ")}
                 {i.narration && ` · ${latencyText(i.narration).text}`}
               </span>
             </span>
@@ -74,7 +91,7 @@ function Stats({
   away: string;
   momentumScale: number;
 }) {
-  const persona = useAppSelector((s) => s.playback.persona);
+  const persona = useAppSelector((s) => s.profile.persona);
   const dispatch = useAppDispatch();
   const get = (k: string) => (row?.[k] as IndicatorValue | null | undefined)?.value;
   const open = (pick: IndicatorPick) => dispatch(actions.openIndicator(pick));
@@ -96,6 +113,14 @@ function Stats({
       <Stat metric="momentum" onOpen={() => open({ metric: "momentum", key: "momentum", label: "Momentum" })} early={null}>
         <Centre value={mo} scale={momentumScale} left={H} right={A} showValue={persona === "analyst"} />
       </Stat>
+      {persona === "analyst" && (
+        <section className="analyst-metrics" data-testid="analyst-metrics">
+          <h4>Match so far ({minute}')</h4>
+          {ANALYST_METRICS.map((m) => (
+            <MetricRow key={m} name={m} t={row?.t ?? 0} />
+          ))}
+        </section>
+      )}
     </div>
   );
 }

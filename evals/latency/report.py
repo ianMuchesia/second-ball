@@ -1,7 +1,7 @@
 """Latency per stage, live, on the demo: replayer -> Kafka -> live narrator.
 
     make up   # Kafka (or KAFKA_BOOTSTRAP_SERVERS pointing at one)
-    LLM_PROVIDER=fake MAX_RUN_USD=0.01 uv run python -m evals.latency.report --speed 10
+    uv run python -m evals.latency.report --speed 10     # fake model; --provider gemini asks first
 
 Stages come from the traces (agents.telemetry spans) and the live service's
 clocks: Kafka transport, the detector per event, the wait in the job queue,
@@ -21,6 +21,7 @@ from pathlib import Path
 from agents.live import Live
 from agents.live.__main__ import kafka_sink, serve
 from agents.llm import from_env
+from agents.llm.guard import add_flags, confirm, match_requests
 from agents.telemetry import RECORDER, setup
 from evals.sections import write_section
 from stream import kafka
@@ -51,10 +52,9 @@ def ms(x: float) -> str:
     return "-" if math.isnan(x) else f"{x * 1000:.1f}"
 
 
-async def run(path: Path, speed: float, languages: list[str]):
+async def run(path: Path, speed: float, languages: list[str], llm):
     setup()
     RECORDER.clear()
-    llm = from_env()
     kafka.ensure_topic(kafka.TOPIC)
     from confluent_kafka import Consumer
 
@@ -142,9 +142,14 @@ def main():
     p.add_argument("--match-file", type=Path, default=Path("demo/match.jsonl"))
     p.add_argument("--speed", type=float, default=10)
     p.add_argument("--languages", default="fr,es,sw,ar")
+    add_flags(p)
     args = p.parse_args()
     languages = [x for x in args.languages.split(",") if x]
-    live, llm, out = asyncio.run(run(args.match_file, args.speed, languages))
+    llm = from_env(provider=args.provider)
+    if args.provider != "fake":
+        n = match_requests(args.match_file, languages)
+        confirm(llm, f"About {n} requests (a free dry run of this match)", args.yes)
+    live, llm, out = asyncio.run(run(args.match_file, args.speed, languages, llm))
     body = render(live, llm, out, args.speed, languages)
     write_section(OUT, "latency", body)
     print(body)
