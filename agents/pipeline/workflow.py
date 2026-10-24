@@ -131,16 +131,21 @@ class NarratorExecutor(Executor):
     def __init__(self, llm: LLMClient, policy: Policy):
         super().__init__(id="narrator")
         self.llm, self.policy = llm, policy
-        self.agents: dict[str, Agent] = {}
+        self.agents: dict[tuple, Agent] = {}
 
-    def agent(self, persona: str) -> Agent:
-        if persona not in self.agents:
-            self.agents[persona] = Agent(
+    def agent(self, task: NarrationTask) -> Agent:
+        """One narrator per persona and moment: its style examples leave out
+        the one written for this moment (leave-one-out)."""
+        key = (task.persona, *prompts.holdout(task))
+        if key not in self.agents:
+            self.agents[key] = Agent(
                 client=AdapterChatClient(self.llm),
-                instructions=prompts.narrator_system(persona),
-                name=f"narrator_{persona}",
+                instructions=prompts.narrator_system(
+                    task.persona, prompts.holdout(task)
+                ),
+                name=f"narrator_{task.persona}",
             )
-        return self.agents[persona]
+        return self.agents[key]
 
     async def write(
         self, analysis: Analysis, attempt: int, reasons, history, ctx
@@ -148,7 +153,7 @@ class NarratorExecutor(Executor):
         with step("narrator", attempt=attempt) as span:
             reply = await ask(
                 self.llm,
-                self.agent(analysis.task.persona),
+                self.agent(analysis.task),
                 prompts.narrator_prompt(analysis, reasons),
                 "narrator",
                 self.policy,

@@ -62,18 +62,18 @@ sw:
     casual: "GOLI, dakika ya {minute}. {team} wanafunga{how}. {standing}."
     analyst: "GOLI, dakika ya {minute}. {team} wanafunga{how}: nafasi yenye {chance}{before}. {standing}."
     before: " (xG {before} kabla ya shambulizi)"
-    counter: " kwa shambulizi la kushtukiza, {zone}"
+    counter: " kwa counter-attack, {zone}"
   big_chance:
     casual: "NAFASI KUBWA, dakika ya {minute}. {team} wanakaribia kufunga. {standing}."
     analyst: "NAFASI KUBWA, dakika ya {minute}. {team} wanatengeneza nafasi yenye {chance}. {standing}."
   red_card_impact:
-    casual: "KADI NYEKUNDU, dakika ya {minute}. {name} (namba {shirt}) wa {team} anatolewa nje{reason}. {standing}."
+    casual: "KADI NYEKUNDU, dakika ya {minute}. {name} (namba {shirt}) wa {team} analishwa kadi nyekundu{reason}. {standing}."
     analyst: "KADI NYEKUNDU, dakika ya {minute}. {team} wakiwa kumi tangu hapo: {changes}."
     reason:
-      last-man foul on a counter: " kwa kosa la mlinzi wa mwisho, kwenye shambulizi la kushtukiza"
-      last-man foul: " kwa kosa la mlinzi wa mwisho"
-      foul on a counter: " kwa kosa kwenye shambulizi la kushtukiza"
-      foul: " kwa kosa"
+      last-man foul on a counter: " kwa kumchezea vibaya na rafu akiwa mlinzi wa mwisho kwenye counter-attack"
+      last-man foul: " kwa kumchezea vibaya na rafu akiwa mlinzi wa mwisho"
+      foul on a counter: " kwa kumchezea vibaya na rafu kwenye counter-attack"
+      foul: " kwa kumchezea vibaya na rafu"
   other:
     casual: "{kind}, dakika ya {minute}. {team}. {standing}."
     analyst: "{kind}, dakika ya {minute}. {team}: {changes}."

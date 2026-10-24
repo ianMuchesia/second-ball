@@ -208,8 +208,13 @@ def analyst_prompt(
     return f"Moment: {task.moment.kind}.\n{seq}{values_block(task, values)}"
 
 
-def narrator_system(persona: str) -> str:
-    shots = examples(persona)
+def holdout(task: NarrationTask) -> tuple[str, str, int]:
+    """The moment being narrated: its own example is left out."""
+    return (task.context.match_id, task.moment.kind, task.moment.clock.minute)
+
+
+def narrator_system(persona: str, held_out: tuple[str, str, int] | None = None) -> str:
+    shots = examples(persona, held_out)
     tail = (
         (
             "\nSTYLE EXAMPLES ONLY - DO NOT COPY PHRASING OR NUMBERS FROM THESE "

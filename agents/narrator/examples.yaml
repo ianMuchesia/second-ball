@@ -9,6 +9,10 @@
 #   63': Riverside's red card (last man, left centre-back)
 #   88': Harbour's 2nd counter goal behind the left-back, 0-2
 
+# Leave-one-out: narrating a moment, the Narrator never sees the example
+# written for that same moment (match, kind, minute), so it cannot copy it.
+match: m-riverside_athletic-harbour_town-1
+
 examples:
   - moment: counter_goal_34
     kind: goal

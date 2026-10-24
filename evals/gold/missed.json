@@ -1,0 +1,15 @@
+[
+ {
+  "model": "gemini-3.5-flash-lite",
+  "recorded_at": "2026-10-23T18:28:37",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo048-analyst",
+  "kind": "red_card_impact",
+  "minute": 63,
+  "persona": "analyst",
+  "text": "Harbour lead 1-0: Riverside drop control from 0.71 to 0.80 after the red card, allowing Harbour to press deeper.",
+  "errors": ["wrong_direction"],
+  "why": "Aired: every number was right, but control rose (0.71 -> 0.80). The Verifier had no direction check; added in b5fe292 (wrong_direction).",
+  "caught_now": true
+ }
+]

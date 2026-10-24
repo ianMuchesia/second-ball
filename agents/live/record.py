@@ -40,6 +40,7 @@ from agents.mcp_server.data import MatchData
 from agents.telemetry import RECORDER, setup
 from core.budget import Budget
 from core.metrics import Events, registry
+from evals.gold import caught
 
 # Shipped languages: a fluent speaker reviewed them (English, Kiswahili).
 # Others work in the pipeline but are machine-translated, not reviewed.
@@ -216,6 +217,10 @@ def main(argv=None):
     out = record(args.match_file, args.out, llm, langs)
     meta = json.loads((out / "meta.json").read_text())
     print(json.dumps(meta))
+    # Every draft the Verifier caught is a gold eval item (real mistakes).
+    saved = caught.save(out)
+    if saved:
+        print(f"caught drafts saved: {saved}")
     if args.provider != "fake" and meta["ai_lines"] == 0:
         raise SystemExit(
             f"WARNING: {out} has no AI lines, only templates"

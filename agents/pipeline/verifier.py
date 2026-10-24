@@ -124,7 +124,7 @@ TRAILS = r"\s+(?:(?:now|still)\s+)?(trail|trails|(?:are|is)\s+(?:now\s+|still\s+
 # Riverside's is wrong. (Pressure is left out: pressure on Riverside's ball is
 # applied by Harbour, so either team's name can be right.)
 OWNED = {"control": "control", "xg": "xG", "threat": "threat", "momentum": "momentum"}
-COPY_LIMIT = 0.8  # word overlap (Jaccard) with a style example that counts as a copy
+COPY_LIMIT = 0.6  # share of a line's word 3-grams found in one example = a copy
 # Common English words that should not survive a translation; 2 or more means
 # the Localizer answered (partly) in English.
 ENGLISH_HINTS = {"the", "and", "behind", "from", "with", "their", "again", "is"}
@@ -479,13 +479,19 @@ def words_of(text: str) -> set[str]:
     return {w.lower() for w in WORD.findall(text)}
 
 
+def trigrams(text: str) -> set[tuple[str, ...]]:
+    words = [w.lower() for w in WORD.findall(text)]
+    return set(zip(words, words[1:], words[2:], strict=False))
+
+
 def copied(text: str, examples: Sequence[str]) -> bool:
-    mine = words_of(text)
-    for line in examples:
-        theirs = words_of(line)
-        if mine and len(mine & theirs) / len(mine | theirs) > COPY_LIMIT:
-            return True
-    return False
+    """A backstop to leave-one-out: the line shares at least COPY_LIMIT of
+    its word 3-grams with an example (single shared words like "Harbour lead"
+    are fine; whole phrases are not)."""
+    mine = trigrams(text)
+    return bool(mine) and any(
+        len(mine & trigrams(line)) / len(mine) >= COPY_LIMIT for line in examples
+    )
 
 
 LOCKED_NUMBER = re.compile(r"\d+(?:\.\d+)?(?:-\d+)?(?:\s*%)?")
