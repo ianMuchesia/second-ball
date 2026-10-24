@@ -168,3 +168,44 @@ shapes:
     full_x: 90.0
     share: 0.85              # share of the way to the front line at full_x. TUNABLE
     forwards_wanted: 5       # shapes with this many forwards push nobody up; 2 forwards = full share
+
+# Player movement between events (engine/core/motion.py), 10 Hz. TUNABLE.
+# Speed bands follow the usual match-analysis zones: walking < 7 km/h,
+# jogging < 14.4, running < 19.8 (high speed), sprinting above.
+motion:
+  pace:                      # top speed per pace, m/s
+    walk: 1.9
+    jog: 4.0
+    run: 5.5
+    sprint: 8.5
+    dive: 7.0                # a keeper's dive
+  accel: 3.5                 # m/s^2 speeding up
+  decel: 5.0                 # m/s^2 slowing down
+  turn_deg_s: 420            # how fast a player turns to face
+  walk_within_m: 3.0         # role target this close: walk
+  run_beyond_m: 12.0         # this far: run (between: jog)
+  support_m: 13.0            # support angle distance from the carrier
+  runner_depth: 0.8          # shape depth (0 back - 1 front) of players who run in behind
+  run_ahead_m: 14.0          # a run in behind goes at most this far past the anchor
+  press_close_m: 1.2         # a pressing defender stops this far goal-side of the ball
+  press_hold_m: 5.0          # a defender holding off stops this far
+  cover_m: 9.0               # the covering defender sits this far behind the ball
+  keeper_ratio: 0.11         # keeper comes off his line by this share of the ball's distance
+  keeper_max_m: 11.0
+  gather_max_s: 8.0          # a player sent for a loose ball gets at most this long
+  setup_max_s: 15.0          # a restart taker gets at most this long to reach the ball
+  dive_accel: 30.0           # a keeper's dive (pace "dive")
+  celebration_s: 9.0         # the scorer's run to the corner flag
+  walk_back_max_s: 60.0      # then everyone back to kick-off places
+  ball_return_ms: 14.0       # a dead ball rolls/is thrown back to its restart spot at this speed
+  ball_drop_ms: 6.0          # a ball stopped in the air falls at this speed (m/s)
+  lofted_ms: 24.0            # a lofted ball's speed along the ground (m/s)
+  throw_ms: 14.0             # a throw-in's speed
+  ball_max_ms: 38.0          # no ball leaves a foot faster (along the ground and up)
+
+# Scripted scenario beats (engine/core/sim.py play_beat). TUNABLE.
+beats:
+  force_after_s: 25          # past this many seconds into its first minute, a beat is forced (a real tackle wins the ball)
+
+counter:
+  channel_max_x: 55.0        # a ball into the channel lands at most this far from the defending goal... in the defending team's frame (so past halfway)

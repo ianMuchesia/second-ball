@@ -213,15 +213,35 @@ export class Footballer {
       }
     }
     if (dtMatch === 0 && !snap) this.vel.multiplyScalar(Math.exp(-dtReal * 10)); // paused: settle into idle
-    this.root.position.set(this.pos.x, 0, this.pos.y);
-
     // Face where you run; when (nearly) still, watch the ball.
+    const v0 = this.vel.length();
+    const want = v0 > 0.7 ? Math.atan2(this.vel.x, this.vel.y) : Math.atan2(ballX - this.pos.x, ballZ - this.pos.y);
+    const turn = Math.min(1, (snap ? 1 : 0) + Math.max(dtMatch, dtReal * 0.5) * 7);
+    this.pose(want, turn, ballX, ballZ, dtMatch, kick, dive, power, celebrate);
+  }
+
+  /** Play the engine's movement exactly: position, velocity and facing come
+   * from the 10 Hz track (world metres, heading in radians as root.rotation.y);
+   * only the body's animation is drawn here. */
+  follow(x: number, z: number, vx: number, vz: number, heading: number, ballX: number, ballZ: number, dtMatch: number, kick: number, dive = 0, power = 1, celebrate = 0) {
+    if (Number.isNaN(x)) {
+      this.root.visible = false;
+      return;
+    }
+    this.root.visible = true;
+    this.pos.set(x, z);
+    this.vel.set(vx, vz);
+    this.lastTarget.set(x, z);
+    this.placed = true;
+    this.pose(heading, 1, ballX, ballZ, dtMatch, kick, dive, power, celebrate);
+  }
+
+  private pose(want: number, turn: number, ballX: number, ballZ: number, dtMatch: number, kick: number, dive: number, power: number, celebrate: number) {
+    this.root.position.set(this.pos.x, 0, this.pos.y);
     const v = this.vel.length();
     this.speed = v;
-    const want = v > 0.7 ? Math.atan2(this.vel.x, this.vel.y) : Math.atan2(ballX - this.pos.x, ballZ - this.pos.y);
     let d = want - this.heading;
     d = Math.atan2(Math.sin(d), Math.cos(d));
-    const turn = Math.min(1, (snap ? 1 : 0) + Math.max(dtMatch, dtReal * 0.5) * 7);
     this.heading += d * turn;
     this.root.rotation.y = this.heading;
 

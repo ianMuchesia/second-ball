@@ -10,7 +10,16 @@ export const store = configureStore({
     profile: profile.reducer,
     [serverApi.reducerPath]: serverApi.reducer,
   },
-  middleware: (getDefault) => getDefault().concat(serverApi.middleware),
+  // The movement track is typed arrays (big, read-only): kept out of the
+  // dev-time serializable and immutability checks; everything else is checked.
+  middleware: (getDefault) =>
+    getDefault({
+      serializableCheck: {
+        ignoredPaths: [/^server\.queries\.tracks/],
+        ignoredActionPaths: [/^payload\.(t|period|dead|v)$/],
+      },
+      immutableCheck: { ignoredPaths: [/^server\.queries\.tracks/] },
+    }).concat(serverApi.middleware),
 });
 
 // The profile is saved whenever it changes (a store listener, not an effect).

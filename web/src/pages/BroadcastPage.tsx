@@ -23,7 +23,8 @@ import {
   type Marker,
   onAir,
 } from "../store/selectors";
-import { useEventsQuery, useProducerQuery, useRunQuery } from "../store/serverApi";
+import { useEventsQuery, useProducerQuery, useRunQuery, useTracksQuery } from "../store/serverApi";
+import { sampleAt, sceneAt } from "../tracks";
 import { useTicker } from "../useTicker";
 
 // Opened on demand: separate chunks.
@@ -36,6 +37,7 @@ export default function BroadcastPage() {
   const run = useRun();
   const { data } = useRunQuery(run);
   const { data: events = [] } = useEventsQuery(run);
+  const { data: tracks } = useTracksQuery(run);
   // The producer's decisions (pulled lines, approved held lines) decide what airs.
   const { data: producer } = useProducerQuery({ run });
   const dispatch = useAppDispatch();
@@ -71,6 +73,7 @@ export default function BroadcastPage() {
   if (!data || !view) return null;
 
   const { match } = data;
+  const scene = tracks && events.length ? sceneAt(tracks, sampleAt(tracks, events, pb.t, pb.focusEventId)) : null;
   // An analyst's evidence drawer is open by default on the line on air (until
   // closed for that moment); otherwise it opens when asked.
   const drawerMoment = pb.drawerOpen
@@ -119,7 +122,7 @@ export default function BroadcastPage() {
         <div className="screen">
           {me.view === "3d" && can3d().ok ? (
             <Suspense fallback={<div className="pitch-scene three loading">Loading the 3D pitch…</div>}>
-              <Pitch3D match={match} events={events} />
+              <Pitch3D match={match} events={events} tracks={tracks ?? null} />
             </Suspense>
           ) : (
             <Pitch
@@ -130,6 +133,7 @@ export default function BroadcastPage() {
               lineup={lineup}
               highlighted={new Set(pb.highlighted)}
               followed={me.followedPlayer}
+            scene={scene}
               onPick={(id) => {
                 dispatch(profileActions.follow(id));
                 dispatch(actions.setPanel("player"));

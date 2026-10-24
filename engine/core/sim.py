@@ -1,5 +1,9 @@
 """Possession-chain state machine. Same seed = identical match.
 
+Players and the ball move continuously between events (engine/core/motion.py,
+10 Hz): an event's freeze frame is where everyone really is at that instant,
+and nobody teleports; the clock only advances through that movement.
+
 Each step the ball carrier picks pass / carry / take-on / shot (or clearance)
 from zone, team style and pressure. Failed passes become interceptions,
 tackles or loose balls and can open a counterpress window. Shots resolve
@@ -20,6 +24,7 @@ import yaml
 from core.contracts import Match, MatchEvent
 from engine.core.lineup import lineup
 from engine.core.models import fatigue, pass_success, pressure_load, xg
+from engine.core.motion import DT, Motion
 from engine.core.pitch import (
     GOAL_Y,
     LENGTH,
@@ -30,7 +35,7 @@ from engine.core.pitch import (
     own,
     own_facing,
 )
-from engine.core.shape import TeamState, build_frame, centre_spot, keeper_spot
+from engine.core.shape import TeamState, centre_spot, keeper_spot
 from engine.core.shapes import ball_side
 from engine.league import COMPETITION
 from engine.weather import load_weather
@@ -40,6 +45,8 @@ CONFIG = Path(__file__).parent.parent / "config" / "engine.yaml"
 # channel, last_man, lines_broken, scenario_beat, ...) goes to the engine-truth
 # sidecar, which only evals may read: the analyser sees events alone.
 FEED_QUALIFIERS = frozenset({"xg", "assist", "length_m"})
+# Balls in the air: crosses, set-piece deliveries, goal kicks.
+LOFTED = frozenset({"cross", "corner_crossed", "freekick_crossed", "goalkick"})
 DEFAULT_KICKOFF = datetime(2026, 11, 7, 15, 0, tzinfo=UTC)
 
 
@@ -55,6 +62,8 @@ class SimulatedMatch:
     truth: list = field(default_factory=list)
     # Engine-internal mode switches (manage / protect / chase). Never emitted.
     mode_log: list = field(default_factory=list)
+    # 10 Hz movement of every player and the ball (recorded runs only).
+    tracks: object = None
 
     def truth_by_event(self):
         return {t["event_id"]: t for t in self.truth}
@@ -68,6 +77,7 @@ def simulate_match(
     kickoff=DEFAULT_KICKOFF,
     config=None,
     scenario=None,
+    tracks=False,
 ):
     """Simulate one match between two ClubProfiles. Returns Match + list[MatchEvent].
 
@@ -89,13 +99,13 @@ def simulate_match(
         away_strength=away.strength,
         lineups=[*lineup(home), *lineup(away)],
     )
-    sim = _Sim(match, home, away, cfg, load_weather()[weather], scenario)
+    sim = _Sim(match, home, away, cfg, load_weather()[weather], scenario, tracks)
     events = sim.run()
     if scenario:
         missed = [b.id for b in scenario.scripted() if b.id not in sim.done]
         if missed:
             raise RuntimeError(f"scenario beats never played: {missed}")
-    return SimulatedMatch(match, events, sim.truth, sim.mode_log)
+    return SimulatedMatch(match, events, sim.truth, sim.mode_log, sim.motion.tracks)
 
 
 def underdog_caution(cfg, own, opponent):
@@ -106,7 +116,7 @@ def underdog_caution(cfg, own, opponent):
 
 
 class _Sim:
-    def __init__(self, match, home, away, cfg, weather, scenario=None):
+    def __init__(self, match, home, away, cfg, weather, scenario=None, tracks=False):
         self.match = match
         self.scenario = scenario
         self.done = set()  # scripted beats already played
@@ -135,7 +145,7 @@ class _Sim:
         self.passes = 0
         self.counterpress = None  # (side, until_t)
         self.transition_until = -1.0  # both teams in transition shape until then
-        self.previous = None  # last frame's shape positions, for smooth movement
+        self.motion = Motion(self, record=tracks)
 
     # ---- clock and game state -------------------------------------------------
 
@@ -144,7 +154,58 @@ class _Sim:
         return int(self.t // 60)
 
     def tick(self, seconds):
-        self.t += max(0.5, seconds)
+        """Let `seconds` of play pass: everyone moves (at least half a second)."""
+        self.t += self.motion.advance(max(0.5, seconds))
+
+    def wait(self, seconds):
+        """Like tick, to the nearest 0.1 s (a ball in flight, a run)."""
+        self.t += self.motion.advance(max(DT, seconds))
+
+    def wait_until(self, done, max_s):
+        """Play on in 0.1 s steps until `done()` or `max_s` seconds."""
+        waited = 0.0
+        while not done() and waited < max_s:
+            self.t += self.motion.advance(DT)
+            waited += DT
+
+    def body(self, side, player):
+        return self.motion.bodies.get((side, player))
+
+    def sync_ball(self):
+        """The ball the decisions use is where it really is."""
+        self.ball = on_pitch(self.motion.ball[0], self.motion.ball[1])
+
+    def setup(self, side, player, spot):
+        """A restart: the ball is placed at `spot` and the taker goes to it."""
+        self.motion.place_ball(spot)
+        key = (side, player)
+        self.motion.order(key, spot, "sprint", self.cfg["motion"]["setup_max_s"])
+        self.wait_until(
+            lambda: (
+                key not in self.motion.bodies
+                or (
+                    dist(self.motion.bodies[key].pos, spot) <= 0.8
+                    and self.motion.ball_settled()
+                )
+            ),
+            self.cfg["motion"]["setup_max_s"],
+        )
+        self.motion.orders.pop(key, None)
+        self.gather()
+
+    def gather(self):
+        """The carrier the match says has the ball goes and gets it."""
+        key = (self.attack, self.carrier)
+        if self.motion.owner == key or key not in self.motion.bodies:
+            return
+        self.motion.dead = False
+        self.motion.give(key)
+        wait = self.cfg["motion"]["gather_max_s"]
+        self.wait_until(lambda: self.motion.owner == key, wait)
+        if self.motion.owner != key:
+            # Still short of it: the ball is played to his feet (it travels).
+            self.motion.kick(self.motion.bodies[key].pos, 40.0)
+            self.wait_until(lambda: self.motion.owner == key, wait)
 
     def lead(self, side):
         return self.teams[side].goals - self.teams[1 - side].goals
@@ -296,10 +357,36 @@ class _Sim:
             self.period = period
             self.t = float(start)
             end = start + 45 * 60 + self.rng.randint(lo, hi) * 60
+            self.motion.start_period(0 if period == 1 else 1)
             self.kickoff(0 if period == 1 else 1)
             while self.t < end:
                 self.step()
+            if period == 1:
+                self.half_time()
         return self.events
+
+    def half_time(self):
+        """The whistle: the ball goes back to the centre and both teams walk to
+        their second-half kick-off places (so the half starts with nobody
+        jumping). The second half's clock starts at 45:00 as usual."""
+        m = self.motion
+        m.place_ball(centre_spot())
+        spots = m.kickoff_spots(1)
+        for k, spot in spots.items():
+            m.order(k, spot, "jog", 120.0)
+        self.wait_until(
+            lambda: (
+                all(
+                    dist(m.bodies[k].pos, spots[k]) <= 0.5
+                    for k in m.bodies
+                    if k in spots
+                )
+                and m.ball_settled()
+            ),
+            120.0,
+        )
+        for k in spots:
+            m.orders.pop(k, None)
 
     def new_possession(self, side, carrier, ball, assist="none", same=False):
         if not same:
@@ -320,7 +407,10 @@ class _Sim:
             self.counterpress = None
 
     def frame(self, pressed=None):
-        """Freeze frame around the current carrier. Returns (frame, presser_distance)."""
+        """The live freeze frame (everyone where they are now) and the nearest
+        outfield defender's distance to the ball. Also decides whether the
+        defence closes right in during the coming action; movement makes it so."""
+        self.sync_ball()
         pr = self.cfg["pressing"]
         bx, _ = own(self.attack, *self.ball)
         defence = 1 - self.attack
@@ -331,35 +421,11 @@ class _Sim:
             if self.counterpressing(defence):
                 p = max(p, pr["counterpress_probability"])
             pressed = self.rng.random() < min(p, 0.95)
-        lo, hi = pr["close_distance_m"] if pressed else pr["open_distance_m"]
-        presser_dist = self.rng.uniform(lo, hi)
-        fb = self.cfg["facing_back"]
-        back_p = (
-            fb["pressed_in_own_half"]
-            if pressed and bx < LENGTH / 2
-            else fb["otherwise"]
+        self.motion.press_close = pressed
+        frame = self.motion.snapshot()
+        _, presser_dist = frame.nearest(
+            defence, self.ball, outfield_only=True, keeper=self.teams[defence].keeper
         )
-        blocks = {s: self.block_height(s) for s in (0, 1)}
-        transition = self.t < self.transition_until
-        phases = {
-            self.attack: "transition" if transition else "in_possession",
-            defence: "transition" if transition else "out_of_possession",
-        }
-        frame = build_frame(
-            self.rng,
-            self.cfg,
-            self.teams,
-            self.attack,
-            self.carrier,
-            self.ball,
-            presser_dist,
-            self.rng.random() < back_p,
-            blocks,
-            phases,
-            self.previous,
-            {s: self.push(s) for s in (0, 1)},
-        )
-        self.previous = frame.shape_positions
         return frame, presser_dist
 
     def step(self):
@@ -370,6 +436,7 @@ class _Sim:
             return
         won_ball, self.just_won = self.just_won, False
         attack, defence = self.attack, 1 - self.attack
+        self.gather()
         frame, presser_dist = self.frame()
         bx, by = own(attack, *self.ball)
         pressed = presser_dist <= self.cfg["under_pressure_m"]
@@ -449,6 +516,7 @@ class _Sim:
         Positions are rounded to the centimetre and facing to 0.1 degree;
         under_pressure is computed from the rounded frame, exactly as stored.
         """
+        frame = self.motion.snapshot()  # where everyone really is now
         sx, sy = _cm(*own(side, *on_pitch(*start)))
         ex, ey = _cm(*own(side, *on_pitch(*end)))
         players, me, opponents = [], (sx, sy), []
@@ -493,6 +561,7 @@ class _Sim:
             freeze_frame=players,
         )
         self.events.append(event)
+        self.motion.mark(event.event_id)
         labels = {k: v for k, v in qual.items() if k not in FEED_QUALIFIERS}
         if labels:
             self.truth.append({"event_id": event.event_id, **labels})
@@ -507,18 +576,18 @@ class _Sim:
         """Play stops: no counterpress or transition; `snap` resets players to shape."""
         self.counterpress = None
         self.transition_until = -1.0
-        if snap:
-            self.previous = None
 
     def kickoff(self, side):
         self.restart(snap=True)
         self.new_possession(side, self.teams[side].front_player, centre_spot())
+        self.setup(side, self.carrier, centre_spot())
         frame, _ = self.frame(pressed=False)
         self.pass_(frame, 10.0, kind="pass", restart=True, backwards=True)
 
     def goalkick(self, side):
         self.restart(snap=True)
         self.new_possession(side, self.teams[side].keeper, keeper_spot(side))
+        self.setup(side, self.carrier, keeper_spot(side))
         frame, _ = self.frame(pressed=False)
         self.pass_(frame, 10.0, kind="goalkick", restart=True)
 
@@ -531,6 +600,7 @@ class _Sim:
             side, (x, y), outfield_only=True, keeper=self.teams[side].keeper
         )
         self.new_possession(side, taker, (x, y))
+        self.setup(side, taker, (x, y))
         frame, _ = self.frame(pressed=False)
         self.pass_(frame, 10.0, kind="throw_in", restart=True)
 
@@ -541,6 +611,7 @@ class _Sim:
             self.carrier if self.attack == side else self.teams[side].front_player,
             at,
         )
+        self.setup(side, self.carrier, at)
         bx, by = own(side, *at)
         sp = self.cfg["set_pieces"]
         late_leader = self.minute >= sp["late_minute"] and self.lead(side) > 0
@@ -570,6 +641,7 @@ class _Sim:
             side, spot, outfield_only=True, keeper=self.teams[side].keeper
         )
         self.new_possession(side, taker, spot)
+        self.setup(side, taker, spot)
         frame, _ = self.frame(pressed=False)
         target = own(side, self.rng.uniform(95, 101), self.rng.uniform(28, 40))
         threat = self.teams[side].profile.set_pieces.threat
@@ -590,9 +662,10 @@ class _Sim:
             self.foot(),
             70.0,
         )
+        receiver, _ = frame.nearest(side, target, exclude={(side, taker)})
+        self.motion.kick(target, 70.0, (side, receiver) if ok else None, lofted=True)
         self.tick(4)
         if ok:
-            receiver, _ = frame.nearest(side, target, exclude={(side, taker)})
             self.new_possession(side, receiver, target, assist="set_piece", same=True)
         else:
             defender, _ = frame.nearest(1 - side, target)
@@ -699,17 +772,23 @@ class _Sim:
             lines_broken=lines,
             **qual,
         )
-        self.tick(
-            self.seconds_per_action(side) * self.rng.uniform(0.6, 1.4)
-            + d / (speed / 3.6)
+        hold = self.seconds_per_action(side) * self.rng.uniform(0.6, 1.4)
+        lofted = kind in LOFTED or d > 30
+        flight = self.motion.kick(
+            target,
+            speed,
+            (side, receiver),
+            lofted,
+            cap_ms=self.cfg["motion"]["throw_ms"] if kind == "throw_in" else None,
         )
 
         if ok:
             self.carrier, self.ball = receiver, target
             self.passes += 1
             self.assist = "cross" if cross else ("through_ball" if through else "pass")
+            self.tick(hold + flight)  # the ball travels; the receiver meets it
             return
-        self.failed_pass(frame, side, receiver, start, target, kind)
+        self.failed_pass(frame, side, receiver, start, target, kind, flight)
 
     def pick_receiver(self, frame, side, carrier, bx, directness, backwards):
         team = self.teams[side]
@@ -763,12 +842,16 @@ class _Sim:
         same_flank = abs(ry - GOAL_Y) > 18 and (ry - GOAL_Y) * (by - GOAL_Y) > 0
         return 1.0 + 2.0 * bu.flank_bias if same_flank and gain > 0 else 1.0
 
-    def failed_pass(self, frame, side, receiver, start, target, kind="pass"):
+    def failed_pass(
+        self, frame, side, receiver, start, target, kind="pass", flight=1.0
+    ):
         defence = 1 - side
         if kind == "cross":
             sp = self.cfg["set_pieces"]
             seeking = self.teams[side].profile.set_pieces.corner_seeking
             if self.rng.random() < sp["cross_to_corner"] * (1 + seeking):
+                self.wait(flight)
+                self.motion.place_ball(target)
                 self.tick(10)
                 self.corner(side)  # cleared behind
                 return
@@ -782,28 +865,33 @@ class _Sim:
         outcome = self.rng.choices(list(weights), weights=list(weights.values()))[0]
 
         if outcome == "interception":
-            mid = ((start[0] + target[0]) / 2, (start[1] + target[1]) / 2)
-            defender, _ = frame.nearest(defence, mid)
-            frame.positions[(defence, defender)] = mid
+            # The defender who can get to the pass first runs to that point.
+            defender, point, when = self.interception(defence, start, target, flight)
+            self.motion.order((defence, defender), point, "sprint", when + 1.0)
+            self.wait(when)
+            self.motion.stop_ball()
+            self.motion.orders.pop((defence, defender), None)
+            self.sync_ball()
+            at = self.ball
             self.emit(
                 frame,
                 defence,
                 defender,
                 "interception",
                 "success",
-                mid,
-                mid,
+                at,
+                at,
                 self.foot(),
             )
             self.tick(1)
-            self.turnover(defence, defender, mid)
+            self.turnover(defence, defender, at)
         elif outcome == "tackle":
             self.carrier, self.ball = receiver, target
-            frame.positions[(side, receiver)] = target
-            defender, _ = frame.nearest(defence, target)
+            self.wait(flight)
+            defender, _ = self.motion.snapshot().nearest(defence, target)
             self.challenge(frame, defender)
         else:
-            frame.positions[(side, receiver)] = target
+            self.wait(flight)
             self.emit(
                 frame, side, receiver, "bad_touch", "fail", target, target, self.foot()
             )
@@ -817,8 +905,39 @@ class _Sim:
             ):
                 self.carrier, self.ball = receiver, target
             else:
-                defender, _ = frame.nearest(defence, target)
+                defender, _ = self.motion.snapshot().nearest(defence, target)
                 self.turnover(defence, defender, target)
+
+    def interception(self, defence, start, target, flight):
+        """(defender, point, seconds): the first point on the pass a defender
+        can reach before the ball, and who. If nobody can, the nearest to the
+        end of the pass takes it there (he arrives a little late)."""
+        bodies = {
+            pl: self.motion.bodies[(s, pl)].pos
+            for (s, pl) in self.motion.bodies
+            if s == defence and not self.motion.bodies[(s, pl)].leaving
+        }
+        top = self.cfg["motion"]["pace"]["sprint"]
+        for k in range(5, 19):
+            u = k / 20
+            point = (
+                start[0] + (target[0] - start[0]) * u,
+                start[1] + (target[1] - start[1]) * u,
+            )
+            when = u * flight
+            pl, d = min(
+                ((pl, dist(p, point)) for pl, p in bodies.items()),
+                key=lambda x: (x[1], x[0]),
+            )
+            if d / top + 0.3 <= when:
+                return pl, point, when
+        u = 0.9
+        point = (
+            start[0] + (target[0] - start[0]) * u,
+            start[1] + (target[1] - start[1]) * u,
+        )
+        pl = min(bodies, key=lambda q: (dist(bodies[q], point), q))
+        return pl, point, u * flight
 
     def challenge(self, frame, defender, card=None, **qual):
         """`defender` goes in on the carrier: foul (maybe a card) or a won tackle.
@@ -827,8 +946,20 @@ class _Sim:
         engine shows no red cards of its own.
         """
         side, defence = self.attack, 1 - self.attack
+        # He closes the carrier down before he can tackle or foul.
+        me, him = (defence, defender), (side, self.carrier)
+        self.motion.order(me, None, "sprint", 6.0, chase=("player", him), offset=0.6)
+        self.wait_until(
+            lambda: (
+                me not in self.motion.bodies
+                or him not in self.motion.bodies
+                or dist(self.motion.bodies[me].pos, self.motion.bodies[him].pos) <= 1.3
+            ),
+            5.0,
+        )
+        self.motion.orders.pop(me, None)
+        self.sync_ball()
         at = self.ball
-        frame.positions[(defence, defender)] = at
         ch = self.cfg["challenges"]
         team = self.teams[defence]
         foul_p = ch["foul"]
@@ -856,9 +987,11 @@ class _Sim:
             self.emit(
                 frame, defence, defender, "foul", outcome, at, at, self.foot(), **qual
             )
+            self.motion.place_ball(at)  # play stops at the foul
             self.tick(25)
             if outcome == "red_card":
                 team.send_off(defender)
+                self.motion.send_off(me)
                 self.tick(60)
             self.free_kick(side, at)
             return
@@ -887,11 +1020,11 @@ class _Sim:
             self.foot(),
             12.0,
         )
+        self.motion.carry((side, self.carrier), end, 5.5)
         self.tick(dist(self.ball, end) / 5.5)
-        self.ball = end
+        self.sync_ball()
         if pressed and self.rng.random() < 0.15:
-            frame.positions[(side, self.carrier)] = end
-            defender, _ = frame.nearest(1 - side, end)
+            defender, _ = self.motion.snapshot().nearest(1 - side, self.ball)
             self.challenge(frame, defender)
 
     def take_on(self, frame, presser_dist):
@@ -921,11 +1054,12 @@ class _Sim:
             end,
             self.foot(),
         )
-        self.tick(2)
         if ok:
-            self.ball = end
-        else:
-            defender, _ = frame.nearest(1 - side, self.ball)
+            self.motion.carry((side, self.carrier), end, 6.0)
+        self.tick(2)
+        self.sync_ball()
+        if not ok:
+            defender, _ = self.motion.snapshot().nearest(1 - side, self.ball)
             self.challenge(frame, defender)
 
     def clearance(self, frame):
@@ -945,13 +1079,14 @@ class _Sim:
             self.foot(),
             80.0,
         )
+        self.motion.kick(end, 80.0, lofted=True)
         self.tick(4)
         if self.rng.random() < 0.15:
             self.throw_in(defence, end)
             return
         keep = self.rng.random() < self.cfg["clearance_kept"]
         who = side if keep else defence
-        player, _ = frame.nearest(
+        player, _ = self.motion.snapshot().nearest(
             who, end, outfield_only=True, keeper=self.teams[who].keeper
         )
         if keep:
@@ -993,6 +1128,8 @@ class _Sim:
             else GOAL_Y + self.rng.choice((-1, 1)) * self.rng.uniform(4, 9)
         )
         end = own(side, LENGTH, aim_y)
+        body = "head" if header else self.foot()
+        speed = self.rng.uniform(60, 110)
         self.emit(
             frame,
             side,
@@ -1001,24 +1138,37 @@ class _Sim:
             "success" if goal else "fail",
             self.ball,
             end,
-            "head" if header else self.foot(),
-            self.rng.uniform(60, 110),
+            body,
+            speed,
             xg=round(chance, 3),
             assist=self.assist,
             **qual,
         )
-        self.tick(3)
+        scorer = self.carrier
+        keeper = self.teams[defence].keeper
+        spot = own(side, LENGTH - 1, aim_y)
+        flight = self.motion.kick(end, speed)
+        # The keeper reacts to the real shot: a dive towards where it is going.
+        self.motion.order((defence, keeper), spot, "dive", flight + 0.4)
+        self.wait(flight)
         if goal:
             self.teams[side].goals += 1
-            self.tick(50)
+            self.celebrate(side, scorer, defence)
             self.kickoff(defence)
         elif on_target:
-            keeper = self.teams[defence].keeper
-            spot = own(side, LENGTH - 1, aim_y)
-            frame.positions[(defence, keeper)] = spot
+            self.motion.stop_ball()
+            self.sync_ball()
             self.emit(
-                frame, defence, keeper, "keeper_save", "success", spot, spot, "other"
+                frame,
+                defence,
+                keeper,
+                "keeper_save",
+                "success",
+                self.ball,
+                self.ball,
+                "other",
             )
+            self.motion.orders.pop((defence, keeper), None)
             self.tick(3)
             if self.rng.random() < self.cfg["shots"]["corner_after_save"]:
                 self.corner(side)
@@ -1027,12 +1177,47 @@ class _Sim:
         else:
             sp = self.cfg["set_pieces"]
             seeking = self.teams[side].profile.set_pieces.corner_seeking
+            self.motion.place_ball(end)  # wide: out of play
             if self.rng.random() < sp["shot_to_corner"] * (1 + seeking):
                 self.tick(15)
                 self.corner(side)
             else:
                 self.tick(20)
                 self.goalkick(defence)
+
+    def celebrate(self, side, scorer, conceding):
+        """After a goal: the scorer runs to the corner flag with teammates
+        after him, then everyone walks back to their kick-off places. All of it
+        is movement, so the replay shows it (no time skipped)."""
+        m = self.motion
+        m.place_ball(own(side, LENGTH + 0.5, GOAL_Y))  # in the net
+        me = (side, scorer)
+        if me in m.bodies:
+            y = 3.0 if m.bodies[me].y < GOAL_Y else 65.0
+            m.order(me, own(side, 102.0, y if side == 0 else 68.0 - y), "sprint", 9.0)
+            mates = sorted(
+                (
+                    k
+                    for k in m.bodies
+                    if k[0] == side and k != me and k[1] != self.teams[side].keeper
+                ),
+                key=lambda k: dist(m.bodies[k].pos, m.bodies[me].pos),
+            )[:3]
+            for k in mates:
+                m.order(k, None, "run", 9.0, chase=("player", me), offset=1.5)
+        self.wait(self.cfg["motion"]["celebration_s"])
+        m.place_ball(centre_spot())
+        spots = m.kickoff_spots(conceding)
+        for k, spot in spots.items():
+            m.order(k, spot, "jog", 90.0)
+        self.wait_until(
+            lambda: all(
+                dist(m.bodies[k].pos, spots[k]) <= 1.5 for k in m.bodies if k in spots
+            ),
+            self.cfg["motion"]["walk_back_max_s"],
+        )
+        for k in spots:
+            m.orders.pop(k, None)
 
     # ---- counters and scripted beats -----------------------------------------
 
@@ -1054,7 +1239,9 @@ class _Sim:
         if behind not in fullbacks:
             return None
         fx, fy = own(opp, *frame.positions[(opp, fullbacks[behind])])
-        tx = clamp(fx - 15, 12, 80)
+        # Into the space behind him, and at least past halfway: a counter's
+        # ball goes long into space (a full-back high up leaves the most).
+        tx = clamp(fx - 15, 12, self.cfg["counter"]["channel_max_x"])
         ty = clamp(fy + (-4 if fy > GOAL_Y else 4), 6, WIDTH - 6)
         target = on_pitch(*own(opp, tx, ty))
 
@@ -1068,86 +1255,172 @@ class _Sim:
         return runner, target, f"behind_{behind}_fullback"
 
     def due_beat(self):
+        """A scripted beat whose minute has come, once its victim (the team
+        that loses the ball) has it, or at the last minute of its window."""
         if not self.scenario:
             return None
         for beat in self.scenario.scripted():
             lo, hi = beat.minute
-            if beat.id not in self.done and lo <= self.minute <= hi:
+            if beat.id in self.done or not lo <= self.minute <= hi:
+                continue
+            # Start it from a natural build-up: the victim on the ball in the
+            # middle of the pitch (its own frame), not mid-way through a chance.
+            victim = self.victim_of(beat)
+            middle = (
+                self.attack == victim and 30.0 <= own(victim, *self.ball)[0] <= 78.0
+            )
+            late = self.t >= lo * 60 + self.cfg["beats"]["force_after_s"]
+            if middle or late:
                 return beat
         return None
 
-    def caught_upfield(self, frame, victim, defender):
-        """A true last-man foul: the high line is caught upfield, so no other
-        outfield defender is goal-side of the ball (only the keeper). Fixed
-        offsets, no random draws: the rest of the match is unchanged."""
-        bx, _ = own(victim, *self.ball)
-        keeper = self.teams[victim].keeper
-        mates = sorted(
-            pl
-            for (s, pl) in frame.positions
-            if s == victim and pl not in (keeper, defender)
-        )
-        for i, pl in enumerate(mates):
-            x, y = own(victim, *frame.positions[(victim, pl)])
-            if x <= bx:
-                frame.positions[(victim, pl)] = own(
-                    victim, min(bx + 3.0 + 1.5 * i, LENGTH - 1.0), y
-                )
+    @staticmethod
+    def victim_of(beat):
+        named = 0 if beat.team == "home" else 1
+        return named if beat.action == "red_card_last_man" else 1 - named
 
     def play_beat(self, beat):
         """Script: the victim attacks down `behind` with the full-back high, loses
         the ball, and the other team counters into the channel behind that
-        full-back. Then a goal, a miss, or a last-man red card."""
+        full-back. Then a goal, a miss, or a last-man red card. Everything moves:
+        the ball is worked there, the runner starts his run at the regain, the
+        defenders caught upfield are still upfield when the foul comes."""
         self.done.add(beat.id)
-        named = 0 if beat.team == "home" else 1
-        victim = named if beat.action == "red_card_last_man" else 1 - named
+        victim = self.victim_of(beat)
         counter = 1 - victim
         tag = {"scenario_beat": beat.id}
         flank = 54.0 if beat.behind == "left" else WIDTH - 54.0
-
-        # 1. Victim attacking on that flank; the forward pass is intercepted.
-        self.restart()
+        m = self.motion
         start = own(victim, 68.0, flank)
-        self.new_possession(victim, self.teams[victim].front_player, start)
+        keeper = self.teams[victim].keeper
+
+        # 1. The victim works the ball to that flank. If it never had the ball
+        # in time, it wins it back first with a real tackle.
+        self.restart()
+        if self.attack != victim:
+            self.gather()
+            tackler, _ = m.snapshot().nearest(
+                victim, self.ball, outfield_only=True, keeper=keeper
+            )
+            me, him = (victim, tackler), (self.attack, self.carrier)
+            m.order(me, None, "sprint", 8.0, chase=("player", him), offset=0.6)
+            self.wait_until(
+                lambda: dist(m.bodies[me].pos, m.bodies[him].pos) <= 1.3, 8.0
+            )
+            m.orders.pop(me, None)
+            self.sync_ball()
+            frame, _ = self.frame(pressed=False)
+            self.emit(
+                frame,
+                victim,
+                tackler,
+                "tackle",
+                "success",
+                self.ball,
+                self.ball,
+                self.foot(),
+                **tag,
+            )
+            self.tick(1.5)
+            self.turnover(victim, tackler, self.ball)
+        if self.attack == victim:
+            self.gather()
+            self.sync_ball()
+            # Already in the final third: it loses the ball there (no pass back).
+            if own(victim, *self.ball)[0] > 78.0:
+                start = self.ball
+            elif dist(self.ball, start) > 8.0:
+                frame, _ = self.frame(pressed=False)
+                receiver, _ = frame.nearest(
+                    victim,
+                    start,
+                    exclude={(victim, self.carrier)},
+                    outfield_only=True,
+                    keeper=keeper,
+                )
+                self.pass_(
+                    frame,
+                    10.0,
+                    forced={"receiver": receiver, "target": start, "ok": True},
+                    qual=tag,
+                )
+                self.gather()
+
+        # 2. The forward pass is cut out by whoever can reach it.
         frame, _ = self.frame(pressed=False)
-        self.carrier, _ = frame.nearest(
-            victim, start, outfield_only=True, keeper=self.teams[victim].keeper
+        self.sync_ball()
+        begin = self.ball
+        bx, _ = own(victim, *begin)
+        aim = own(
+            victim,
+            clamp(max(84.0, bx + 10.0), 0.0, 100.0),
+            flank + (-8 if beat.behind == "left" else 8),
         )
-        frame, _ = self.frame(pressed=False)
-        aim = own(victim, 84.0, flank + (-8 if beat.behind == "left" else 8))
         self.emit(
             frame,
             victim,
             self.carrier,
             "pass",
             "fail",
-            start,
+            begin,
             aim,
             self.foot(),
             50.0,
             **tag,
         )
-        mid = ((start[0] + aim[0]) / 2, (start[1] + aim[1]) / 2)
-        interceptor, _ = frame.nearest(counter, mid)
-        frame.positions[(counter, interceptor)] = mid
+        flight = m.kick(aim, 50.0)
+        interceptor, point, when = self.interception(counter, begin, aim, flight)
+        m.order((counter, interceptor), point, "sprint", when + 1.0)
+        self.wait(when)
+        m.stop_ball()
+        m.orders.pop((counter, interceptor), None)
+        self.sync_ball()
+        won = self.ball
         self.emit(
             frame,
             counter,
             interceptor,
             "interception",
             "success",
-            mid,
-            mid,
+            won,
+            won,
             self.foot(),
             **tag,
         )
-        self.tick(2)
-        self.turnover(counter, interceptor, mid)
+        self.turnover(counter, interceptor, won)
         self.just_won = False
 
-        # 2. Long ball into the channel behind the full-back.
+        # 3. The runner goes the moment the ball is won; the ball goes into the
+        # channel behind the full-back, ahead of him.
         frame, _ = self.frame(pressed=False)
         runner, target, label = self.channel_target(frame, counter, beat.behind)
+        m.order((counter, runner), target, "sprint", 8.0)
+        caught = []
+        if beat.action == "red_card_last_man":
+            by_role = {r: p for p, r in self.teams[victim].roles.items()}
+            defender = by_role.get(beat.role)
+            if defender is None:
+                defender, _ = frame.nearest(
+                    victim, target, outfield_only=True, keeper=keeper
+                )
+            # The rest of the high line is caught upfield: they jog back, too late.
+            caught = [
+                k for k in m.bodies if k[0] == victim and k[1] not in (keeper, defender)
+            ]
+            for k in caught:
+                b = m.bodies[k]
+                m.order(
+                    k,
+                    own(
+                        victim,
+                        max(own(victim, *b.pos)[0] - 6.0, 30.0),
+                        own(victim, *b.pos)[1],
+                    ),
+                    "jog",
+                    20.0,
+                )
+        self.gather()
+        frame, _ = self.frame(pressed=False)
         self.pass_(
             frame,
             10.0,
@@ -1155,23 +1428,17 @@ class _Sim:
             qual={**tag, "counter": True, "channel": label},
         )
 
-        # 3a. Last-man foul.
+        # 4a. Last-man foul: the centre-back chases him down from behind.
         if beat.action == "red_card_last_man":
+            self.gather()
             frame, _ = self.frame(pressed=False)
-            by_role = {r: p for p, r in self.teams[victim].roles.items()}
-            defender = by_role.get(beat.role)
-            if defender is None:
-                defender, _ = frame.nearest(
-                    victim,
-                    self.ball,
-                    outfield_only=True,
-                    keeper=self.teams[victim].keeper,
-                )
-            self.caught_upfield(frame, victim, defender)
             self.challenge(frame, defender, card="red_card", last_man=True, **tag)
+            for k in caught:
+                m.orders.pop(k, None)
             return
 
-        # 3b. Carry towards goal, then the shot.
+        # 4b. He drives at goal, then the shot.
+        self.gather()
         frame, _ = self.frame(pressed=False)
         _, cy = own(counter, *self.ball)
         end = own(counter, 93.0, GOAL_Y + clamp(cy - GOAL_Y, -7, 7))
@@ -1188,8 +1455,9 @@ class _Sim:
             counter=True,
             **tag,
         )
+        m.carry((counter, self.carrier), end, 7.0)
         self.tick(dist(self.ball, end) / 7.0)
-        self.ball = end
+        self.sync_ball()
         frame, _ = self.frame(pressed=False)
         self.shot(
             frame,

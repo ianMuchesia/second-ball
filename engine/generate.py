@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import get_args
 
 from core.contracts.match import Weather
-from engine.core import score, simulate_match
+from engine.core import score, simulate_match, trackfile
 from engine.league import load_league
 from engine.scenarios import SCENARIOS_DIR, expected_moments, load_scenario
 
@@ -57,10 +57,12 @@ def main(argv=None):
             weather=sc.weather,
             kickoff=sc.kickoff,
             scenario=sc,
+            tracks=True,  # recorded runs carry the 10 Hz movement
         )
         args.out.mkdir(parents=True, exist_ok=True)
         with (args.out / "match.jsonl").open("w") as f:
             write_lines(result, f)
+        trackfile.write(result.tracks, args.out)
         with (args.out / "engine_truth.jsonl").open("w") as f:
             for row in result.truth:
                 f.write(json.dumps(row, sort_keys=True) + "\n")

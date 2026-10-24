@@ -191,6 +191,10 @@ def record(
         shutil.rmtree(out)
     out.mkdir(parents=True)
     (out / "match.json").write_text(data.match.model_dump_json(indent=1))
+    # The engine's 10 Hz movement, if the match file has it (scenario runs).
+    for name in ("tracks.json", "tracks.bin"):
+        if (match_file.parent / name).exists():
+            shutil.copyfile(match_file.parent / name, out / name)
     jsonl(out / "events.jsonl", (e.model_dump_json() for e in data.events.items))
     jsonl(
         out / "moments.jsonl",

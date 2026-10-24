@@ -9,6 +9,7 @@ Endpoints (all JSON unless noted):
     GET  /api/runs/{run}                         meta, match, moments, overlays,
                                                  narrations, indicators, audit
     GET  /api/runs/{run}/events                  events with freeze frames
+    GET  /api/runs/{run}/tracks(.bin)            10 Hz movement (recorded scenario runs)
     GET  /api/runs/{run}/evidence?ids=a,b        events in plain words + positions
     GET  /api/runs/{run}/traces?trace_id=...     spans of one trace
     GET  /api/runs/{run}/stream?speed=10         SSE: the run replayed in match time
@@ -171,6 +172,28 @@ def checked(n: dict) -> dict:
 def get_events(run: str):
     b = load(run)
     return [absolute(e, b["match"], b["t"][e.event_id]) for e in b["events"]]
+
+
+@app.get("/api/runs/{run}/tracks")
+def tracks_header(run: str):
+    """The 10 Hz movement's header: slots, sample count, event -> sample."""
+    path = run_path(run) / "tracks.json"
+    if not path.exists():
+        raise HTTPException(404, "this run has no movement tracks")
+    return FileResponse(path, media_type="application/json")
+
+
+@app.get("/api/runs/{run}/tracks.bin")
+def tracks_body(run: str):
+    """The 10 Hz movement itself (engine/core/trackfile.py), gzip-encoded."""
+    path = run_path(run) / "tracks.bin"
+    if not path.exists():
+        raise HTTPException(404, "this run has no movement tracks")
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        headers={"Content-Encoding": "gzip", "Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/api/runs/{run}/evidence")

@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { ballAt, type BallState, DRIBBLES, indexAt, isGoal, playbackAt, SHOTS, teamCode, teamName, type Timeline } from "./match";
+import type { Scene, Tracks } from "../tracks";
 import { Footballer, loadRig } from "./Footballer";
 import { GK_KITS, matchKits, REF_KIT } from "./kits";
 import { Stadium, wx, wz } from "./stadium";
@@ -22,6 +23,10 @@ export interface Clock {
   t: number;
   playing: boolean;
   focusEventId: string | null;
+  // The engine's 10 Hz movement at this instant (runs that have it): played
+  // back exactly. `sample` is the (fractional) track sample.
+  scene?: Scene | null;
+  sample?: number;
 }
 
 /** A player where the 3D scene has him, in pitch metres (broadcast frame). */
@@ -78,8 +83,107 @@ export class Stage {
   /** Exact engine positions this frame (paused or a clicked event). */
   exact = true;
 
-  static async create(canvas: HTMLCanvasElement, tl: Timeline, clock: () => Clock): Promise<Stage> {
-    return new Stage(canvas, tl, await loadRig(), clock);
+  static async create(canvas: HTMLCanvasElement, tl: Timeline, clock: () => Clock, tracks: Tracks | null = null): Promise<Stage> {
+    const stage = new Stage(canvas, tl, await loadRig(), clock);
+    if (tracks) stage.useTracks(tracks);
+    return stage;
+  }
+
+  // ---- track mode: the engine's movement, played back exactly ---------------
+  private strikes = new Map<string, number[]>(); // player -> samples he strikes the ball
+  private dives = new Map<string, [number, number][]>(); // keeper -> [from, to] samples
+  private parties = new Map<string, [number, number][]>(); // scorer -> [from, to]
+  private eventSamples: [number, number][] = []; // [sample, event index], sorted
+  private lastSample = 0;
+
+  private useTracks(tr: Tracks) {
+    const add = <T,>(m: Map<string, T[]>, k: string, v: T) => m.set(k, [...(m.get(k) ?? []), v]);
+    this.tl.events.forEach((e, i) => {
+      const k = tr.events[e.id];
+      if (k === undefined) return;
+      this.eventSamples.push([k, i]);
+      if (STRIKES(e)) add(this.strikes, e.player, k);
+      if (e.type === "keeper_save") {
+        const shot = this.tl.events[i - 1];
+        add(this.dives, e.player, [shot ? (tr.events[shot.id] ?? k - 6) : k - 6, k + 8]);
+      }
+      if (isGoal(e) && e.outcome !== "owngoal") add(this.parties, e.player, [k + 4, k + 4 + 9 * tr.hz]);
+    });
+    this.eventSamples.sort((a, b) => a[0] - b[0]);
+  }
+
+  private eventIndexAt(sample: number): number {
+    let best = 0;
+    for (const [k, i] of this.eventSamples) if (k <= sample) best = i;
+    return best;
+  }
+
+  private frameTracks(sc: Scene, s: number, dtReal: number) {
+    const dtMatch = this.playing ? Math.max(0, Math.min(1, (s - this.lastSample) / 10)) : 0;
+    this.lastSample = s;
+    const [bx, by, bh] = sc.ball;
+    let holder: string | null = null;
+    let near = 1.3;
+    for (let k = 0; k < this.players.length; k++) {
+      const f = this.players[k];
+      const id = this.tl.slots[k].player_id;
+      const p = sc.players.get(id);
+      if (!p) {
+        f.follow(NaN, NaN, 0, 0, 0, 0, 0, 0, -1);
+        continue;
+      }
+      const a = (p.facing * Math.PI) / 180;
+      // Strike: wind back before contact, follow through after (samples are 0.1 s).
+      let kick = -1;
+      for (const at of this.strikes.get(id) ?? []) if (s >= at - 3.5 && s <= at + 2.5) kick = (s - (at - 3.5)) / 6;
+      let dive = 0;
+      for (const [a0, a1] of this.dives.get(id) ?? []) if (s >= a0 && s <= a1) dive = Math.min(1, (s - a0) / 4) * (s > a1 - 4 ? (a1 - s) / 4 : 1);
+      let party = 0;
+      for (const [a0, a1] of this.parties.get(id) ?? []) if (s >= a0 && s <= a1) party = Math.min(1, (s - a0) / 6);
+      f.follow(wx(p.x), wz(p.y), p.vx, -p.vy, Math.atan2(Math.cos(a), -Math.sin(a)), wx(bx), wz(by), dtMatch, kick, dive, 1, party);
+      const d = Math.hypot(p.x - bx, p.y - by);
+      if (d < near && bh < 1) {
+        near = d;
+        holder = id;
+      }
+      f.lit = false;
+    }
+    if (holder) this.players[this.tl.slotOf.get(holder)!].lit = true;
+
+    // The referee: level with play, a little off it (not in the engine yet).
+    const rx = bx + (52.5 - bx) * 0.25;
+    const ry = by + (by > 34 ? -11 : 11);
+    this.referee.step(wx(rx), wz(ry), wx(bx), wz(by), dtMatch, dtReal, -1, false);
+
+    this.ball.position.set(wx(bx), BALL_R + bh, wz(by));
+    const moved = this.v3.copy(this.ball.position).sub(this.lastBall);
+    if (moved.lengthSq() < 100) {
+      this.ball.rotation.x += moved.z / BALL_R;
+      this.ball.rotation.z -= moved.x / BALL_R;
+    }
+    this.lastBall.copy(this.ball.position);
+    this.ballShadow.position.set(this.ball.position.x, 0.025, this.ball.position.z);
+    (this.ballShadow.material as THREE.MeshBasicMaterial).opacity = 0.4 / (1 + bh * 0.4);
+
+    const i = this.eventIndexAt(s);
+    const e = this.tl.events[i];
+    let goal: number | null = null;
+    for (const [, spans] of this.parties) for (const [a0, a1] of spans) if (s >= a0 - 4 && s <= a1) goal = i;
+    if (goal !== null && this.celebrating === null) this.cheerUntil = performance.now() + 4500;
+    this.celebrating = goal;
+    const left = this.cheerUntil - performance.now();
+    this.stadium.stands.update(performance.now() / 1000, left > 0 ? clamp01(left / 1500) : 0);
+    this.stadium.update(dtReal);
+    const scr = this.tl.score;
+    this.stadium.stands.screen.show(teamCode(this.tl.home), teamCode(this.tl.away), scr[2 * i], scr[2 * i + 1], Math.floor(e.clock / 60) + 1, goal !== null ? "GOAL" : null);
+    this.b.holder = holder;
+    this.aim(e.team === this.tl.home ? 1 : -1, dtReal, false);
+    this.renderer.render(this.scene, this.camera);
+    const now = performance.now();
+    if (now - this.lastTick > 100) {
+      this.lastTick = now;
+      this.onTick?.({ t: this.t, index: i, playing: this.playing, holder, goalAt: goal });
+    }
   }
 
   private constructor(
@@ -273,6 +377,14 @@ export class Stage {
     // Follow the screen's clock: a small step forward is played, anything else
     // (a jump, a step back) is a seek.
     const c = this.clock();
+    if (c.scene && c.sample !== undefined) {
+      this.playing = c.playing;
+      this.exact = true; // the track is the engine's own movement
+      this.t = c.t;
+      this.frameTracks(c.scene, c.sample, dtReal);
+      this.raf = requestAnimationFrame(this.loop);
+      return;
+    }
     const target = playbackAt(this.tl, c.t, c.focusEventId);
     this.playing = c.playing;
     this.exact = !c.playing || c.focusEventId !== null;
