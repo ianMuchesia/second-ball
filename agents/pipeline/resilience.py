@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from agents.llm import LLMClient, ProviderError
+from agents.llm.base import CALL_ROLE
 from agents.llm.client import CALL_TIMEOUT
 from agents.telemetry import step
 from core.budget import BudgetExceeded
@@ -61,6 +62,7 @@ async def ask(llm: LLMClient, agent, prompt: str, role: str, policy: Policy):
         n = len(llm.budget.ledger)
         with step(f"llm.{role}", attempt=attempt) as span:
             token = CALL_TIMEOUT.set(policy.timeout_s[role])
+            role_token = CALL_ROLE.set(role)
             try:
                 reply = await asyncio.wait_for(
                     agent.run(prompt), policy.timeout_s[role] + BACKSTOP_S
@@ -91,6 +93,7 @@ async def ask(llm: LLMClient, agent, prompt: str, role: str, policy: Policy):
                     return None
             finally:
                 CALL_TIMEOUT.reset(token)
+                CALL_ROLE.reset(role_token)
         if attempt < policy.attempts:
             await policy.sleep(policy.backoff_s * 2 ** (attempt - 1))
     return None

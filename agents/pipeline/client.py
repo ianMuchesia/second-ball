@@ -8,6 +8,10 @@ from agent_framework import BaseChatClient, ChatResponse, Message
 from agents.llm import LLMClient
 
 DEFAULT_MAX_OUTPUT = 400
+# The Analyst on a reasoning model (gpt-5-mini, effort low) thinks before it
+# answers, and its thinking counts in this cap: at 400 it ran out before
+# answering on 9 of 12 moments (Foundry recording, 2026-10-25).
+ANALYST_MAX_OUTPUT = 1500
 
 
 class AdapterChatClient(BaseChatClient):

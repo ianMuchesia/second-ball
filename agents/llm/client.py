@@ -6,6 +6,7 @@ from contextvars import ContextVar
 
 from dotenv import load_dotenv
 
+from agents.llm.base import ProviderError
 from agents.llm.fake import FakeProvider
 from agents.llm.foundry import FoundryProvider
 from agents.llm.gemini import GeminiProvider
@@ -19,6 +20,7 @@ DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 # Studio limit (a little under it). Low default: safe on the free tier.
 DEFAULT_GEMINI_RPM = 10
 DEFAULT_GEMINI_TIMEOUT_S = 20.0  # per HTTP request; the pipeline has its own per agent
+DEFAULT_FOUNDRY_TIMEOUT_S = 30.0  # per HTTP request (a reasoning model thinks first)
 DEFAULT_MAX_RUN_TOKENS = 500_000
 DEFAULT_KES_RATE = 130.0
 DEFAULT_KES_RATE_DATE = "2026-09-29"
@@ -59,9 +61,17 @@ class LLMClient:
             raise
         timeout = CALL_TIMEOUT.get()
         extra = {"timeout_s": timeout} if timeout else {}
-        # A failed call is not charged (nothing to bill); the next precheck
-        # replaces this one.
-        response = self.provider.generate(prompt, system, max_output_tokens, **extra)
+        # A failed call is not charged (nothing to bill) unless the provider
+        # says it was billed anyway; the next precheck replaces this one.
+        try:
+            response = self.provider.generate(
+                prompt, system, max_output_tokens, **extra
+            )
+        except ProviderError as e:
+            if e.usage is not None:
+                self.budget.charge(model, *e.usage)
+                log.info("llm call (billed, failed) %s", self.budget.ledger[-1])
+            raise
         self.budget.charge(model, response.input_tokens, response.output_tokens)
         log.info("llm call %s", self.budget.ledger[-1])
         return response
@@ -89,7 +99,9 @@ def from_env(env=None, provider=None):
         provider = FoundryProvider(
             endpoint=env.get("FOUNDRY_ENDPOINT"),
             api_key=env.get("FOUNDRY_API_KEY"),
-            model=env.get("FOUNDRY_MODEL"),
+            model=env.get("FOUNDRY_MODEL"),  # gpt-4.1-mini: Narrator, Localizer, recaps
+            roles={"analyst": env.get("FOUNDRY_ANALYST_MODEL")},  # gpt-5-mini
+            timeout_s=float(env.get("FOUNDRY_TIMEOUT_S", DEFAULT_FOUNDRY_TIMEOUT_S)),
         )
     elif provider_name == "fake":
         provider = FakeProvider()  # tests and offline runs: free, no network
