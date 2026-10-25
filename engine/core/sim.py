@@ -1221,9 +1221,11 @@ class _Sim:
 
     # ---- counters and scripted beats -----------------------------------------
 
-    def channel_target(self, frame, side, behind=None):
+    def channel_target(self, frame, side, behind=None, past_line=False):
         """(runner, target, label): a ball into the channel behind the opponent's
-        full-back (`behind`, or the ball-side / more advanced one), or None."""
+        full-back (`behind`, or the ball-side / more advanced one), or None.
+        `past_line`: behind their whole back line too (a scripted counter: the
+        runner is through, only a recovering defender can catch him)."""
         opp = 1 - side
         fullbacks = self.teams[opp].fullbacks()
         if not fullbacks:
@@ -1242,6 +1244,14 @@ class _Sim:
         # Into the space behind him, and at least past halfway: a counter's
         # ball goes long into space (a full-back high up leaves the most).
         tx = clamp(fx - 15, 12, self.cfg["counter"]["channel_max_x"])
+        if past_line:
+            keeper = self.teams[opp].keeper
+            deepest = min(
+                own(opp, *xy)[0]
+                for (s, p), xy in frame.positions.items()
+                if s == opp and p != keeper
+            )
+            tx = clamp(min(tx, deepest - self.cfg["counter"]["past_line_m"]), 12, tx)
         ty = clamp(fy + (-4 if fy > GOAL_Y else 4), 6, WIDTH - 6)
         target = on_pitch(*own(opp, tx, ty))
 
@@ -1393,7 +1403,9 @@ class _Sim:
         # 3. The runner goes the moment the ball is won; the ball goes into the
         # channel behind the full-back, ahead of him.
         frame, _ = self.frame(pressed=False)
-        runner, target, label = self.channel_target(frame, counter, beat.behind)
+        runner, target, label = self.channel_target(
+            frame, counter, beat.behind, past_line=True
+        )
         m.order((counter, runner), target, "sprint", 8.0)
         caught = []
         if beat.action == "red_card_last_man":

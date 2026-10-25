@@ -185,6 +185,7 @@ motion:
   walk_within_m: 3.0         # role target this close: walk
   run_beyond_m: 12.0         # this far: run (between: jog)
   support_m: 13.0            # support angle distance from the carrier
+  edge_until_x: 88.5         # a waiting carrier edges forward no further than this (the box edge)
   runner_depth: 0.8          # shape depth (0 back - 1 front) of players who run in behind
   run_ahead_m: 14.0          # a run in behind goes at most this far past the anchor
   press_close_m: 1.2         # a pressing defender stops this far goal-side of the ball
@@ -209,3 +210,4 @@ beats:
 
 counter:
   channel_max_x: 55.0        # a ball into the channel lands at most this far from the defending goal... in the defending team's frame (so past halfway)
+  past_line_m: 6.0           # a scripted counter's ball lands this far behind the defending team's deepest outfield player

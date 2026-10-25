@@ -126,6 +126,9 @@ class Motion:
                 else:
                     x = max(x, LENGTH / 2 + 1.0)
                 spots[(team.side, pl)] = (x, y)
+            if team.side == side_with_ball:
+                # The taker stands over the ball when the whistle goes.
+                spots[(team.side, team.front_player)] = centre
         return spots
 
     def start_period(self, side_with_ball):
@@ -292,35 +295,43 @@ class Motion:
     # ---- physics -----------------------------------------------------------------
 
     def move(self, b, target, pace):
-        caps = self.cfg["pace"]
+        # The hot loop (about 1.3M calls a match): plain arithmetic, settings
+        # read once; the same numbers as before, step for step.
+        cfg = self.cfg
+        caps = cfg["pace"]
         cap = caps[pace]
         dx, dy = target[0] - b.x, target[1] - b.y
         d = math.hypot(dx, dy)
+        if d < 0.15 and b.vx == 0.0 and b.vy == 0.0:
+            return  # standing on his spot: nothing would change
         # Arrive: slow down in time to stop on the target.
-        want = 0.0 if d < 0.15 else min(cap, math.sqrt(2 * self.cfg["decel"] * d) * 0.9)
+        want = 0.0 if d < 0.15 else min(cap, math.sqrt(2 * cfg["decel"] * d) * 0.9)
         wx, wy = (dx / d * want, dy / d * want) if d >= 0.15 else (0.0, 0.0)
         ax, ay = (wx - b.vx) / DT, (wy - b.vy) / DT
         a = math.hypot(ax, ay)
-        limit = self.cfg["accel"] if want > b.speed else self.cfg["decel"]
+        limit = cfg["accel"] if want > math.hypot(b.vx, b.vy) else cfg["decel"]
         if pace == "dive":  # a keeper's dive: explosive, short
-            limit = self.cfg["dive_accel"]
+            limit = cfg["dive_accel"]
         if a > limit:
             ax, ay = ax * limit / a, ay * limit / a
         b.vx += ax * DT
         b.vy += ay * DT
-        s = b.speed
+        s = math.hypot(b.vx, b.vy)
         top = max(caps["sprint"], cap)
         if s > top:
             b.vx, b.vy = b.vx * top / s, b.vy * top / s
-        b.x = clamp(b.x + b.vx * DT, 0.0, LENGTH)
-        b.y = clamp(b.y + b.vy * DT, 0.0, WIDTH)
+        x, y = b.x + b.vx * DT, b.y + b.vy * DT  # kept on the pitch
+        b.x = 0.0 if x < 0.0 else LENGTH if x > LENGTH else x  # noqa: FURB136 - hot loop: no min/max calls
+        b.y = 0.0 if y < 0.0 else WIDTH if y > WIDTH else y  # noqa: FURB136 - hot loop
 
     def face(self):
         """Face where you run; when slow, face the ball (the carrier: forward)."""
+        step = self.cfg["turn_deg_s"] * DT
         for key, b in self.bodies.items():
-            if key == self.owner and b.speed < 1.0:
+            speed = math.hypot(b.vx, b.vy)
+            if key == self.owner and speed < 1.0:
                 want = 0.0 if key[0] == 0 else 180.0
-            elif b.speed >= 1.0 and not self.is_keeper(key):
+            elif speed >= 1.0 and not self.is_keeper(key):
                 want = math.degrees(math.atan2(b.vy, b.vx)) % 360
             else:
                 want = (
@@ -328,10 +339,8 @@ class Motion:
                     % 360
                 )
             turn = (want - b.facing + 540) % 360 - 180
-            b.facing = (
-                b.facing
-                + clamp(turn, -self.cfg["turn_deg_s"] * DT, self.cfg["turn_deg_s"] * DT)
-            ) % 360
+            turn = -step if turn < -step else step if turn > step else turn  # noqa: FURB136 - hot loop
+            b.facing = (b.facing + turn) % 360
 
     def is_keeper(self, key):
         return key[1] == self.sim.teams[key[0]].keeper
@@ -396,11 +405,12 @@ class Motion:
                     out[key] = (spot, pace)
         if self.dead:
             return out
-        # The player on the ball shields it and edges forward until he acts.
+        # The player on the ball shields it and edges forward until he acts;
+        # in the box he holds it (he does not walk it to the byline).
         if self.owner in self.bodies:
             fx, fy = own(self.owner[0], *self.bodies[self.owner].pos)
             out[self.owner] = (
-                own(self.owner[0], min(fx + 1.5, LENGTH - 1.0), fy),
+                own(self.owner[0], max(fx, min(fx + 1.5, cfg["edge_until_x"])), fy),
                 "walk",
             )
         self.attacking_roles(out, attack, ball)
