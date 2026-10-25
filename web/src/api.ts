@@ -44,6 +44,7 @@ export interface ScreenEvent {
   end: [number, number];
   xg: number | null;
   ball_speed_kmh?: number | null;
+  goal_line_s?: number | null; // a goal: strike to over the line (s), when the engine timed it
   freeze_frame: FramePlayer[];
   words?: string;
 }

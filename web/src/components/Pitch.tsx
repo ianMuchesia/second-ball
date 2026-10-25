@@ -1,3 +1,4 @@
+import { REFEREE } from "../tracks";
 import type { FramePlayer, LineupPlayer, ScreenEvent } from "../api";
 import type { Scene } from "../tracks";
 import { surname, teamName } from "../api";
@@ -26,13 +27,14 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted, follo
   // With movement data, everyone is where the engine had them at this instant
   // (at an event's moment that is its freeze frame); without, the last frame.
   const players: FramePlayer[] = scene
-    ? [...scene.players].map(([player_id, p]) => ({
+    ? [...scene.players].filter(([player_id]) => player_id !== REFEREE).map(([player_id, p]) => ({
         player_id,
         team_id: lineup.get(player_id)?.team_id ?? "",
         xy: [p.x, p.y] as [number, number],
         facing_deg: p.facing,
       }))
     : (frame?.freeze_frame ?? []);
+  const referee = scene?.players.get(REFEREE) ?? null; // the engine's referee, if it has one
   const ballXY: [number, number] | null = scene ? [scene.ball[0], scene.ball[1]] : event ? event.end : null;
   const actors = new Set(path.map((e) => e.player_id));
   const y = (v: number) => W - v;
@@ -143,6 +145,7 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted, follo
             </g>
           );
         })}
+        {referee && <circle cx={referee.x} cy={y(referee.y)} r={0.9} className="referee" data-testid="referee-2d" />}
         {ballXY && <circle cx={ballXY[0]} cy={y(ballXY[1])} r={0.75 + (scene ? scene.ball[2] * 0.08 : 0)} className="ball" />}
       </svg>
       {possession && (

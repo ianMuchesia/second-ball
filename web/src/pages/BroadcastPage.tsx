@@ -24,7 +24,7 @@ import {
   onAir,
 } from "../store/selectors";
 import { useEventsQuery, useProducerQuery, useRunQuery, useTracksQuery } from "../store/serverApi";
-import { sampleAt, sceneAt } from "../tracks";
+import { goalLineAt, sampleAt, sceneAt, trackEnd } from "../tracks";
 import { useTicker } from "../useTicker";
 
 // Opened on demand: separate chunks.
@@ -43,7 +43,9 @@ export default function BroadcastPage() {
   const dispatch = useAppDispatch();
   const pb = useAppSelector((s) => s.playback);
   const me = useAppSelector((s) => s.profile);
-  const end = events.length ? events[events.length - 1].t : 0;
+  const lastT = events.length ? events[events.length - 1].t : 0;
+  // With the engine's movement, play runs to the end of the track.
+  const end = tracks && events.length ? Math.max(lastT, trackEnd(tracks, events)) : lastT;
   useTicker(end);
 
   const byId = useMemo(() => new Map(events.map((e) => [e.event_id, e])), [events]);
@@ -73,6 +75,7 @@ export default function BroadcastPage() {
   if (!data || !view) return null;
 
   const { match } = data;
+  const goalAt = useMemo(() => (tracks ? goalLineAt(tracks, events) : null), [tracks, events]);
   const scene = tracks && events.length ? sceneAt(tracks, sampleAt(tracks, events, pb.t, pb.focusEventId)) : null;
   // An analyst's evidence drawer is open by default on the line on air (until
   // closed for that moment); otherwise it opens when asked.
@@ -146,6 +149,8 @@ export default function BroadcastPage() {
             home={match.home_team}
             away={match.away_team}
             scripted={match.mode === "scenario"}
+            t={pb.t}
+            goalAt={goalAt}
           />
           {/* Fewer overlays for a fan: stat cards are an analyst's. */}
           {view.card && me.persona === "analyst" && (

@@ -10,8 +10,12 @@ export function ScoreBug({
   home,
   away,
   scripted,
+  t,
+  goalAt,
 }: {
   events: ScreenEvent[];
+  t?: number; // the screen's clock
+  goalAt?: Map<string, number> | null; // goal -> when the ball crossed the line
   upto: number;
   home: string;
   away: string;
@@ -20,7 +24,9 @@ export function ScoreBug({
   const goals = { [home]: 0, [away]: 0 };
   const reds = { [home]: 0, [away]: 0 };
   for (const e of events.slice(0, upto + 1)) {
-    if (SHOTS.has(e.type) && e.outcome === "success") goals[e.team_id] += 1;
+    // A goal counts once the ball is over the line (when the engine timed it).
+    const crossed = !goalAt?.has(e.event_id) || (t ?? Infinity) >= goalAt.get(e.event_id)!;
+    if (SHOTS.has(e.type) && e.outcome === "success" && crossed) goals[e.team_id] += 1;
     if (e.outcome === "owngoal") goals[e.team_id === home ? away : home] += 1;
     if (e.outcome === "red_card") reds[e.team_id] += 1;
   }

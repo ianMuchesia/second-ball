@@ -32,6 +32,7 @@ export interface Ev {
   ey: number;
   speed: number | null; // ball km/h
   xg: number | null;
+  goalLine: number | null; // a goal: strike to over the line (s), when the engine timed it
   ff: Float32Array; // [x0, y0, x1, y1, ...] in slot order; NaN = not on the pitch
 }
 
@@ -92,6 +93,7 @@ export function fromRun(match: Match, api: ScreenEvent[]): Timeline {
       ey: e.end[1],
       speed: e.ball_speed_kmh ?? null,
       xg: e.xg,
+      goalLine: e.goal_line_s ?? null,
       ff,
     };
   });
