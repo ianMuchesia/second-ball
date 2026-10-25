@@ -1,0 +1,199 @@
+# The physics-first engine (engine/play/). Stage 1: the drill pitch.
+# Every number here is a physical assumption; docs/PHYSICS.md says where it
+# comes from and how much movement may vary before a test calls it a bug.
+
+dt: 0.1                    # seconds per step (10 Hz, same as the tracks)
+substeps: 5                # ball integration steps per dt (0.02 s)
+
+ball:
+  roll_decel: 1.2          # m/s^2 rolling resistance on dry natural grass
+  drag_k: 0.0133           # 1/m: quadratic air drag, 0.5*rho*Cd*A/m (Cd 0.25)
+  gravity: 9.81
+  restitution: 0.6         # vertical bounce on grass
+  bounce_keep: 0.85        # share of along-the-ground speed kept per bounce
+  rest_speed: 0.05         # below this the ball has stopped (m/s)
+  carry_ahead: 0.6         # a dribbled ball sits this far in front (m)
+
+player:                    # same caps as the current engine (engine.yaml motion)
+  top_speed: 8.5           # m/s sprint
+  accel: 3.5               # m/s^2 speeding up
+  decel: 5.0               # m/s^2 slowing down
+  lateral: 5.0             # m/s^2 sideways (bending a run, cutting)
+  turn_deg_s: 420
+  reaction_s: 0.25         # a player starts reacting to a new ball this late
+  dribble_speed: 5.5       # m/s top speed with the ball at his feet
+  smother_decel: 25.0      # m/s^2 a keeper going down on the ball stops (about 1.5 m from a sprint)
+  body_m: 0.7              # two players' centres never closer than this
+  push_m: 0.05             # ...eased apart at most this much each per step (0.5 m/s)
+  early_s: 0.2             # a chaser times his run to be there this much before the ball
+
+control:
+  feet_m: 0.8              # ball centre within this of the body: playable
+  feet_height_m: 0.9       # ...and no higher (chest down)
+  feet_speed: 16.0         # m/s relative speed above which it cannot be controlled
+  keeper_hands_m: 1.4      # a keeper in his area reaches this far
+  keeper_height_m: 2.6
+  keeper_speed: 30.0
+  approach_m: 3.0          # within this of a loose ball a chaser goes straight at it
+  shot_settled_ms: 8.0     # a shot slower than this (spent, deflected) can be gathered like a loose ball
+  approach_lead_s: 0.2     # ...aiming where it will be this much later
+  approach_gain: 2.5       # ...at the ball's speed plus this (m/s), up to top speed
+
+predict:
+  horizon_s: 5.0           # how far ahead a player reads the ball
+  step_s: 0.1
+
+drill:
+  length_s: 18.0           # the whole drill
+  after_control_s: 4.0     # play on this long after someone wins the ball
+  touch_at_s: 1.2          # the attacker's heavy touch
+  touch_speed: [4.5, 11.0] # how hard (m/s): about 8-50 m of roll on grass
+  touch_angle_deg: 28      # how far off straight at goal (either way)
+
+# Stage 2: playing on after possession (engine/play/game.py). The attack:
+# a feeder plays the striker in against a centre-back, an outlet and a keeper.
+game:
+  think_s: 0.4             # each player re-decides this often (and at once when the ball changes hands)
+  length_s: 32.0           # the longest an attack runs
+  end_after_s: 2.5         # play runs on this long after it ends (a goal, a hold, the ball away)
+
+carry:                     # the ball at a dribbler's feet, touch by touch
+  close_m: 0.9             # furthest it gets from his feet under pressure (a defender within 4 m)
+  open_m: 2.0              # ...in space
+  touch_s: [0.45, 0.9]     # time between touches: pressed, in space
+  speed_close: 4.5         # m/s he carries at under pressure
+  speed_open: 6.5          # ...in space
+  directions: 16           # headings he weighs
+  stick: 0.12              # a new heading must beat the current one by this (no zig-zag)
+  knock_m: 5.0             # a knock past his man: the ball goes this far
+  knock_cooldown_s: 2.0
+  roll_space_m: 6.0        # needs this much room on that side
+  turn_touch_ms: 8.0       # turning with the ball, it moves round him at most his speed + this (m/s)
+
+defend:
+  engage_m: 9.0            # within this of the carrier he stops sprinting and jockeys
+  jockey_m: 1.8            # goal-side gap while jockeying
+  inside_m: 0.5            # ...standing this far to the inside (shows him wide)
+  lunge_range_m: 1.8       # he goes in when the ball is this close to him
+  exposed_m: 0.85          # ...and at least this far from the carrier's feet
+  lunge_s: 0.35            # a lunge lasts this long
+  lunge_reach_m: 1.25      # how far his foot gets from his body during it
+  lunge_speed: 6.0         # m/s burst at the ball
+  stun_s: 0.8              # beaten by a missed lunge: off balance this long
+  cooldown_s: 1.4          # between lunges
+  poke_ms: [4.0, 8.0]      # a toe-poke sends the ball off this fast
+  react_s: 0.15            # he reads an exposed ball this late
+  unshielded_m: 0.3        # the ball as near him as the carrier (+ this): he can get a foot in
+  commit_m: 24.0           # the carrier this close to goal: a jockeying defender must go in...
+  commit_after_s: 1.0      # ...after this long tight on him
+  win_base: 0.15           # a foot on the ball wins it clean this often ...
+  win_loose: 0.40          # ...more the further it was off the carrier's foot
+  front_bonus: 0.10        # ...more from in front of him, less from behind
+  poke: 0.30               # ...pokes it loose this often (else the carrier rides it); about 55-60% of duels go the defender's way
+  grace_s: 0.8             # nobody goes in on a man who has just won the ball for this long
+  wary_s: 6.0              # after a miss, for this long he goes in only for a clearly loose ball (and waits longer)
+
+shoot:
+  min_quality: 0.08        # xG he needs before he will shoot under pressure
+  good_quality: 0.22       # xG he shoots at even unchallenged
+  close_m: 11.0            # this close to goal he shoots
+  speed: [23.0, 29.0]      # m/s off the foot
+  height: [0.2, 1.6]       # aimed to cross the line at this height (m)
+  aim_in_m: 0.6            # aimed this far inside the post
+  err_deg: 2.0             # direction error at the spot ...
+  err_deg_per_m: 0.08      # ...growing with distance
+  err_pressure_deg: 3.0    # ...and with a man on him
+  lane_block_m: 1.2        # a defender this close to the line to goal is in the way
+  block_m: 0.7             # a shot this close to an outfield body is blocked
+  keeper_beaten_m: 2.5     # keeper this far off the line to goal (or behind the ball): goal open
+  open_goal: 0.8           # an open goal's chance at the spot ...
+  open_goal_scale_m: 30.0  # ...falling with distance (0.48 from 15 m, 0.35 from 25 m)
+  carry_on_m: 4.0          # shoot now, or carry on this far for a better chance?
+  safe_m: 6.0              # ...carrying on is safe with nobody within this
+  shoot_vs_carry: 0.8      # shoot when the chance now is this share of the (risked) one later
+
+keeper:
+  reaction_s: 0.2
+  dive_speed: 5.0          # m/s along his dive (a full-stretch dive covers about 2.5 m)
+  dive_accel: 30.0
+  hands_m: 1.0             # his hands reach this far from his body
+  dive_extra_m: 0.6        # ...further at full stretch (hands about 1.6 m from his centre)
+  standing_reach_m: 1.4    # ...standing
+  jump_m: 2.6              # highest he can reach
+  catch_speed: 27.0        # a ball slower than this, near his body, he holds
+  catch_m: 0.7
+  easy_share: 0.55         # a ball within this share of his reach is an easy save ...
+  save_easy: 0.95          # ...saved this often
+  save_drop: 0.55          # at full stretch, this much less (0.40)
+  save_per_ms: 0.02        # ...and this much less per m/s over 20 m/s
+  parry_keep: 0.35         # a parried ball keeps this share of its speed
+  ratio_1v1: 0.3           # 1-on-1: off his line by this share of the distance
+  max_1v1_m: 8.0
+  hold_s: [1.5, 3.0]       # holding it before he distributes
+  come_margin_s: 0.4       # he comes for a loose ball only this much before any attacker
+
+clear:                     # a defender with no pass and a man on him, in his own third
+  pressed_m: 6.0           # a man this close and no pass on: clear it
+  length_m: [35.0, 50.0]   # how far up the pitch
+  speed: 22.0              # m/s along the ground (a lofted ball: drag takes some off)
+
+passing:
+  arrive_ms: 7.0           # a pass arrives at about this speed
+  max_ms: 24.0
+  err_deg: 1.8
+  err_pressure_deg: 4.0
+  safe_margin_s: 0.3       # the receiver must beat every opponent to it by this
+  block_m: 1.2             # a body this close to the line of the pass (ahead) blocks it
+  min_m: 6.0
+  max_m: 40.0
+
+referee:                   # the diagonal system (FOOTBALL_BEHAVIOUR 13)
+  near_m: 15.0             # never nearer the ball than this
+  far_m: 25.0              # never further
+  walk_ms: 1.9
+  jog_ms: 4.0
+  top_ms: 7.0              # referees run, but slower than players at full sprint
+
+# Phase 6: the full match (engine/play/match.py).
+match:
+  foul_from_behind: 0.35   # a tackle from behind that gets there is a foul this often
+  restart_delay_s: 4.0     # a stoppage lasts at least this long (the taker sets it)
+  restart_max_s: 30.0      # ...and the taker is waited for at most this long
+  kickoff_wait_s: 120.0    # a kick-off waits for everyone to be in place, at most this long
+  celebration_s: 40.0      # goal to kick-off: celebrating, then walking back ...
+  walk_back_s: 30.0        # ...the last this many seconds of it
+  mark_zone_m: 28.0        # attackers this near goal are picked up by a marker ...
+  mark_m: 1.5              # ...who stands this far off him, goal-side
+  hold_line_m: 18.0        # a jockeying defender gives ground to here, then stands
+  double_m: 30.0           # the ball this near his goal: two men close the carrier
+  parry_keep: 0.5          # a parry is pushed wide towards the byline at this share of the shot's speed
+  lunge_range_m: 1.5       # in a match a defender goes in only for a ball this close
+  pass_bias: 0.15          # a safe pass is worth this much more than its score (teams keep the ball) ...
+  pass_bias_patience: 0.25 # ...plus this x (1 - the club's directness): patient clubs keep it more
+  pass_bias_overdue: 0.3   # ...plus this once he has held it past the club's seconds per action
+  pass_m: [35.0, 55.0]     # longest pass: patient club .. direct club
+  build_up_pass_m: 25.0    # a club that builds up short keeps it this short in its own zone
+  clear_when_m: 8.0        # in his own third a man this close: get it away ...
+  clear_when_building_m: 2.5  # ...a club that builds up short: only when really pressed
+  clear_box_m: 22.0        # this near his own goal (about his box) he clears it, not passes, unless his club builds up short
+  press_from_block_m: 35.0 # a team presses from this far beyond its block line ...
+  press_per_intensity_m: 25.0  # ...plus this per unit of press intensity above 1 (PPDA 10)
+  two_press_intensity: 1.3 # at this intensity two men go to the ball
+  counter_s: 4.0           # after winning it, counter runners sprint in behind this long
+  long_ball_directness: 0.6  # a club this direct (or more) hits it long from its own half ...
+  long_ball_pressed_m: 5.0 # ...under pressure (a man this close) ...
+  long_ball_rate: 0.5      # ...this x its directness of the times he looks
+  long_ball_lead_m: 12.0   # aimed this far ahead of the forward (into his run)
+  long_ball_ms: 22.0       # along the ground at most (a lofted ball)
+  lane_zone_m: 22.0        # the ball this near goal: the covering defender ...
+  lane_cover_m: 3.0        # ...stands this far goal-side of it, in the shooting lane
+  shoot_pressed_q: 0.15    # in a match, a man under pressure shoots only at this xG or more
+  shot_err_deg: 5.0        # finishing in a match: direction error at the spot ...
+  shot_err_deg_per_m: 0.15 # ...growing with distance ...
+  shot_err_pressure_deg: 4.0  # ...and with a man on him (target: 34-38% of shots on target)
+  set_defender_m: 4.0      # in the attacking third a defender this close in front ...
+  pass_bias_set_defender: 0.5  # ...makes a safe pass worth this much more (move it, don't run into him)
+  past_ahead_m: 1.0        # a carrier going by a defender (him less than this in front): he puts a foot in
+  long_shot_m: [16.0, 26.0]  # the shot from distance ...
+  long_shot_q: 0.03        # ...when the chance is at least this, the lane clear ...
+  long_shot_p: 0.10        # ...taken this often each time he looks (a look is 0.4 s)
