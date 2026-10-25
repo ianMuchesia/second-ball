@@ -3,15 +3,18 @@ import { plural, teamName } from "../api";
 import { Crest } from "../components/Crest";
 import { useRun } from "../hooks/useRun";
 import { paths } from "../router/routes";
-import { useEventsQuery, useRunQuery } from "../store/serverApi";
+import { useEventsQuery, useRunQuery, useTracksQuery } from "../store/serverApi";
 
 /** One run: loads it once (RTK Query caches it for both tabs), then the tab. */
 export default function RunLayout() {
   const run = useRun();
   const runQ = useRunQuery(run);
   const eventsQ = useEventsQuery(run);
+  // The movement too (null when the run has none): without it the pitch would
+  // first show the last event's positions, then jump.
+  const tracksQ = useTracksQuery(run);
   if (runQ.error || eventsQ.error) return <p className="page">Could not load run “{run}”.</p>;
-  if (!runQ.data || !eventsQ.data) return <p className="page">Loading {run}…</p>;
+  if (!runQ.data || !eventsQ.data || tracksQ.isLoading) return <p className="page">Loading {run}…</p>;
   const { meta, match } = runQ.data;
   const fake = meta.model === "fake-model";
   // Counted from the run itself, so older bundles show real numbers too.

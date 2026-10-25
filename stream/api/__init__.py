@@ -86,13 +86,17 @@ def bundle(path: Path, stamp: float) -> dict:
     # Match seconds on core's continuous clock: the time the Producer and the
     # recorded overlays use, and the screen's playback clock.
     clock = Events.for_match(match, events).elapsed
+    at = {e.event_id: t for e, t in zip(events, clock, strict=True)}
+    # Every page load asks for the events as served, and they never change.
+    served = [absolute(e, match, at[e.event_id]) for e in events]
     return {
         "meta": json.loads((path / "meta.json").read_text()),
         "match": match,
         "events": events,
         "by_id": {e.event_id: e for e in events},
         "index": {e.event_id: i for i, e in enumerate(events)},
-        "t": {e.event_id: t for e, t in zip(events, clock, strict=True)},
+        "t": at,
+        "events_json": json.dumps(served, ensure_ascii=False, separators=(",", ":")),
         "moments": rows(path / "moments.jsonl"),
         "overlays": rows(path / "overlays.jsonl"),
         "narrations": rows(path / "narrations.jsonl"),
@@ -101,13 +105,18 @@ def bundle(path: Path, stamp: float) -> dict:
         "player_recaps": rows(path / "player_recaps.jsonl"),
         "cards": {},  # player_id -> card, built on first request
         "metrics": {},  # (name, event index) -> values, built on request
-        "events_json": None,  # the events as served, encoded on first request
     }
+
+
+# One thread builds a run's bundle; the others wait for it instead of each
+# building their own (a cold server's first page loads arrive together).
+LOAD_LOCK = threading.Lock()
 
 
 def load(run: str) -> dict:
     path = run_path(run)
-    return bundle(path, (path / "meta.json").stat().st_mtime)
+    with LOAD_LOCK:
+        return bundle(path, (path / "meta.json").stat().st_mtime)
 
 
 @app.get("/api/health")
@@ -182,12 +191,7 @@ def checked(n: dict) -> dict:
 
 @app.get("/api/runs/{run}/events")
 def get_events(run: str):
-    b = load(run)
-    # Every page load asks for them and they never change: encoded once.
-    if b["events_json"] is None:
-        served = [absolute(e, b["match"], b["t"][e.event_id]) for e in b["events"]]
-        b["events_json"] = json.dumps(served, ensure_ascii=False, separators=(",", ":"))
-    return Response(b["events_json"], media_type="application/json")
+    return Response(load(run)["events_json"], media_type="application/json")
 
 
 @app.get("/api/runs/{run}/tracks")
