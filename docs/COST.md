@@ -67,10 +67,16 @@ calls) cost $0.0471 ([EVAL.md](EVAL.md)).
 ## Not measured yet
 
 - **Hosting.** Defined (`infra/main.bicep`: Azure Container Apps, one
-  replica of 0.5 vCPU / 1 GiB while judges may visit, a Basic container
-  registry, Log Analytics) with a monthly budget of 20 (billing currency) on
+  replica of 0.5 vCPU / 1 GiB while judges may visit, Log Analytics; the
+  image is public on GitHub Container Registry, free, instead of an Azure
+  registry at $0.17 a day) with a monthly budget of 20 (billing currency) on
   the resource group that emails at 50% and 80% spent and 100% forecast. Not
   deployed yet, so its real cost is not measured; it makes no model calls.
+  Expected, at South Africa North retail prices (Azure price list, 25 Oct
+  2026): the replica costs about $0.39 a day idle and at most $1.30 a day if
+  busy all day, before the monthly free grant (180,000 vCPU-seconds and
+  360,000 GiB-seconds per subscription, about four days of this replica);
+  logs are a few MB (ingestion $3.36/GB after the free 5 GB a month).
 - **Rate limits.** Each Foundry deployment allows 50 requests and 50K tokens a
   minute. `runs/demo-foundry-2` averaged about 29 requests and 20K input
   tokens a minute across both deployments (70 calls in 2.4 min) with no

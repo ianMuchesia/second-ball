@@ -16,6 +16,8 @@ RUN npm run build
 
 # ---- the API ---------------------------------------------------------------------
 FROM python:3.12-slim AS app
+# Links the public GHCR package to the repository (infra/README.md).
+LABEL org.opencontainers.image.source="https://github.com/ianMuchesia/second-ball"
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -25,8 +27,7 @@ COPY core/ core/
 COPY engine/ engine/
 COPY stream/ stream/
 COPY agents/ agents/
-COPY evals/ evals/
-COPY scripts/ scripts/
+# Not evals/ or scripts/: recording and evaluation tools, not the site.
 RUN uv sync --frozen --no-dev
 COPY --from=web /web/dist web/dist
 
