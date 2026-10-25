@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -101,6 +101,7 @@ def bundle(path: Path, stamp: float) -> dict:
         "player_recaps": rows(path / "player_recaps.jsonl"),
         "cards": {},  # player_id -> card, built on first request
         "metrics": {},  # (name, event index) -> values, built on request
+        "events_json": None,  # the events as served, encoded on first request
     }
 
 
@@ -182,7 +183,11 @@ def checked(n: dict) -> dict:
 @app.get("/api/runs/{run}/events")
 def get_events(run: str):
     b = load(run)
-    return [absolute(e, b["match"], b["t"][e.event_id]) for e in b["events"]]
+    # Every page load asks for them and they never change: encoded once.
+    if b["events_json"] is None:
+        served = [absolute(e, b["match"], b["t"][e.event_id]) for e in b["events"]]
+        b["events_json"] = json.dumps(served, ensure_ascii=False, separators=(",", ":"))
+    return Response(b["events_json"], media_type="application/json")
 
 
 @app.get("/api/runs/{run}/tracks")

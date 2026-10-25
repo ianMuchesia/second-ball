@@ -29,7 +29,12 @@ export function parseTracks(header: TrackHeader, body: ArrayBuffer): Tracks {
   const dead = new Uint8Array(body, 5 * n, n);
   const start = 6 * n + ((6 * n) % 2);
   const v = new Int16Array(body.slice(start, start + 2 * n * header.values_per_sample));
-  return { ...header, t, period, dead, v };
+  // The engine marks the kick-off before its first sample (index -1): every
+  // event's sample is kept inside the track, or the playback clock is NaN.
+  const events = Object.fromEntries(
+    Object.entries(header.events).map(([id, k]) => [id, Math.max(0, Math.min(n - 1, k))]),
+  );
+  return { ...header, events, t, period, dead, v };
 }
 
 export interface Placed {
@@ -49,9 +54,9 @@ export interface Scene {
 type Anchor = [number, number]; // [screen time, sample]
 const anchorCache = new WeakMap<ScreenEvent[], WeakMap<Tracks, Anchor[]>>();
 
-/** Each event's exact moment on the screen's clock: events carry whole
- * seconds, the track has tenths, so the event sits at its second plus the
- * track's fraction. Anchored there, playback runs at the engine's own speed. */
+/** Each event anchored at its own time on the screen's clock: at an event's
+ * second the scene is its freeze frame, and in between playback runs in
+ * proportion from one event's sample to the next. */
 function anchors(tr: Tracks, events: ScreenEvent[]): Anchor[] {
   let byTrack = anchorCache.get(events);
   if (!byTrack) anchorCache.set(events, (byTrack = new WeakMap()));
@@ -61,8 +66,7 @@ function anchors(tr: Tracks, events: ScreenEvent[]): Anchor[] {
     for (const e of events) {
       const k = tr.events[e.event_id];
       if (k === undefined) continue;
-      const at = e.t + (tr.t[k] - Math.floor(tr.t[k]));
-      if (!out.length || at >= out[out.length - 1][0]) out.push([at, k]);
+      if (!out.length || e.t >= out[out.length - 1][0]) out.push([e.t, k]);
     }
     byTrack.set(tr, out);
   }
@@ -94,30 +98,50 @@ export function sampleAt(tr: Tracks, events: ScreenEvent[], t: number, focusId: 
   return k0 + ((t - t0) / (next[0] - t0)) * (next[1] - k0);
 }
 
+/** The screen time playback reaches (fractional) sample `s`: sampleAt
+ * backwards. */
+function timeAt(tr: Tracks, events: ScreenEvent[], s: number): number {
+  const a = anchors(tr, events);
+  if (!a.length) return s / tr.hz;
+  if (s <= a[0][1]) return a[0][0] - (a[0][1] - s) / tr.hz;
+  let lo = 0;
+  let hi = a.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (a[mid][1] <= s) lo = mid;
+    else hi = mid - 1;
+  }
+  const [t0, k0] = a[lo];
+  const next = a[lo + 1];
+  if (!next) return t0 + (s - k0) / tr.hz;
+  if (next[1] === k0) return t0;
+  return t0 + ((s - k0) / (next[1] - k0)) * (next[0] - t0);
+}
+
 /** For each goal (a shot that went in) the engine timed: the screen time the
- * ball crossed the line (its strike's exact moment + `goal_line_s`). The
- * score changes then, not at the strike. */
+ * ball crosses the line on the pitch (the strike's sample + `goal_line_s`).
+ * The score changes then, not at the strike. */
 export function goalLineAt(tr: Tracks, events: ScreenEvent[]): Map<string, number> {
   const out = new Map<string, number>();
   const w = tr.values_per_sample;
   for (const e of events) {
     const k = tr.events[e.event_id];
     if (k === undefined || e.outcome !== "success" || !SHOT_TYPES.has(e.type)) continue;
-    let line = e.goal_line_s;
-    if (typeof line !== "number") {
+    let crossing = typeof e.goal_line_s === "number" ? k + e.goal_line_s * tr.hz : undefined; // sample
+    if (crossing === undefined) {
       // Not timed by the engine: find it in the track (the ball over a goal
       // line between the posts), within 6 s of the strike.
       for (let j = k + 1; j < Math.min(tr.n, k + 60); j++) {
         const x = tr.v[j * w] / 100;
         const y = tr.v[j * w + 1] / 100;
         if ((x <= 0 || x >= 105) && Math.abs(y - 34) <= 3.66) {
-          line = tr.t[j] - tr.t[k];
+          crossing = j;
           break;
         }
       }
     }
-    if (typeof line !== "number") continue;
-    out.set(e.event_id, e.t + (tr.t[k] - Math.floor(tr.t[k])) + line);
+    if (crossing === undefined) continue;
+    out.set(e.event_id, timeAt(tr, events, crossing));
   }
   return out;
 }
