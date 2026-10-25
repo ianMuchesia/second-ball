@@ -84,8 +84,11 @@ in the code named next to it; open items are listed as open.
   context, and the deployed app never calls a model, so no key is configured
   in Azure.
 - It runs as a non-root user; health checks on `/api/health`.
-- The Container App is HTTPS only; it pulls its image with a managed identity
-  that has only AcrPull on the registry (registry admin user off).
+- The Container App is HTTPS only. Its image is public on GitHub Container
+  Registry, so Azure holds no registry credentials; being public, the image
+  must hold nothing secret: it has only the code, the built screen and the
+  recorded run, which was checked for keys and endpoints before publishing.
+  Pushing it needs Ian's GitHub token, typed at a prompt, never stored.
 - A monthly cost budget on the resource group emails at 50% and 80% of actual
   spend and 100% of forecast.
 

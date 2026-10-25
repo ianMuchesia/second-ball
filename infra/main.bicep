@@ -1,7 +1,7 @@
 // Second Ball on Azure Container Apps (judge mode: one recorded run, no model
-// calls, no secrets). Two passes (infra/README.md):
-//   1. deployApp=false: registry, identity, logs, environment, budget;
-//   2. push the image to the registry, then deployApp=true: the app.
+// calls, no secrets). The image is public on GitHub Container Registry (no
+// Azure registry to pay for, no pull credentials); push it first
+// (infra/README.md), then deploy.
 targetScope = 'resourceGroup'
 
 @description('Region; South Africa North is closest to Nairobi (DECISIONS.md).')
@@ -12,11 +12,11 @@ param location string = resourceGroup().location
 @maxLength(12)
 param name string = 'secondball'
 
-@description('Create the container app (pass 2, once the image is in the registry).')
-param deployApp bool = false
+@description('Create the container app (false: logs, environment and budget only).')
+param deployApp bool = true
 
-@description('Image tag in the registry, e.g. second-ball:demo-foundry-2.')
-param imageTag string = 'second-ball:demo-foundry-2'
+@description('The public image (GHCR names are lowercase).')
+param image string = 'ghcr.io/ianmuchesia/second-ball:demo-foundry-2'
 
 @description('Replicas kept running: 1 while judges may visit (no cold start), 0 afterwards.')
 @minValue(0)
@@ -32,40 +32,12 @@ param budgetEmails array
 @description('First day of the month the budget starts (yyyy-MM-01).')
 param budgetStart string = '2026-10-01'
 
-var suffix = uniqueString(resourceGroup().id)
-var acrPullRole = subscriptionResourceId(
-  'Microsoft.Authorization/roleDefinitions',
-  '7f951dda-4ed3-4680-a7ca-43fe172d538d'
-)
-
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: '${name}-logs'
   location: location
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
-  }
-}
-
-resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: '${name}${suffix}'
-  location: location
-  sku: { name: 'Basic' }
-  properties: { adminUserEnabled: false } // pulled with the identity below, no password
-}
-
-resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: '${name}-app'
-  location: location
-}
-
-resource pull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(registry.id, identity.id, acrPullRole)
-  scope: registry
-  properties: {
-    roleDefinitionId: acrPullRole
-    principalId: identity.properties.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 
@@ -86,10 +58,6 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource app 'Microsoft.App/containerApps@2024-03-01' = if (deployApp) {
   name: name
   location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${identity.id}': {} }
-  }
   properties: {
     managedEnvironmentId: env.id
     configuration: {
@@ -99,18 +67,13 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = if (deployApp) {
         transport: 'auto'
         allowInsecure: false // HTTPS only
       }
-      registries: [
-        {
-          server: registry.properties.loginServer
-          identity: identity.id
-        }
-      ]
+      // No registries block: a public image needs no pull credentials.
     }
     template: {
       containers: [
         {
           name: 'second-ball'
-          image: '${registry.properties.loginServer}/${imageTag}'
+          image: image
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: [
             // Also set in the image; repeated so the public setting is visible here.
@@ -136,7 +99,6 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = if (deployApp) {
       scale: { minReplicas: minReplicas, maxReplicas: 1 }
     }
   }
-  dependsOn: [pull]
 }
 
 resource budget 'Microsoft.Consumption/budgets@2023-05-01' = {
@@ -172,6 +134,4 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = {
   }
 }
 
-output registryName string = registry.name
-output registryServer string = registry.properties.loginServer
 output url string = deployApp ? 'https://${app!.properties.configuration.ingress.fqdn}' : ''
