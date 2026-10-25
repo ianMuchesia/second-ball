@@ -1,0 +1,21 @@
+[
+ {
+  "model": "gpt-4.1-mini",
+  "recorded_at": "2026-10-25T13:49:06.254708+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo058-analyst",
+  "kind": "red_card_impact",
+  "minute": 63,
+  "persona": "analyst",
+  "attempt": 1,
+  "text": "Riverside's left centre-back Stonebridge (5) was sent off for a last-man foul on a counter at 63 minutes, leaving Riverside trailing a player down.",
+  "reasons": [
+   "number 5 is not in the values or the match context; use only: control_index_before=0.819576, pressure_on_ball_before=0.646349, defensive_line_gap_before=15.3294, final_third_pressures_before=0.601002, control_index_after=0.481282, pressure_on_ball_after=0.436193, defensive_line_gap_after=13.5657, final_third_pressures_after=0.707269"
+  ],
+  "errors": [
+   "wrong_number"
+  ],
+  "human_label": "false_alarm",
+  "human_note": "Stonebridge wears 5 (team sheet; the facts given say 'number 5'): the line is true."
+ }
+]

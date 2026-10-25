@@ -114,9 +114,24 @@ def test_counts_come_phrased_by_code(goal):
             ),
             "Harbour's second goal on the counter",
         ),
+        # The count given to the wrong team, or to no team at all.
         (
-            "Harbour lead 2-0, their second counter goal behind the left-back.",
+            "Riverside's second goal on the counter behind the left-back makes it 0-2.",
             "as given",
+        ),
+        ("The second counter goal for Riverside; Harbour lead 2-0.", "as given"),
+        ("Harbour lead 2-0. A counter creates 2 counter goals.", "as given"),
+        # The right goal, the wrong number of passes or counters.
+        (
+            (
+                "Harbour lead 2-0 with their second counter goal from 2 passes "
+                "behind Riverside's left-back."
+            ),
+            "no code-made count of passes is 2",
+        ),
+        (
+            "Harbour lead 2-0 with their third counter goal behind Riverside's left-back.",
+            "no code-made count of counters is 3",
         ),
     ],
 )
@@ -124,6 +139,28 @@ def test_wrong_relations_are_rejected(goal, line, why):
     data, _ = goal
     reasons = verify(line, analysis(data, goal_88(data), "analyst")).reasons
     assert any(why in r for r in reasons), reasons
+
+
+# Ian, 2026-10-25: the count need not be said in code's exact words; a true
+# rewording of whose count it is passes (it was blocked on 24 Oct; the five
+# Foundry drafts he labelled false alarms are of this kind).
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Harbour lead 2-0, their second counter goal behind the left-back.",
+        "Harbour lead 2-0 with their second counter goal, behind Riverside's left-back.",
+        "Harbour score their second goal on the counter, 1 pass behind Riverside's left-back.",
+        "A second counter goal behind Riverside's left-back, and Harbour lead 2-0.",
+        (
+            "Harbour's break behind Riverside's left-back brings a second counter "
+            "goal: Harbour lead 2-0."
+        ),
+    ],
+)
+def test_a_true_rewording_of_the_count_passes(goal, line):
+    data, _ = goal
+    v = verify(line, analysis(data, goal_88(data), "analyst"))
+    assert not any("as given" in r for r in v.reasons), v.reasons
 
 
 def test_one_is_ordinary_english(goal):

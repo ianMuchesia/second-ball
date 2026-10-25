@@ -1,0 +1,92 @@
+[
+ {
+  "model": "gpt-4.1-mini",
+  "recorded_at": "2026-10-25T13:22:06.485185+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo072-casual",
+  "kind": "goal",
+  "minute": 88,
+  "persona": "casual",
+  "attempt": 1,
+  "text": "Harbour scored their second goal on the counter with 1 pass behind Riverside's left-back, making it Riverside 0-2 Harbour and Harbour lead 2-0!",
+  "reasons": [
+   "say this count as given: 'Harbour's second goal on the counter'"
+  ],
+  "errors": [
+   "wrong_relation"
+  ],
+  "human_label": "false_alarm"
+ },
+ {
+  "model": "gpt-4.1-mini",
+  "recorded_at": "2026-10-25T13:22:06.485185+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo072-casual",
+  "kind": "goal",
+  "minute": 88,
+  "persona": "casual",
+  "attempt": 2,
+  "text": "Harbour scored in the 88th! One pass on the counter behind Riverside's left-back Kofi Lindqvane, Harbour lead 2-0 with their second counter goal.",
+  "reasons": [
+   "say this count as given: 'Harbour's second goal on the counter'"
+  ],
+  "errors": [
+   "wrong_relation"
+  ],
+  "human_label": "false_alarm"
+ },
+ {
+  "model": "gpt-4.1-mini",
+  "recorded_at": "2026-10-25T13:22:06.485185+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo072-analyst",
+  "kind": "goal",
+  "minute": 88,
+  "persona": "analyst",
+  "attempt": 1,
+  "text": "Harbour lead 2-0 after scoring their second counter goal with 1 pass, exploiting space behind Riverside's left-back Kofi Lindqvane; chance was xG 0.45.",
+  "reasons": [
+   "say this count as given: 'Harbour's second goal on the counter'"
+  ],
+  "errors": [
+   "wrong_relation"
+  ],
+  "human_label": "false_alarm"
+ },
+ {
+  "model": "gpt-4.1-mini",
+  "recorded_at": "2026-10-25T13:22:06.485185+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo072-analyst",
+  "kind": "goal",
+  "minute": 88,
+  "persona": "analyst",
+  "attempt": 2,
+  "text": "Harbour scored in the 88th minute with their second goal on the counter, using 1 pass to exploit space behind Riverside's left-back for a chance worth xG 0.45.",
+  "reasons": [
+   "say this count as given: 'Harbour's second goal on the counter'"
+  ],
+  "errors": [
+   "wrong_relation"
+  ],
+  "human_label": "false_alarm"
+ },
+ {
+  "model": "gpt-4.1-mini",
+  "recorded_at": "2026-10-25T13:22:06.485185+00:00",
+  "match_id": "m-riverside_athletic-harbour_town-1",
+  "overlay_id": "m-riverside_athletic-harbour_town-1-mo072-analyst",
+  "kind": "goal",
+  "minute": 88,
+  "persona": "analyst",
+  "attempt": 3,
+  "text": "Harbour scored their second goal on the counter at 88 minutes, with 1 pass exploiting space behind Riverside's left-back Kofi Lindqvane; chance xG 0.45.",
+  "reasons": [
+   "say this count as given: 'Harbour's second goal on the counter'"
+  ],
+  "errors": [
+   "wrong_relation"
+  ],
+  "human_label": "false_alarm"
+ }
+]

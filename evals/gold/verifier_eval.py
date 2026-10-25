@@ -174,7 +174,10 @@ def render(checked) -> str:
         "",
         BEFORE,
         "",
-        f"{len(checked)} drafts the Verifier blocked in real Gemini runs, labelled by",
+        (
+            f"{len(checked)} drafts the Verifier blocked in real-model runs "
+            f"({', '.join(sorted({i.row['model'] for i, _ in checked}))}), labelled by"
+        ),
         "Ian (`evals/gold/caught/`), run through today's Verifier (format fixes in",
         "code, then the truth rules).",
         "",
