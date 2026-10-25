@@ -2,6 +2,7 @@
 // loading/error state included, and the producer view refetched after an
 // approve, reject or test injection (tag "Producer").
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { parseTracks, type Tracks } from "../tracks";
 import type {
   AuditRow,
   Injection,
@@ -30,6 +31,16 @@ export const serverApi = createApi({
     runs: b.query<Meta[], void>({ query: () => "runs" }),
     run: b.query<Run, string>({ query: (run) => `runs/${run}` }),
     events: b.query<ScreenEvent[], string>({ query: (run) => `runs/${run}/events` }),
+    // The engine's 10 Hz movement (binary; null for runs without it).
+    tracks: b.query<Tracks | null, string>({
+      async queryFn(run) {
+        const head = await fetch(`/api/runs/${run}/tracks`);
+        if (!head.ok) return { data: null };
+        const body = await fetch(`/api/runs/${run}/tracks.bin`);
+        if (!body.ok) return { data: null };
+        return { data: parseTracks(await head.json(), await body.arrayBuffer()) };
+      },
+    }),
     evidence: b.query<ScreenEvent[], { run: string; ids: string[] }>({
       query: ({ run, ids }) => ({ url: `runs/${run}/evidence`, params: { ids: ids.join(",") } }),
     }),
@@ -72,6 +83,7 @@ export const {
   useRunsQuery,
   useRunQuery,
   useEventsQuery,
+  useTracksQuery,
   useEvidenceQuery,
   useMetricQuery,
   useMetricsQuery,

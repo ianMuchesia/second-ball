@@ -34,7 +34,10 @@ def standing(task: NarrationTask, lang: str) -> str:
 
 def num(v: float) -> str:
     x = shown(v)
-    return str(x) if isinstance(x, int) else f"{x:.2f}"
+    if isinstance(x, int):
+        return str(x)
+    # 1.003 rounds to "1.00": written whole, as the Verifier's style wants.
+    return f"{x:.2f}".removesuffix(".00")
 
 
 def changes(values: dict[str, float], lang: str, limit: int = 2) -> str:

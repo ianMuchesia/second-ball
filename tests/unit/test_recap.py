@@ -96,3 +96,33 @@ def test_recap_is_translated_and_airs_at_once():
     assert set(out.overlay.text) == {"en", "sw"}
     (shown,) = Producer(speed=10).offer(out.overlay, 5400, 1.0, now=5400)
     assert shown.status == "aired"
+
+
+def test_a_count_belongs_to_the_team_it_is_said_of():
+    """Before or after the count: 'Despite 35 shots, Riverside...' is
+    Riverside's; '35 shots' given to Harbour is still sent back."""
+    ctx = context_at(DATA, GOALS[-1])
+    task, values, _ = recap_task("full_time", DATA.events, ctx, aired(), "analyst", [])
+    from agents.pipeline.models import Analysis
+    from core.contracts import Insight
+
+    a = Analysis(
+        task=task,
+        insight=Insight(
+            claim="-",
+            mechanism="-",
+            evidence_event_ids=task.moment.evidence_event_ids,
+            confidence=1,
+        ),
+        values=values,
+    )
+    n = int(values["riverside_shots"])
+    ok = f"Despite {n} shots, Riverside lost 0-2 to Harbour on the counter."
+    assert not any(
+        "count as given" in r for r in verify(ok, a, max_words=60, final=True).reasons
+    )
+    wrong = f"Harbour won 2-0 with {n} shots against Riverside's counters."
+    assert any(
+        "count as given" in r
+        for r in verify(wrong, a, max_words=60, final=True).reasons
+    )

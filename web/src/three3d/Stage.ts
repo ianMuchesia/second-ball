@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { ballAt, type BallState, DRIBBLES, indexAt, isGoal, playbackAt, SHOTS, teamCode, teamName, type Timeline } from "./match";
+import { REFEREE, type Scene, type Tracks } from "../tracks";
 import { Footballer, loadRig } from "./Footballer";
 import { GK_KITS, matchKits, REF_KIT } from "./kits";
 import { Stadium, wx, wz } from "./stadium";
@@ -22,6 +23,10 @@ export interface Clock {
   t: number;
   playing: boolean;
   focusEventId: string | null;
+  // The engine's 10 Hz movement at this instant (runs that have it): played
+  // back exactly. `sample` is the (fractional) track sample.
+  scene?: Scene | null;
+  sample?: number;
 }
 
 /** A player where the 3D scene has him, in pitch metres (broadcast frame). */
@@ -78,8 +83,167 @@ export class Stage {
   /** Exact engine positions this frame (paused or a clicked event). */
   exact = true;
 
-  static async create(canvas: HTMLCanvasElement, tl: Timeline, clock: () => Clock): Promise<Stage> {
-    return new Stage(canvas, tl, await loadRig(), clock);
+  static async create(canvas: HTMLCanvasElement, tl: Timeline, clock: () => Clock, tracks: Tracks | null = null): Promise<Stage> {
+    const stage = new Stage(canvas, tl, await loadRig(), clock);
+    if (tracks) stage.useTracks(tracks);
+    return stage;
+  }
+
+  // ---- track mode: the engine's movement, played back exactly ---------------
+  private strikes = new Map<string, number[]>(); // player -> samples he strikes the ball
+  private dives = new Map<string, [number, number][]>(); // keeper -> [from, to] samples
+  private parties = new Map<string, [number, number][]>(); // scorer -> [from, to]
+  private crossed = new Map<number, number>(); // goal event index -> sample the ball crossed the line
+  private eventSamples: [number, number][] = []; // [sample, event index], sorted
+  private lastSample = 0;
+
+  private useTracks(tr: Tracks) {
+    const add = <T,>(m: Map<string, T[]>, k: string, v: T) => m.set(k, [...(m.get(k) ?? []), v]);
+    this.tl.events.forEach((e, i) => {
+      const k = tr.events[e.id];
+      if (k === undefined) return;
+      this.eventSamples.push([k, i]);
+      if (STRIKES(e)) add(this.strikes, e.player, k);
+      if (e.type === "keeper_save") {
+        const shot = this.tl.events[i - 1];
+        add(this.dives, e.player, [shot ? (tr.events[shot.id] ?? k - 6) : k - 6, k + 8]);
+      }
+      if (isGoal(e) && e.outcome !== "owngoal") {
+        // The celebration (and the score on the big screen) from the moment
+        // the ball is over the line.
+        const over = k + (e.goalLine !== null ? Math.round(e.goalLine * tr.hz) : 4);
+        this.crossed.set(i, over);
+        add(this.parties, e.player, [over, over + 9 * tr.hz]);
+      }
+    });
+    this.eventSamples.sort((a, b) => a[0] - b[0]);
+  }
+
+  /** The referee without an engine track: the diagonal system (15-25 m from
+   * the ball, docs/FOOTBALL_BEHAVIOUR.md section 13). The target moves with
+   * the ball and never flips sides; it is kept within 12 m of him so the body
+   * always runs to it (a long ball: he chases, he does not appear there). */
+  private stepReferee(bx: number, by: number, dtMatch: number, snap: boolean) {
+    let x = Math.min(Math.max(bx, 16), 89);
+    let y = 56 - ((x - 16) * 44) / 73;
+    const d = Math.hypot(x - bx, y - by);
+    if (d < 15 || d > 25) {
+      const want = Math.min(Math.max(d, 15), 25);
+      const ux = d > 0.1 ? (x - bx) / d : 0;
+      const uy = d > 0.1 ? (y - by) / d : -1;
+      x = bx + ux * want;
+      y = by + uy * want;
+    }
+    // He runs there like a man: at most 7 m/s, at most 5 m/s^2, easing in to
+    // stop on his spot (the engine referee's limits; no spring, no jumps).
+    const r = this.refAt;
+    if (snap || !this.refPlaced) {
+      r.set(x, y);
+      this.refVel.set(0, 0);
+    } else if (dtMatch > 0) {
+      const dx = x - r.x;
+      const dy = y - r.y;
+      const d = Math.hypot(dx, dy);
+      const want = d < 0.1 ? 0 : Math.min(7, Math.sqrt(2 * 5 * d) * 0.9);
+      const wvx = d < 0.1 ? 0 : (dx / d) * want;
+      const wvy = d < 0.1 ? 0 : (dy / d) * want;
+      let ax = (wvx - this.refVel.x) / dtMatch;
+      let ay = (wvy - this.refVel.y) / dtMatch;
+      const a = Math.hypot(ax, ay);
+      if (a > 5) {
+        ax *= 5 / a;
+        ay *= 5 / a;
+      }
+      this.refVel.set(this.refVel.x + ax * dtMatch, this.refVel.y + ay * dtMatch);
+      r.set(r.x + this.refVel.x * dtMatch, r.y + this.refVel.y * dtMatch);
+    }
+    this.refPlaced = true;
+    const v = this.refVel;
+    const fa = v.length() > 0.7 ? Math.atan2(v.y, v.x) : Math.atan2(by - r.y, bx - r.x);
+    this.referee.follow(wx(r.x), wz(r.y), v.x, -v.y, Math.atan2(Math.cos(fa), -Math.sin(fa)), wx(bx), wz(by), dtMatch, -1);
+  }
+  private refVel = new THREE.Vector2(0, 0);
+  private refAt = new THREE.Vector2(52.5 - 8, 46);
+  private refPlaced = false;
+
+  private eventIndexAt(sample: number): number {
+    let best = 0;
+    for (const [k, i] of this.eventSamples) if (k <= sample) best = i;
+    return best;
+  }
+
+  private frameTracks(sc: Scene, s: number, dtReal: number) {
+    const dtMatch = this.playing ? Math.max(0, Math.min(1, (s - this.lastSample) / 10)) : 0;
+    this.lastSample = s;
+    const [bx, by, bh] = sc.ball;
+    let holder: string | null = null;
+    let near = 1.3;
+    for (let k = 0; k < this.players.length; k++) {
+      const f = this.players[k];
+      const id = this.tl.slots[k].player_id;
+      const p = sc.players.get(id);
+      if (!p) {
+        f.follow(NaN, NaN, 0, 0, 0, 0, 0, 0, -1);
+        continue;
+      }
+      const a = (p.facing * Math.PI) / 180;
+      // Strike: wind back before contact, follow through after (samples are 0.1 s).
+      let kick = -1;
+      for (const at of this.strikes.get(id) ?? []) if (s >= at - 3.5 && s <= at + 2.5) kick = (s - (at - 3.5)) / 6;
+      let dive = 0;
+      for (const [a0, a1] of this.dives.get(id) ?? []) if (s >= a0 && s <= a1) dive = Math.min(1, (s - a0) / 4) * (s > a1 - 4 ? (a1 - s) / 4 : 1);
+      let party = 0;
+      for (const [a0, a1] of this.parties.get(id) ?? []) if (s >= a0 && s <= a1) party = Math.min(1, (s - a0) / 6);
+      f.follow(wx(p.x), wz(p.y), p.vx, -p.vy, Math.atan2(Math.cos(a), -Math.sin(a)), wx(bx), wz(by), dtMatch, kick, dive, 1, party);
+      const d = Math.hypot(p.x - bx, p.y - by);
+      if (d < near && bh < 1) {
+        near = d;
+        holder = id;
+      }
+      f.lit = false;
+    }
+    if (holder) this.players[this.tl.slotOf.get(holder)!].lit = true;
+
+    // The referee: where the engine had him, if it simulated him; otherwise
+    // on his diagonal, moving like a man (never jumping).
+    const ref = sc.players.get(REFEREE);
+    if (ref) {
+      const ra = (ref.facing * Math.PI) / 180;
+      this.referee.follow(wx(ref.x), wz(ref.y), ref.vx, -ref.vy, Math.atan2(Math.cos(ra), -Math.sin(ra)), wx(bx), wz(by), dtMatch, -1);
+    } else this.stepReferee(bx, by, dtMatch, false);
+
+    this.ball.position.set(wx(bx), BALL_R + bh, wz(by));
+    const moved = this.v3.copy(this.ball.position).sub(this.lastBall);
+    if (moved.lengthSq() < 100) {
+      this.ball.rotation.x += moved.z / BALL_R;
+      this.ball.rotation.z -= moved.x / BALL_R;
+    }
+    this.lastBall.copy(this.ball.position);
+    this.ballShadow.position.set(this.ball.position.x, 0.025, this.ball.position.z);
+    (this.ballShadow.material as THREE.MeshBasicMaterial).opacity = 0.4 / (1 + bh * 0.4);
+
+    const i = this.eventIndexAt(s);
+    const e = this.tl.events[i];
+    let goal: number | null = null;
+    for (const [, spans] of this.parties) for (const [a0, a1] of spans) if (s >= a0 && s <= a1) goal = i;
+    if (goal !== null && this.celebrating === null) this.cheerUntil = performance.now() + 4500;
+    this.celebrating = goal;
+    const left = this.cheerUntil - performance.now();
+    this.stadium.stands.update(performance.now() / 1000, left > 0 ? clamp01(left / 1500) : 0);
+    this.stadium.update(dtReal);
+    const scr = this.tl.score;
+    // Before the ball is over the line, the score is still the one before the shot.
+    const over = this.crossed.get(i);
+    const si = over !== undefined && s < over && i > 0 ? i - 1 : i;
+    this.stadium.stands.screen.show(teamCode(this.tl.home), teamCode(this.tl.away), scr[2 * si], scr[2 * si + 1], Math.floor(e.clock / 60) + 1, goal !== null ? "GOAL" : null);
+    this.b.holder = holder;
+    this.aim(e.team === this.tl.home ? 1 : -1, dtReal, false);
+    this.renderer.render(this.scene, this.camera);
+    const now = performance.now();
+    if (now - this.lastTick > 100) {
+      this.lastTick = now;
+      this.onTick?.({ t: this.t, index: i, playing: this.playing, holder, goalAt: goal });
+    }
   }
 
   private constructor(
@@ -273,6 +437,14 @@ export class Stage {
     // Follow the screen's clock: a small step forward is played, anything else
     // (a jump, a step back) is a seek.
     const c = this.clock();
+    if (c.scene && c.sample !== undefined) {
+      this.playing = c.playing;
+      this.exact = true; // the track is the engine's own movement
+      this.t = c.t;
+      this.frameTracks(c.scene, c.sample, dtReal);
+      this.raf = requestAnimationFrame(this.loop);
+      return;
+    }
     const target = playbackAt(this.tl, c.t, c.focusEventId);
     this.playing = c.playing;
     this.exact = !c.playing || c.focusEventId !== null;
@@ -358,10 +530,8 @@ export class Stage {
       f.lit = id === b.holder;
     }
 
-    // The referee: level with play, a little off it, towards the middle.
-    const rx = b.x + (52.5 - b.x) * 0.25;
-    const ry = b.y + (b.y > 34 ? -11 : 11);
-    this.referee.step(wx(rx), wz(ry), wx(b.x), wz(b.y), dtMatch, dtReal, -1, snap);
+    // The referee: on his diagonal, moving like a man (never jumping).
+    this.stepReferee(b.x, b.y, dtMatch, snap);
 
     // The ball belongs to feet, not to the engine's line: glued to a dribbler,
     // leaving the passer's boot, and arriving at the receiver's. Exact: where

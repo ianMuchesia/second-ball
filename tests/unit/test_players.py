@@ -92,13 +92,14 @@ def test_wilson_interval():
 def test_the_34th_minute_goal_and_its_chance():
     data = demo()
     ev = data.events
-    fenmore = next(p for p in data.match.lineups if p.name == "Lars Fenmore")
-    quill = next(p for p in data.match.lineups if p.name == "Matthias Quill")
-    f = contributions(ev, fenmore.player_id, fenmore.team_id)
-    q = contributions(ev, quill.player_id, quill.team_id)
+    kestrelle = next(p for p in data.match.lineups if p.name == "Dario Kestrelle")
+    mayhollow = next(p for p in data.match.lineups if p.name == "Corin Mayhollow")
+    f = contributions(ev, kestrelle.player_id, kestrelle.team_id)
+    q = contributions(ev, mayhollow.player_id, mayhollow.team_id)
     goal = next(c for c in f["goals"])
     assert ev.items[goal.index].minute == 34
-    # Quill's pass found Fenmore, who carried and scored: a chance, an assist.
+    # Mayhollow won it and played Kestrelle in behind; he carried and scored:
+    # a chance, an assist.
     assert any(ev.items[c.index].minute == 34 for c in q["assists"])
     assert any(ev.items[c.index].minute == 34 for c in q["chances_created"])
 

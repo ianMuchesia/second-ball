@@ -1,4 +1,6 @@
-import type { LineupPlayer, ScreenEvent } from "../api";
+import { REFEREE } from "../tracks";
+import type { FramePlayer, LineupPlayer, ScreenEvent } from "../api";
+import type { Scene } from "../tracks";
 import { surname, teamName } from "../api";
 import { teamCode } from "../theme";
 
@@ -15,13 +17,25 @@ interface Props {
   highlighted: Set<string>; // player ids lit by the evidence
   followed: string | null; // the followed player: his name is always on
   onPick: (playerId: string) => void; // click a player to follow him
+  scene?: Scene | null; // the engine's 10 Hz movement at this instant, if the run has it
 }
 
 /** The scene: home attacks left to right. Player positions from the event's
  * freeze frame; the current action as a solid arrow, the previous ones faded
  * and numbered; the player on the ball and anyone in the evidence named. */
-export function Pitch({ event, frame, path, homeTeam, lineup, highlighted, followed, onPick }: Props) {
-  const players = frame?.freeze_frame ?? [];
+export function Pitch({ event, frame, path, homeTeam, lineup, highlighted, followed, onPick, scene }: Props) {
+  // With movement data, everyone is where the engine had them at this instant
+  // (at an event's moment that is its freeze frame); without, the last frame.
+  const players: FramePlayer[] = scene
+    ? [...scene.players].filter(([player_id]) => player_id !== REFEREE).map(([player_id, p]) => ({
+        player_id,
+        team_id: lineup.get(player_id)?.team_id ?? "",
+        xy: [p.x, p.y] as [number, number],
+        facing_deg: p.facing,
+      }))
+    : (frame?.freeze_frame ?? []);
+  const referee = scene?.players.get(REFEREE) ?? null; // the engine's referee, if it has one
+  const ballXY: [number, number] | null = scene ? [scene.ball[0], scene.ball[1]] : event ? event.end : null;
   const actors = new Set(path.map((e) => e.player_id));
   const y = (v: number) => W - v;
   const holder = event ? inPossession(event, players) : null;
@@ -131,7 +145,8 @@ export function Pitch({ event, frame, path, homeTeam, lineup, highlighted, follo
             </g>
           );
         })}
-        {event && <circle cx={event.end[0]} cy={y(event.end[1])} r={0.75} className="ball" />}
+        {referee && <circle cx={referee.x} cy={y(referee.y)} r={0.9} className="referee" data-testid="referee-2d" />}
+        {ballXY && <circle cx={ballXY[0]} cy={y(ballXY[1])} r={0.75 + (scene ? scene.ball[2] * 0.08 : 0)} className="ball" />}
       </svg>
       {possession && (
         <div className="possession" data-testid="possession">

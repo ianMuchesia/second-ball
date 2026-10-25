@@ -44,3 +44,6 @@ extend-exclude = ["web"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "slow: full-season statistics (hundreds of matches); make test-slow, nightly in CI",
+]

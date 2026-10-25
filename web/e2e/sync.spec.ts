@@ -1,13 +1,14 @@
 import { expect, test } from "@playwright/test";
+import { recordedBall } from "./recorded";
 
 interface Ev {
+  event_id: string;
   t: number;
   minute: number;
   second: number;
   team_id: string;
   type: string;
   outcome: string;
-  end: [number, number];
 }
 
 const SHOTS = new Set(["shot", "shot_penalty", "shot_freekick"]);
@@ -19,6 +20,7 @@ test("score, clock, ball, possession and the line on air agree at 10 moments", a
   const events: Ev[] = await (await request.get("/api/runs/e2e/events")).json();
   const run = await (await request.get("/api/runs/e2e")).json();
   const [home, away]: string[] = [run.match.home_team, run.match.away_team];
+  const ballAt = await recordedBall(request, events);
   const end = events[events.length - 1].t;
   for (let k = 1; k <= 10; k++) {
     const t = Math.round((end * k) / 11);
@@ -37,8 +39,11 @@ test("score, clock, ball, possession and the line on air agree at 10 moments", a
     const holder = e.type === "foul" ? (e.team_id === home ? away : home) : e.team_id;
     await expect(page.getByTestId("possession")).toContainText(code(holder));
     const ball = page.locator("svg.pitch circle.ball");
-    expect(Number(await ball.getAttribute("cx"))).toBeCloseTo(e.end[0], 1);
-    expect(Number(await ball.getAttribute("cy"))).toBeCloseTo(68 - e.end[1], 1);
+    const [bx, by] = ballAt(t);
+    // Polled: until the movement has loaded, the pitch shows the event's end point.
+    const where = `ball at ${mmss(e.minute, e.second)}`;
+    await expect.poll(async () => Number(await ball.getAttribute("cx")), { message: where }).toBeCloseTo(bx, 1);
+    await expect.poll(async () => Number(await ball.getAttribute("cy")), { message: where }).toBeCloseTo(68 - by, 1);
     // A line on air is never from the future.
     const card = page.getByTestId("lower-third");
     if (await card.count()) {

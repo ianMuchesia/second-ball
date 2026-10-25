@@ -7,6 +7,9 @@
   `style_only` (facts right, blocked by a format rule), `wrong_reason`
   (wrong reason, but a real error it did not name); `missed` lists real
   errors the Verifier did not catch.
+- `caught/old-match/` — drafts about an earlier version of the demo match,
+  kept for the record and left out of the eval (their numbers were right for
+  that match, not today's); its README says which and why.
 - `missed.json` — lines that aired wrong because no check existed yet, each
   with the fix that now catches it.
 - `agents/narrator/examples.yaml` — Ian's lines; the first gold items.

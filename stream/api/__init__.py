@@ -9,6 +9,7 @@ Endpoints (all JSON unless noted):
     GET  /api/runs/{run}                         meta, match, moments, overlays,
                                                  narrations, indicators, audit
     GET  /api/runs/{run}/events                  events with freeze frames
+    GET  /api/runs/{run}/tracks(.bin)            10 Hz movement (recorded scenario runs)
     GET  /api/runs/{run}/evidence?ids=a,b        events in plain words + positions
     GET  /api/runs/{run}/traces?trace_id=...     spans of one trace
     GET  /api/runs/{run}/stream?speed=10         SSE: the run replayed in match time
@@ -21,9 +22,14 @@ Endpoints (all JSON unless noted):
                                                  within an importance tier), drafts, audit
     POST /api/runs/{run}/producer/{overlay_id}   {action: approve|reject, who, reason}
     POST /api/runs/{run}/inject-test-error       a wrong claim through the real Verifier
+    GET  /api/health                             liveness: ok and the runs on disk
+
+The two POSTs follow PRODUCER_WRITES (open | token | off); a public
+deployment sets off.
 """
 
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -34,8 +40,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -80,13 +86,17 @@ def bundle(path: Path, stamp: float) -> dict:
     # Match seconds on core's continuous clock: the time the Producer and the
     # recorded overlays use, and the screen's playback clock.
     clock = Events.for_match(match, events).elapsed
+    at = {e.event_id: t for e, t in zip(events, clock, strict=True)}
+    # Every page load asks for the events as served, and they never change.
+    served = [absolute(e, match, at[e.event_id]) for e in events]
     return {
         "meta": json.loads((path / "meta.json").read_text()),
         "match": match,
         "events": events,
         "by_id": {e.event_id: e for e in events},
         "index": {e.event_id: i for i, e in enumerate(events)},
-        "t": {e.event_id: t for e, t in zip(events, clock, strict=True)},
+        "t": at,
+        "events_json": json.dumps(served, ensure_ascii=False, separators=(",", ":")),
         "moments": rows(path / "moments.jsonl"),
         "overlays": rows(path / "overlays.jsonl"),
         "narrations": rows(path / "narrations.jsonl"),
@@ -98,9 +108,21 @@ def bundle(path: Path, stamp: float) -> dict:
     }
 
 
+# One thread builds a run's bundle; the others wait for it instead of each
+# building their own (a cold server's first page loads arrive together).
+LOAD_LOCK = threading.Lock()
+
+
 def load(run: str) -> dict:
     path = run_path(run)
-    return bundle(path, (path / "meta.json").stat().st_mtime)
+    with LOAD_LOCK:
+        return bundle(path, (path / "meta.json").stat().st_mtime)
+
+
+@app.get("/api/health")
+def health():
+    """For the container's probes: the app is up and can read its runs."""
+    return {"ok": True, "runs": len(list_runs())}
 
 
 @app.get("/api/runs")
@@ -169,8 +191,29 @@ def checked(n: dict) -> dict:
 
 @app.get("/api/runs/{run}/events")
 def get_events(run: str):
-    b = load(run)
-    return [absolute(e, b["match"], b["t"][e.event_id]) for e in b["events"]]
+    return Response(load(run)["events_json"], media_type="application/json")
+
+
+@app.get("/api/runs/{run}/tracks")
+def tracks_header(run: str):
+    """The 10 Hz movement's header: slots, sample count, event -> sample."""
+    path = run_path(run) / "tracks.json"
+    if not path.exists():
+        raise HTTPException(404, "this run has no movement tracks")
+    return FileResponse(path, media_type="application/json")
+
+
+@app.get("/api/runs/{run}/tracks.bin")
+def tracks_body(run: str):
+    """The 10 Hz movement itself (engine/core/trackfile.py), gzip-encoded."""
+    path = run_path(run) / "tracks.bin"
+    if not path.exists():
+        raise HTTPException(404, "this run has no movement tracks")
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        headers={"Content-Encoding": "gzip", "Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/api/runs/{run}/evidence")
@@ -403,7 +446,24 @@ def producer(run: str, favourite: str | None = None):
     }
 
 
-@app.post("/api/runs/{run}/producer/{overlay_id}")
+def producer_writes(x_producer_token: str | None = Header(default=None)) -> None:
+    """Who may approve, reject or inject (PRODUCER_WRITES): "open" (local
+    development, the default), "token" (the X-Producer-Token header must equal
+    PRODUCER_TOKEN) or "off" (a public deployment: nobody)."""
+    mode = os.environ.get("PRODUCER_WRITES", "open")
+    if mode == "open":
+        return
+    if mode == "token":
+        want = os.environ.get("PRODUCER_TOKEN", "")
+        if want and x_producer_token and hmac.compare_digest(x_producer_token, want):
+            return
+        raise HTTPException(401, "producer actions need a valid X-Producer-Token")
+    raise HTTPException(403, "producer actions are switched off on this server")
+
+
+@app.post(
+    "/api/runs/{run}/producer/{overlay_id}", dependencies=[Depends(producer_writes)]
+)
 def act(run: str, overlay_id: str, body: Action):
     if overlay_id not in {o["overlay_id"] for o in load(run)["overlays"]}:
         raise HTTPException(404, f"no overlay {overlay_id!r}")
@@ -432,7 +492,7 @@ def corrupt(text: str) -> str:
     return text.rstrip(".!") + ", and they will win this."
 
 
-@app.post("/api/runs/{run}/inject-test-error")
+@app.post("/api/runs/{run}/inject-test-error", dependencies=[Depends(producer_writes)])
 def inject(run: str, body: Injection):
     b = load(run)
     made = [n for n in b["narrations"] if n.get("task") and not n["fallback"]]

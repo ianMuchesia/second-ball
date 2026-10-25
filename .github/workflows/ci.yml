@@ -4,11 +4,26 @@ on:
   push:
   pull_request:
   workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * *"  # nightly, 04:00 Nairobi: the full-season statistics
 
 permissions:
   contents: read
 
 jobs:
+  # The full-season statistics (hundreds of simulated matches, tests marked
+  # `slow`): too long for every push, so nightly (and on demand).
+  slow:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --frozen
+      - run: make test-slow
+
   test:
     runs-on: ubuntu-latest
     # Stream tests (tests/unit/test_stream.py) need Kafka and Postgres.

@@ -91,9 +91,11 @@ def test_from_env_rejects_unknown_provider():
         from_env(ENV, provider="openai")
 
 
-def test_foundry_is_a_stub():
-    with pytest.raises(NotImplementedError):
+def test_foundry_without_its_settings_refuses_and_names_them():
+    with pytest.raises(ValueError) as e:
         from_env(ENV, provider="foundry")
+    for name in ("FOUNDRY_ENDPOINT", "FOUNDRY_API_KEY", "FOUNDRY_MODEL"):
+        assert name in str(e.value)
 
 
 def test_gemini_requires_api_key():

@@ -368,7 +368,7 @@ def wrong_counts(text: str, analysis: Analysis) -> list[str]:
 
 COUNTED = re.compile(
     r"\b(?P<n>\d+|" + "|".join([*CARDINALS, *ORDINALS]) + r")\b"
-    r"(?:\s+[\w'\-]+){0,2}?\s+(?P<noun>goal|pass|shot|chance)(?:e?s)?\b",
+    r"(?:\s+(?!\d)[\w'\-]+){0,2}?\s+(?P<noun>goal|pass|shot|chance)(?:e?s)?\b",
     re.IGNORECASE,
 )
 
@@ -393,13 +393,18 @@ def unphrased_counts(text: str, analysis: Analysis) -> list[str]:
         n, noun = as_number(m.group("n")), m.group("noun").lower()
         if n is None or n < 2:
             continue  # "one pass" is ordinary English; the error is 2+ misattached
-        owner = re.match(r"(.+?)'s \d", phrase)  # "Riverside's 27 shots"
+        # Whose count: the team before it, a digit or a word ("Riverside's
+        # 27 shots", "Harbour's second goal on the counter").
+        owner = re.match(r"(.+?)'s\s+$", phrase[: m.start()])
         for said in COUNTED.finditer(text):
             if as_number(said.group("n")) != n or said.group("noun").lower() != noun:
                 continue
+            before = team_before(text, said.start(), analysis)
             if owner and owner.group(1) in (
-                team_before(text, said.start(), analysis),
+                before,
                 subject(text, said.start(), analysis),
+                # "Despite 35 shots, Riverside...": the team comes after.
+                None if before else team_after(text, said.end(), analysis),
             ):
                 continue  # "Riverside ... 27 shots": the right team's count
             out.append(f"say this count as given: '{phrase}'")
@@ -518,10 +523,11 @@ def score_mistakes(text: str, analysis: Analysis) -> list[str]:
             claims.append((team, True))
         if re.search(rf"\b{name}{TRAILS}", text, re.IGNORECASE):
             claims.append((team, False))
-        if re.search(rf"\bleading\s+{name}\b", text, re.IGNORECASE):
-            claims.append((other, True))
-        if re.search(rf"\btrailing\s+{name}\b", text, re.IGNORECASE):
-            claims.append((other, False))
+        for verb, leads in (("leading", True), ("trailing", False)):
+            for m in re.finditer(rf"\b{verb}\s+{name}\b", text, re.IGNORECASE):
+                who = participle_team(text, m, team, other, analysis)
+                if who is not None:
+                    claims.append((who, leads))
     score = f"{ctx.team_names[ctx.home]} {home}-{away} {ctx.team_names[ctx.away]}"
     return [
         f"wrong about the score: it is {score}, so {ctx.team_names[team]} "
@@ -529,6 +535,37 @@ def score_mistakes(text: str, analysis: Analysis) -> list[str]:
         for team, leads in dict.fromkeys(claims)
         if (leader == team) != leads
     ]
+
+
+def participle_team(text, m, named, other, analysis):
+    """Who 'trailing X' / 'leading X' (match `m`) says is behind or ahead.
+    "Trailing Riverside build..." (X described): X. "Harbour, trailing
+    Riverside" or "while trailing Harbour by a goal" (the verb, X its
+    object): the team doing it, the one named before or the clause's
+    subject. "trailing Riverside 0-1 Harbour" quotes the score: no claim of
+    its own (the score is checked as a score). None when it cannot tell."""
+    ctx = analysis.task.context
+    team_of = {ctx.team_names[t].lower(): t for t in (ctx.home, ctx.away)}
+    names = "|".join(re.escape(n) for n in ctx.team_names.values())
+    if re.match(rf"\s*{SCORE}\s+(?:{names})\b", text[m.end() :], re.IGNORECASE):
+        return None
+    before = text[: m.start()]
+    doer = re.search(
+        rf"\b({names})(?:\s*,|\s+(?:are|is|was|were)(?:\s+still|\s+now)?)?\s*$",
+        before,
+        re.IGNORECASE,
+    )
+    if doer:
+        return team_of[doer.group(1).lower()]
+    verb = re.search(
+        r"\b(?:while|when|as|after|despite|since)\s*$", before, re.IGNORECASE
+    )
+    if verb or re.match(r"\s+by\b", text[m.end() :], re.IGNORECASE):
+        said = subject(text, m.start(), analysis)
+        if said is None or said.lower() == ctx.team_names[named].lower():
+            return None
+        return other
+    return named
 
 
 def wrong_owner(text: str, analysis: Analysis) -> list[str]:
@@ -554,15 +591,31 @@ def wrong_owner(text: str, analysis: Analysis) -> list[str]:
 
 
 def team_before(text: str, at: int, analysis: Analysis) -> str | None:
-    """The team named last before position `at`, in the same sentence."""
+    """The team named last before position `at`, in the same sentence; a
+    team named as a place ("behind Riverside's left-back") does not count."""
     start = max(text.rfind(c, 0, at) for c in ".!?;:") + 1
-    names = analysis.task.context.team_names.values()
+    seg = text[start:at]
+    names = "|".join(re.escape(n) for n in analysis.task.context.team_names.values())
     found = [
-        (m.start(), name)
-        for name in names
-        for m in re.finditer(rf"\b{re.escape(name)}\b", text[start:at])
+        m.group(1)
+        for m in re.finditer(rf"\b({names})\b", seg)
+        if not PLACE.search(seg[: m.start()])
     ]
-    return max(found)[1] if found else None
+    return found[-1] if found else None
+
+
+def team_after(text: str, at: int, analysis: Analysis) -> str | None:
+    """The team named first after position `at`, in the same sentence; not
+    one named as a place."""
+    ends = [i for i in (text.find(c, at) for c in ".!?;") if i >= 0]
+    seg = text[at : min(ends, default=len(text))]
+    names = "|".join(re.escape(n) for n in analysis.task.context.team_names.values())
+    found = (
+        m.group(1)
+        for m in re.finditer(rf"\b({names})\b", seg)
+        if not PLACE.search(seg[: m.start()])
+    )
+    return next(found, None)
 
 
 def owner_of(key: str, analysis: Analysis) -> str | None:
@@ -602,7 +655,32 @@ def credited(text: str, at: int, word: str, analysis: Analysis) -> str | None:
     )
     if owned:
         return owned[-1].group(1)
-    return subject(text, at, analysis)
+    return clause_team(text, at, analysis)
+
+
+# A team named after these is a place on the pitch or an object, not the
+# one whose number it is: "behind Riverside's left-back", "against Harbour",
+# "trailing Harbour" (the team trailed, not the one acting).
+PLACE = re.compile(
+    r"\b(?:behind|against|past|beyond|around|through|into|inside|outside|"
+    r"at|on|over|than|from|beat|beats|defeated|defeat|beating|leading|trailing)\s+(?:the\s+)?$",
+    re.IGNORECASE,
+)
+
+
+def clause_team(text: str, at: int, analysis: Analysis) -> str | None:
+    """The team acting in the clause the number at `at` is in: the last
+    team named before it in its sentence, leaving out a team named as a
+    place or an object ("Harbour lead as Riverside create a chance worth
+    xG 0.34": Riverside's xG)."""
+    seg = text[sentence_start(text, at) : at]
+    names = "|".join(re.escape(n) for n in analysis.task.context.team_names.values())
+    found = [
+        m.group(1)
+        for m in re.finditer(rf"\b({names})\b", seg)
+        if not PLACE.search(seg[: m.start()])
+    ]
+    return found[-1] if found else subject(text, at, analysis)
 
 
 def wrong_owners(text: str, analysis: Analysis) -> list[str]:
@@ -785,9 +863,18 @@ def shirts_said(text: str, analysis: Analysis) -> tuple[str, list[str]]:
         for m in SHIRT.finditer(text)
         if int(m.group(1)) not in sheet
     ]
-    return SHIRT.sub(
-        lambda m: "" if int(m.group(1)) in sheet else m.group(0), text
-    ), bad
+    text = SHIRT.sub(lambda m: "" if int(m.group(1)) in sheet else m.group(0), text)
+    # "Stonebridge (5)": his own number in brackets is a shirt number too; a
+    # wrong one stays (and wrong_players names it).
+    for player in ctx.lineup:
+        text = re.sub(
+            rf"\b({name_pattern(player)})\s*\((?:number\s*|no\.?\s*|#)?"
+            rf"{player.shirt_number}\)",
+            r"\1",
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text, bad
 
 
 def wrong_players(text: str, analysis: Analysis) -> list[str]:
@@ -839,6 +926,7 @@ def wrong_numbers(text: str, analysis: Analysis) -> list[str]:
 
 
 MAX_WORDS = 25  # one on-screen line
+LONG_GRACE = 1.5  # up to this x the limit a true line airs (noted, wrapped)
 
 
 def verify(
@@ -855,8 +943,12 @@ def verify(
     if not text.strip():
         return Verdict(passed=False, reasons=["the line is empty"])
     reasons = wrong_numbers(text, analysis)
-    if len(text.split()) > max_words:
+    notes = []
+    words = len(text.split())
+    if words > max_words * LONG_GRACE:
         reasons.append(f"too long: at most {max_words} words")
+    elif words > max_words:
+        notes.append(f"long: {words} words (limit {max_words}); the screen wraps it")
     if analysis.task.persona == "casual" and any(d for _, d, _ in numbers(text)):
         reasons.append(
             "casual line: no index numbers or decimals; say it in words "
@@ -882,7 +974,7 @@ def verify(
     reasons += chances_as_goals(text, analysis)
     reasons += xg_relation(text, analysis)
     reasons = list(dict.fromkeys(reasons))
-    notes = score_repeated(text)  # tone: logged only
+    notes += score_repeated(text)  # tone: logged only
     if copied(text, examples):
         reasons.append("too close to a style example: write your own line")
     if PREDICTION.search(text):

@@ -42,7 +42,7 @@ def test_a_goals_xg_is_not_circular(data):
     m = goal_34(data)
     assert set(m.metrics_after) == {"shot_xg"}
     assert m.metrics_after["shot_xg"].value == pytest.approx(0.45)
-    assert m.metrics_before["xg"].value == pytest.approx(0.162, abs=0.001)
+    assert m.metrics_before["xg"].value == pytest.approx(0.55, abs=0.001)
     shot = data.events.items[data.by_id[m.evidence_event_ids[-1]]]
     assert shot.event_id not in m.metrics_before["xg"].evidence_event_ids
 
@@ -54,7 +54,7 @@ def test_the_34th_minute_goal_reads_like_a_broadcast(data):
         "left-back. Harbour lead 1-0."
     )
     analyst = template(analysis(data, m, "analyst"))
-    assert "a chance worth xG 0.45 (xG 0.16 before the move)" in analyst
+    assert "a chance worth xG 0.45 (xG 0.55 before the move)" in analyst
     sw = template(analysis(data, m, "casual"), "sw")
     assert sw.startswith("GOLI, dakika ya 34. Harbour wanafunga")
     assert "Harbour wanaongoza 1-0" in sw

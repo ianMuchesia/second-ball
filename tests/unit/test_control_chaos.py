@@ -206,10 +206,13 @@ def mean_openness(fixture):
     return gap, statistics.mean(values)
 
 
-def test_openness_is_lower_in_mismatches(monkeypatch):
+# These two need a full season to show (they fail on 50 matches for want of
+# close games, mismatches and late chasing spells): nightly, make test-slow.
+@pytest.mark.slow
+def test_openness_is_lower_in_mismatches(monkeypatch, n=300):
     monkeypatch.setattr(chaos, "grid", lambda: xt.load(CFG["xt_version"]))
     with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
-        results = list(pool.map(mean_openness, fixtures(300, 90_000), chunksize=8))
+        results = list(pool.map(mean_openness, fixtures(n, 90_000), chunksize=8))
     close = [o for gap, o in results if gap < 0.1]
     mismatch = [o for gap, o in results if gap > 0.3]
     assert len(close) >= 30 and len(mismatch) >= 30
@@ -257,12 +260,13 @@ def chasing_spells(fixture):
     return statistics.mean(late) - statistics.mean(early)
 
 
-def test_late_chasing_spells_are_more_two_way_than_the_first_half_hour():
+@pytest.mark.slow
+def test_late_chasing_spells_are_more_two_way_than_the_first_half_hour(n=300):
     # Ian (2026-10-22): the general rule, over free matches, instead of one demo.
     with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
         diffs = [
             d
-            for d in pool.map(chasing_spells, fixtures(300, 91_000), chunksize=8)
+            for d in pool.map(chasing_spells, fixtures(n, 91_000), chunksize=8)
             if d is not None
         ]
     mean = statistics.mean(diffs)

@@ -18,12 +18,12 @@ examples:
     kind: goal
     minute: 34
     casual: "Lightning from Harbour! One pass behind Riverside's left-back on the counter, and Harbour lead 1-0!"
-    analyst: "Harbour counter into the space behind Riverside's left-back: one chance worth xG 0.45, after only xG 0.16 before it."
+    analyst: "Harbour counter into the space behind Riverside's left-back: one chance worth xG 0.45, after xG 0.55 before it."
   - moment: red_card_63
     kind: red_card_impact
     minute: 63
     casual: "Red card for Riverside! Their last man walks while trailing 0-1, leaving them down to ten men!"
-    analyst: "Riverside lose their left centre-back; Harbour halve ball pressure from 0.52 to 0.25, raising Riverside's control to 0.80 and defence-midfield gap to 13.8 m."
+    analyst: "Riverside lose their left centre-back; their control falls from 0.82 to 0.48 and their pressure on the ball from 0.65 to 0.44."
   - moment: counter_goal_88
     kind: goal
     minute: 88

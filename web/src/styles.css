@@ -106,6 +106,7 @@ b { font-weight: 600; }
 .pitch .player { cursor: pointer; }
 .pitch .player .follow-ring { fill: none; stroke: var(--amber); stroke-width: 0.45; }
 .pitch .ball { fill: #fff; stroke: var(--bg); stroke-width: 0.25; }
+.pitch .referee { fill: #f2c200; stroke: #111; stroke-width: 0.3; }
 .possession { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 6px; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; background: rgba(18, 17, 16, 0.85); padding: 3px 10px; border: 1px solid var(--line); }
 .kit { width: 10px; height: 10px; display: inline-block; border-radius: 50%; }
 .kit.home { background: var(--home); }

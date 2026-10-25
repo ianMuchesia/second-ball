@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { recordedBall } from "./recorded";
 
 // The 3D pitch (Ian's viewer, integrated): it reads the API's events, which
 // are already in the broadcast frame, so it must not flip them again; paused,
@@ -28,7 +29,7 @@ function shownAt(events: Ev[], t: number): Ev {
   return events[i];
 }
 
-test("2D is the default; 3D loads only when asked", async ({ page }) => {
+test("2D is the default; 3D loads only when asked", async ({ page, request }) => {
   const chunks: string[] = [];
   page.on("request", (r) => chunks.push(r.url()));
   await page.goto("/runs/e2e?t=600");
@@ -38,8 +39,10 @@ test("2D is the default; 3D loads only when asked", async ({ page }) => {
   await page.getByTestId("view").selectOption("3d");
   await expect(page.getByTestId("pitch-3d")).toHaveAttribute("data-ready", "yes", { timeout: 60_000 });
   expect(chunks.some((u) => u.includes("Pitch3D"))).toBe(true);
+  // The test run has the engine's movement tracks: the note says so.
+  expect((await request.get("/api/runs/e2e/tracks")).ok()).toBe(true);
   await expect(page.getByTestId("interpolated-note")).toHaveText(
-    "Motion between events is interpolated; positions at events come from the engine.",
+    "Every player and the ball move as the engine simulated them (10 times a second).",
   );
   await page.getByTestId("view").selectOption("2d");
   await expect(page.locator("svg.pitch")).toBeVisible();
@@ -73,9 +76,12 @@ for (const minute of [10, 50, 63]) {
         }).length;
       }, { timeout: 30_000 })
       .toBe(0);
+    // The ball where the engine had it then (at a pass's instant, at the
+    // passer's feet, not yet at its end point).
+    const [bx, by] = (await recordedBall(request, events))(t);
     const { ball, players } = await placed();
-    expect(ball.x).toBeCloseTo(shown.end[0], 1);
-    expect(ball.y).toBeCloseTo(shown.end[1], 1);
+    expect(ball.x).toBeCloseTo(bx, 1);
+    expect(ball.y).toBeCloseTo(by, 1);
     // Home attacks left to right in both halves (the API's frame): keepers.
     const run = await (await request.get("/api/runs/e2e")).json();
     const keeper = (team: string) =>

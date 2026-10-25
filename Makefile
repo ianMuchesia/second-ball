@@ -1,10 +1,11 @@
-.PHONY: help up down test lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate live jaeger eval-narration eval-latency record api e2e
+.PHONY: help up down test test-slow lint infra contracts contracts-check shapes demo realism realism-reference replay eval-moments mcp narrate live jaeger eval-narration eval-latency record api e2e
 
 help:
 	@echo "Targets:"
 	@echo "  up     docker compose up -d (Kafka + Postgres)"
 	@echo "  down   docker compose down"
-	@echo "  test   uv run pytest -q tests/spec tests/unit"
+	@echo "  test   uv run pytest -q tests/spec tests/unit (not the slow full seasons)"
+	@echo "  test-slow  the full-season statistics (hundreds of matches; nightly in CI)"
 	@echo "  lint   uv run ruff check . && ruff format --check ."
 	@echo "  infra  Bicep deploy (stub)"
 	@echo "  contracts        regenerate docs/schemas and web/src/types from core/contracts"
@@ -33,14 +34,17 @@ down:
 	docker compose down
 
 test:
-	uv run pytest -q tests/spec tests/unit
+	uv run pytest -q -m "not slow" tests/spec tests/unit
+
+test-slow:  # the full-season statistics (hundreds of matches): nightly in CI
+	uv run pytest -q -m slow tests/unit
 
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
 
-infra:
-	@echo "infra: stub, nothing deployed yet (see infra/main.bicep)"
+infra:  # compiles infra/main.bicep; deploying: infra/README.md
+	az bicep build --file infra/main.bicep --stdout > /dev/null && echo "infra/main.bicep: OK"
 
 contracts:
 	uv run python -m scripts.export_contracts

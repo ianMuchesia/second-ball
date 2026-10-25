@@ -23,7 +23,7 @@ from agent_framework import Agent, Executor, WorkflowBuilder, WorkflowContext, h
 from agents.llm import LLMClient
 from agents.narrator import examples
 from agents.pipeline import prompts
-from agents.pipeline.client import AdapterChatClient
+from agents.pipeline.client import ANALYST_MAX_OUTPUT, AdapterChatClient
 from agents.pipeline.models import (
     Analysis,
     Approved,
@@ -134,7 +134,10 @@ class AnalystExecutor(Executor):
         self.llm, self.policy, self.tools = llm, policy, tools
         self.insights = {} if insights is None else insights
         self.agent = Agent(
-            client=AdapterChatClient(llm), instructions=prompts.ANALYST, name="analyst"
+            client=AdapterChatClient(llm),
+            instructions=prompts.ANALYST,
+            name="analyst",
+            default_options={"max_tokens": ANALYST_MAX_OUTPUT},
         )
 
     @handler

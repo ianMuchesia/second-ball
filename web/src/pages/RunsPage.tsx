@@ -2,12 +2,14 @@ import { Link, Navigate } from "react-router-dom";
 import { DEFAULT_RUN, paths } from "../router/routes";
 import { useRunsQuery } from "../store/serverApi";
 
-/** Recorded runs on the server; straight to the demo when it is there. */
+/** Recorded runs on the server; straight to the demo when it is there, or to
+ * the only run when there is one (a deployment serves a single bundle). */
 export default function RunsPage() {
   const { data: runs, isLoading, error } = useRunsQuery();
   if (isLoading) return <p className="page">Loading runs…</p>;
   if (error) return <p className="page">The API is not reachable (start it: make api).</p>;
   if (runs?.some((r) => r.name === DEFAULT_RUN)) return <Navigate to={paths.run(DEFAULT_RUN)} replace />;
+  if (runs?.length === 1) return <Navigate to={paths.run(runs[0].name)} replace />;
   return (
     <main className="page">
       <h1>Second Ball</h1>

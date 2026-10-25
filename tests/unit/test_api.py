@@ -68,7 +68,7 @@ def test_evidence_in_plain_words_with_absolute_positions(client):
     ).json()
     assert (
         e["words"]
-        == "63:09 Ilya Stonebridge (Riverside, left centre-back) fouls: red card."
+        == "63:22 Ilya Stonebridge (Riverside, left centre-back) fouls: red card."
     )
     assert any(p["player_id"] == "riverside_athletic-5" for p in e["freeze_frame"])
 
@@ -161,3 +161,41 @@ def test_run_streams_as_server_sent_events(client):
     assert body.startswith("event: meta")
     assert "event: event" in body and body.rstrip().endswith("}")
     assert "event: end" in body
+
+
+def first_overlay(client):
+    return client.get("/api/runs/demo").json()["overlays"][0]["overlay_id"]
+
+
+def test_a_public_deployment_switches_producer_writes_off(client, monkeypatch):
+    monkeypatch.setenv("PRODUCER_WRITES", "off")
+    before = len(client.get("/api/runs/demo/producer").json()["audit"])
+    oid = first_overlay(client)
+    act = {"action": "approve", "who": "someone"}
+    assert client.post(f"/api/runs/demo/producer/{oid}", json=act).status_code == 403
+    assert client.post("/api/runs/demo/inject-test-error", json={}).status_code == 403
+    assert len(client.get("/api/runs/demo/producer").json()["audit"]) == before
+    assert client.get("/api/runs/demo").status_code == 200  # reading is open
+
+
+def test_token_mode_needs_the_right_token(client, monkeypatch):
+    monkeypatch.setenv("PRODUCER_WRITES", "token")
+    monkeypatch.setenv("PRODUCER_TOKEN", "s3cret-for-test")
+    oid = first_overlay(client)
+    act = {"action": "approve", "who": "Ian"}
+    url = f"/api/runs/demo/producer/{oid}"
+    assert client.post(url, json=act).status_code == 401
+    assert (
+        client.post(url, json=act, headers={"X-Producer-Token": "wrong"}).status_code
+        == 401
+    )
+    ok = client.post(url, json=act, headers={"X-Producer-Token": "s3cret-for-test"})
+    assert ok.status_code == 200 and ok.json()["action"] == "approve"
+    monkeypatch.setenv("PRODUCER_TOKEN", "")  # no token configured: nobody
+    assert (
+        client.post(url, json=act, headers={"X-Producer-Token": ""}).status_code == 401
+    )
+
+
+def test_health_says_the_app_can_read_its_runs(client):
+    assert client.get("/api/health").json() == {"ok": True, "runs": 1}

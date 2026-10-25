@@ -43,7 +43,9 @@ def test_every_real_error_is_blocked_for_the_right_reason(checked):
     assert missed == []
 
 
-@pytest.mark.parametrize("n", [10, 16, 17, 18])
+# #10, #16, #17, #18 of the first 18; two 23 Oct drafts before them were
+# retired to caught/old-match/ (about an earlier demo), so they now sit at:
+@pytest.mark.parametrize("n", [8, 14, 15, 16])
 def test_the_four_misses_ian_found_are_now_caught(checked, n):
     item, verdict = checked[n - 1]
     assert item.row["missed"] and not verdict.passed
@@ -113,7 +115,7 @@ def test_predictions_only_before_full_time(data):
 
 
 def test_a_sentence_may_start_with_an_ordinary_word(data):
-    a = analysis(data, 30, "big_chance", "casual")
+    a = analysis(data, 18, "big_chance", "casual")
     assert verify(
         "Patient passing from Riverside: a big chance, level at 0-0.", a
     ).passed
@@ -131,3 +133,53 @@ def test_tone_is_noted_not_blocked(data):
         a,
     )
     assert v.passed and "give the score once" in v.notes[0]
+
+
+# ---- meaning, not memorised sentences (phrasings not in the gold set) ---------
+# 55': Harbour lead 1-0; the chance (xG 0.63) is Riverside's.
+
+TRUE_LINES = [
+    "Behind at 0-1, trailing Riverside carve out a chance worth xG 0.63.",
+    "Riverside, trailing Harbour by a goal, create a chance worth xG 0.63.",
+    "Harbour lead 1-0, but Riverside respond with a chance worth xG 0.63.",
+    "While trailing Harbour, Riverside fashion a chance worth xG 0.63.",
+]
+FALSE_LINES = [
+    ("Trailing Harbour push forward, and Riverside create a chance.", "score"),
+    ("Riverside, leading Harbour, create a chance worth xG 0.63.", "score"),
+    ("Harbour, trailing Riverside, concede a chance worth xG 0.63.", "score"),
+    ("Riverside threaten, but Harbour fashion a chance worth xG 0.63.", "xG"),
+    ("Harbour's xG 0.63 chance comes as Riverside trail 0-1.", "xG"),
+]
+
+
+@pytest.mark.parametrize("line", TRUE_LINES)
+def test_who_trails_and_whose_number_read_by_meaning(data, line):
+    assert check(line, analysis(data, 55, "big_chance")).passed
+
+
+@pytest.mark.parametrize(("line", "about"), FALSE_LINES)
+def test_the_wrong_team_still_blocks_in_new_phrasings(data, line, about):
+    v = check(line, analysis(data, 55, "big_chance"))
+    assert not v.passed and any(about in r for r in v.reasons), v.reasons
+
+
+# A player's own shirt number in brackets is a shirt number, not a statistic
+# (63', a Foundry draft labelled a false alarm); a wrong one still blocks.
+@pytest.mark.parametrize(
+    ("line", "ok"),
+    [
+        (
+            "Riverside's left centre-back Stonebridge (5) is sent off on a counter.",
+            True,
+        ),
+        ("Ilya Stonebridge (number 5) is sent off for a last-man foul.", True),
+        (
+            "Riverside's left centre-back Stonebridge (7) is sent off on a counter.",
+            False,
+        ),
+        ("Stonebridge is sent off after 5 fouls on the counter.", False),
+    ],
+)
+def test_a_shirt_number_in_brackets(data, line, ok):
+    assert check(line, analysis(data, 63, "red_card_impact")).passed is ok
