@@ -1,0 +1,23 @@
+# Secrets and local state never go into the image (or to a remote builder).
+.env
+.env.*
+!.env.example
+.git
+.venv
+.vscode
+**/__pycache__
+**/.pytest_cache
+.ruff_cache
+**/node_modules
+web/dist
+web/test-results
+web/playwright-report
+data
+demo
+demo-*
+evals/realism/.cache
+**/*.jsonl.bak
+
+# Runs: only the bundle the image serves (Dockerfile ARG RUN).
+runs/*
+!runs/demo-foundry-2

@@ -22,9 +22,14 @@ Endpoints (all JSON unless noted):
                                                  within an importance tier), drafts, audit
     POST /api/runs/{run}/producer/{overlay_id}   {action: approve|reject, who, reason}
     POST /api/runs/{run}/inject-test-error       a wrong claim through the real Verifier
+    GET  /api/health                             liveness: ok and the runs on disk
+
+The two POSTs follow PRODUCER_WRITES (open | token | off); a public
+deployment sets off.
 """
 
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -35,7 +40,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -102,6 +107,12 @@ def bundle(path: Path, stamp: float) -> dict:
 def load(run: str) -> dict:
     path = run_path(run)
     return bundle(path, (path / "meta.json").stat().st_mtime)
+
+
+@app.get("/api/health")
+def health():
+    """For the container's probes: the app is up and can read its runs."""
+    return {"ok": True, "runs": len(list_runs())}
 
 
 @app.get("/api/runs")
@@ -426,7 +437,24 @@ def producer(run: str, favourite: str | None = None):
     }
 
 
-@app.post("/api/runs/{run}/producer/{overlay_id}")
+def producer_writes(x_producer_token: str | None = Header(default=None)) -> None:
+    """Who may approve, reject or inject (PRODUCER_WRITES): "open" (local
+    development, the default), "token" (the X-Producer-Token header must equal
+    PRODUCER_TOKEN) or "off" (a public deployment: nobody)."""
+    mode = os.environ.get("PRODUCER_WRITES", "open")
+    if mode == "open":
+        return
+    if mode == "token":
+        want = os.environ.get("PRODUCER_TOKEN", "")
+        if want and x_producer_token and hmac.compare_digest(x_producer_token, want):
+            return
+        raise HTTPException(401, "producer actions need a valid X-Producer-Token")
+    raise HTTPException(403, "producer actions are switched off on this server")
+
+
+@app.post(
+    "/api/runs/{run}/producer/{overlay_id}", dependencies=[Depends(producer_writes)]
+)
 def act(run: str, overlay_id: str, body: Action):
     if overlay_id not in {o["overlay_id"] for o in load(run)["overlays"]}:
         raise HTTPException(404, f"no overlay {overlay_id!r}")
@@ -455,7 +483,7 @@ def corrupt(text: str) -> str:
     return text.rstrip(".!") + ", and they will win this."
 
 
-@app.post("/api/runs/{run}/inject-test-error")
+@app.post("/api/runs/{run}/inject-test-error", dependencies=[Depends(producer_writes)])
 def inject(run: str, body: Injection):
     b = load(run)
     made = [n for n in b["narrations"] if n.get("task") and not n["fallback"]]
