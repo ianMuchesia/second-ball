@@ -42,11 +42,25 @@ def tally(fixture):
     return c
 
 
+# Checks that hold on 50 matches run in every test run (and on the full 312
+# nightly); the club-by-club threat order needs the full season: nightly only.
 @pytest.fixture(scope="module")
-def season():
+def full_season():
     with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
         return sum(
-            pool.map(tally, fixtures(312, 40_000), chunksize=8), collections.Counter()
+            pool.map(tally, fixtures(312, 40_000), chunksize=8),
+            collections.Counter(),
+        )
+
+
+@pytest.fixture(
+    scope="module", params=[50, pytest.param(312, marks=pytest.mark.slow, id="312")]
+)
+def season(request):
+    with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
+        return sum(
+            pool.map(tally, fixtures(request.param, 40_000), chunksize=8),
+            collections.Counter(),
         )
 
 
@@ -59,7 +73,9 @@ def league_average(season, key, exclude=()):
     return sum(per_match(season, c, key) for c in clubs) / len(clubs)
 
 
-def test_set_piece_threat_order(season):
+@pytest.mark.slow
+def test_set_piece_threat_order(full_season):
+    season = full_season
     xg = {c: per_match(season, c, "sp_xg") for c in LEAGUE}
     assert (
         xg["thornfield_athletic"]

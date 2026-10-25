@@ -63,6 +63,12 @@ def mismatches(n, first_seed=60_000):
     return [(*pairs[i % len(pairs)], first_seed + i) for i in range(n)]
 
 
+# Checks that hold on 50 matches run in every test run (and on the full 200
+# nightly); the two possession comparisons need the full season (4-goal and
+# 1-goal leads are too rare in 50): nightly only, make test-slow.
+SEASON = [50, pytest.param(200, marks=pytest.mark.slow, id="200")]
+
+
 @pytest.fixture(scope="module")
 def mismatch_season():
     with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
@@ -70,9 +76,15 @@ def mismatch_season():
 
 
 @pytest.fixture(scope="module")
-def season():
+def full_season():
     with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
         return list(pool.map(play, fixtures(200, 20_000), chunksize=8))
+
+
+@pytest.fixture(scope="module", params=SEASON)
+def season(request):
+    with ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn")) as pool:
+        return list(pool.map(play, fixtures(request.param, 20_000), chunksize=8))
 
 
 def share(passes, team, bucket):
@@ -90,12 +102,14 @@ def possession_drop(season, bucket):
     return sum(drops) / len(drops), len(drops)
 
 
-def test_one_goal_leaders_have_less_possession_after_65(season):
-    drop, n = possession_drop(season, "lead1")
+@pytest.mark.slow
+def test_one_goal_leaders_have_less_possession_after_65(full_season):
+    drop, n = possession_drop(full_season, "lead1")
     assert n >= 50
     assert drop >= 0.02  # at least 2 points of possession given up
 
 
+@pytest.mark.slow
 def test_four_goal_leaders_change_less_than_one_goal_leaders(mismatch_season):
     # Both groups from the same strong-v-weak matches (with 13 clubs, 4-goal
     # leads are too rare in a general sample of 200 to compare).
