@@ -233,6 +233,7 @@ export interface ProducerView {
     final_fallback: boolean;
   }[];
   audit: AuditRow[];
+  writes: "open" | "token" | "off"; // whether this server saves producer actions
 }
 
 export interface Injection {

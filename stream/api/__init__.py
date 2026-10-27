@@ -443,14 +443,22 @@ def producer(run: str, favourite: str | None = None):
         "queue": queue,
         "rejected_drafts": drafts,
         "audit": rows(run_path(run) / "audit.jsonl"),
+        # Whether actions are saved here; the screen keeps them in the
+        # browser otherwise (a public server).
+        "writes": writes_mode(),
     }
+
+
+def writes_mode() -> str:
+    mode = os.environ.get("PRODUCER_WRITES", "open")
+    return mode if mode in ("open", "token") else "off"
 
 
 def producer_writes(x_producer_token: str | None = Header(default=None)) -> None:
     """Who may approve, reject or inject (PRODUCER_WRITES): "open" (local
     development, the default), "token" (the X-Producer-Token header must equal
     PRODUCER_TOKEN) or "off" (a public deployment: nobody)."""
-    mode = os.environ.get("PRODUCER_WRITES", "open")
+    mode = writes_mode()
     if mode == "open":
         return
     if mode == "token":
@@ -467,6 +475,9 @@ def producer_writes(x_producer_token: str | None = Header(default=None)) -> None
 def act(run: str, overlay_id: str, body: Action):
     if overlay_id not in {o["overlay_id"] for o in load(run)["overlays"]}:
         raise HTTPException(404, f"no overlay {overlay_id!r}")
+    # Overruling the AI is never silent: a pull or reject says why.
+    if body.action == "reject" and not body.reason.strip():
+        raise HTTPException(422, "a pull or reject needs a reason")
     return append_audit(
         run,
         {

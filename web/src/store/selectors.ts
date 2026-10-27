@@ -43,13 +43,18 @@ export function decisionsOf(audit: AuditRow[] = []) {
   return { pulled, approved };
 }
 
-/** What can be on air: aired lines not pulled, plus held lines a human approved. */
-export function onAir(run: Run, audit: AuditRow[] = []): Timed<Overlay>[] {
+/** What can be on air: aired lines not pulled, plus held lines a human
+ * approved. With the gate on (approve before air), every line waits for a
+ * producer's approval. */
+export function onAir(run: Run, audit: AuditRow[] = [], gate = false): Timed<Overlay>[] {
   const { pulled, approved } = decisionsOf(audit);
   const latest = new Map<string, Timed<Overlay>>();
   for (const o of run.overlays) latest.set(o.overlay_id, o);
   return [...latest.values()].filter(
-    (o) => !pulled.has(o.overlay_id) && (o.status === "aired" || (o.status === "pending" && approved.has(o.overlay_id))),
+    (o) =>
+      !pulled.has(o.overlay_id) &&
+      ((o.status === "aired" && (!gate || approved.has(o.overlay_id))) ||
+        (o.status === "pending" && approved.has(o.overlay_id))),
   );
 }
 
@@ -121,8 +126,9 @@ export function feedOf(
   persona: string,
   audit: AuditRow[] = [],
   rank: Ranking = { favouriteClub: null, followedPlayer: null },
+  gate = false, // approve before air: only approved lines
 ): FeedItem[] {
-  const items = onAir(run, audit)
+  const items = onAir(run, audit, gate)
     .filter((o) => (o.slot === "narrative" || o.slot === "recap") && o.overlay_id.endsWith(`-${persona}`))
     .map((o) => {
       const moment = run.moments.find((m) => m.moment_id === momentIdOf(o.overlay_id));
