@@ -191,6 +191,7 @@ b { font-weight: 600; }
 .tick-labels span { position: absolute; transform: translateX(-50%); font-family: var(--display); font-weight: 700; font-size: 0.75rem; color: var(--muted); top: 2px; }
 .selected { margin-top: 8px; display: flex; gap: 12px; align-items: center; font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; }
 .selected button { background: var(--amber); color: var(--bg); border: none; font-weight: 700; }
+.selected button.dismiss { background: transparent; color: var(--muted); }
 
 /* ---- evidence drawer and modal ---------------------------------------------- */
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); overflow-y: auto; background: var(--panel); border-left: 3px solid var(--amber); padding: 16px 18px; z-index: 10; box-shadow: -12px 0 32px rgba(0, 0, 0, 0.5); }
@@ -212,6 +213,18 @@ b { font-weight: 600; }
 .definition { line-height: 1.45; }
 
 /* ---- producer ---------------------------------------------------------------- */
+/* The control room: broadcast beside the desk, full width on a desktop. */
+.app:has(.control-room) { max-width: none; }
+.control-room { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(380px, 1fr); gap: 16px; align-items: start; }
+.control-room .producer { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; }
+.room-broadcast { min-width: 0; }
+@media (max-width: 1100px) {
+  .control-room { grid-template-columns: 1fr; }
+  .room-broadcast { display: none; } /* still mounted: its clock keeps running */
+  .control-room .producer { position: static; max-height: none; }
+}
+.producer .public-note { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--amber); background: var(--panel); font-size: 0.85rem; }
+.producer .gate { display: block; margin: 6px 0 10px; font-size: 0.85rem; cursor: pointer; }
 .producer section { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 16px; margin-bottom: 14px; }
 .producer h3 { margin: 0 0 2px; font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
 .count { font-size: 0.85rem; background: var(--panel-2); border: 1px solid var(--line); padding: 0 8px; color: var(--amber); }
@@ -288,6 +301,8 @@ b { font-weight: 600; }
 
 /* ---- Phase 5: who is watching ------------------------------------------- */
 .stat-card.analyst { display: block; }
+.moment-chip { position: absolute; top: 46px; left: 12px; font-family: var(--display); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; background: rgba(18, 17, 16, 0.85); border-left: 3px solid var(--amber); padding: 3px 10px; color: var(--text); animation: chip-fade 5s forwards; pointer-events: none; }
+@keyframes chip-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 .viewer-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 10px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
 .viewer-bar label { display: flex; gap: 6px; align-items: center; font-family: var(--display); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.78rem; color: var(--muted); }
 .viewer-bar select { max-width: 220px; text-transform: none; letter-spacing: 0; }

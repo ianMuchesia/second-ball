@@ -1,5 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
+import { control } from "./control";
 import { playback } from "./playback";
 import { profile, saveProfile } from "./profile";
 import { serverApi } from "./serverApi";
@@ -7,6 +8,7 @@ import { serverApi } from "./serverApi";
 export const store = configureStore({
   reducer: {
     playback: playback.reducer,
+    control: control.reducer,
     profile: profile.reducer,
     [serverApi.reducerPath]: serverApi.reducer,
   },

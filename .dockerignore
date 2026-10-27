@@ -21,3 +21,5 @@ evals/realism/.cache
 # Runs: only the bundle the image serves (Dockerfile ARG RUN).
 runs/*
 !runs/demo-foundry-2
+# Producer actions taken locally (tests, rehearsals) never go public.
+runs/*/audit.jsonl

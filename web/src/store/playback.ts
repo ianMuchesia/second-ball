@@ -22,6 +22,7 @@ export interface Playback {
   focusEventId: string | null; // the clicked evidence event (that instant)
   move: string[] | null; // the open moment's move: its actions are drawn
   until: number | null; // playing the move: stop here (its last action)
+  resume: { t: number; playing: boolean } | null; // where the viewer was before opening evidence
 }
 
 // A deep link (?t=<match seconds>) opens the replay at that moment.
@@ -41,6 +42,7 @@ const initialState: Playback = {
   focusEventId: null,
   move: null,
   until: null,
+  resume: null,
 };
 
 // The match length is derived from the events, never stored: actions that
@@ -63,6 +65,7 @@ export const playback = createSlice({
     jump(s, a: PayloadAction<{ t: number; end: number }>) {
       s.t = clamp(a.payload.t, a.payload.end);
       s.until = null;
+      s.resume = null; // the viewer chose a new place: closing stays there
     },
     setPlaying(s, a: PayloadAction<boolean>) {
       s.playing = a.payload;
@@ -83,6 +86,7 @@ export const playback = createSlice({
     // Evidence opened: the whole replay goes to the start of the move (clock,
     // players, ball together) and plays it at 1x, stopping at its last action.
     openDrawer(s, a: PayloadAction<{ momentId: string; players: string[]; move: string[]; from: number; to: number }>) {
+      if (!s.drawerOpen) s.resume = { t: s.t, playing: s.playing };
       s.momentId = a.payload.momentId;
       s.drawerOpen = true;
       s.highlighted = a.payload.players;
@@ -101,6 +105,14 @@ export const playback = createSlice({
       s.focusEventId = null;
       s.move = null;
       s.until = null;
+      // Like a TV replay: back to where the viewer was, playing if it was,
+      // and the moment no longer selected (no "Evidence ›" asking again).
+      if (s.resume) {
+        s.t = s.resume.t;
+        s.playing = s.resume.playing;
+        s.momentId = null;
+      }
+      s.resume = null;
     },
     openIndicator(s, a: PayloadAction<IndicatorPick | null>) {
       s.indicator = a.payload;

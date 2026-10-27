@@ -178,6 +178,31 @@ def test_a_public_deployment_switches_producer_writes_off(client, monkeypatch):
     assert client.get("/api/runs/demo").status_code == 200  # reading is open
 
 
+def test_a_pull_or_reject_must_say_why(client):
+    oid = first_overlay(client)
+    url = f"/api/runs/demo/producer/{oid}"
+    for reason in ("", "   "):
+        act = {"action": "reject", "who": "Ian", "reason": reason}
+        assert client.post(url, json=act).status_code == 422
+    assert client.post(url, json={"action": "approve", "who": "Ian"}).status_code == 200
+    act = {"action": "reject", "who": "Ian", "reason": "wrong player named"}
+    assert client.post(url, json=act).json()["reason"] == "wrong player named"
+
+
+def test_the_screen_is_told_whether_producer_actions_are_saved(client, monkeypatch):
+    # The screen keeps a public visitor's decisions in their browser instead.
+    for mode, told in [
+        ("open", "open"),
+        ("token", "token"),
+        ("off", "off"),
+        ("typo", "off"),
+    ]:
+        monkeypatch.setenv("PRODUCER_WRITES", mode)
+        assert client.get("/api/runs/demo/producer").json()["writes"] == told
+    monkeypatch.delenv("PRODUCER_WRITES")
+    assert client.get("/api/runs/demo/producer").json()["writes"] == "open"
+
+
 def test_token_mode_needs_the_right_token(client, monkeypatch):
     monkeypatch.setenv("PRODUCER_WRITES", "token")
     monkeypatch.setenv("PRODUCER_TOKEN", "s3cret-for-test")

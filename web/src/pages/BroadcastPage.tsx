@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from "react";
 import { Controls } from "../components/Controls";
 import { MatchCentre } from "../components/MatchCentre";
-import { MomentCard } from "../components/MomentCard";
+import { kindLabel, MomentCard } from "../components/MomentCard";
 import { MetricRow } from "../components/PinnedMetric";
 import { Pitch } from "../components/Pitch";
 import { PlayerCard } from "../components/PlayerCard";
@@ -27,13 +27,18 @@ import { useEventsQuery, useProducerQuery, useRunQuery, useTracksQuery } from ".
 import { goalLineAt, sampleAt, sceneAt, trackEnd } from "../tracks";
 import { useTicker } from "../useTicker";
 
+// A picked moment's label stays this long (match seconds) after it.
+const PICKED_LINGER_S = 60;
+
 // Opened on demand: separate chunks.
 const EvidenceDrawer = lazy(() => import("../components/Evidence"));
 const IndicatorModal = lazy(() => import("../components/IndicatorModal"));
 // three.js and the player model: only for viewers who switch to 3D.
 const Pitch3D = lazy(() => import("../components/Pitch3D"));
 
-export default function BroadcastPage() {
+/** `inRoom`: beside the producer's desk (the control room), where an
+ * analyst's drawer does not open by itself over the desk. */
+export default function BroadcastPage({ inRoom = false }: { inRoom?: boolean }) {
   const run = useRun();
   const { data } = useRunQuery(run);
   const { data: events = [] } = useEventsQuery(run);
@@ -49,17 +54,27 @@ export default function BroadcastPage() {
   useTicker(end);
 
   const byId = useMemo(() => new Map(events.map((e) => [e.event_id, e])), [events]);
-  const airable = useMemo(() => (data ? onAir(data, producer?.audit) : []), [data, producer]);
+  // The control room's decisions: the server's audit plus this browser's own.
+  const room = useAppSelector((s) => s.control);
+  const airable = useMemo(
+    () => (data ? onAir(data, [...(producer?.audit ?? []), ...room.local], room.gate) : []),
+    [data, producer, room],
+  );
   const lineup = useMemo(() => (data ? lineupOf(data) : new Map()), [data]);
   const feed = useMemo(
     () =>
       data
-        ? feedOf(data, byId, lineup, me.persona, producer?.audit, {
-            favouriteClub: me.favouriteClub,
-            followedPlayer: me.followedPlayer,
-          })
+        ? feedOf(
+            data,
+            byId,
+            lineup,
+            me.persona,
+            [...(producer?.audit ?? []), ...room.local],
+            { favouriteClub: me.favouriteClub, followedPlayer: me.followedPlayer },
+            room.gate,
+          )
         : [],
-    [data, byId, lineup, me.persona, me.favouriteClub, me.followedPlayer, producer],
+    [data, byId, lineup, me.persona, me.favouriteClub, me.followedPlayer, producer, room],
   );
   const selectView = useMemo(makeViewSelector, []);
   const view = useAppSelector((s) => (data ? selectView(s, data, events, airable) : null));
@@ -81,7 +96,7 @@ export default function BroadcastPage() {
   // closed for that moment); otherwise it opens when asked.
   const drawerMoment = pb.drawerOpen
     ? pb.momentId
-    : me.persona === "analyst" && view.lineMoment && pb.drawerDismissed !== view.lineMoment
+    : !inRoom && me.persona === "analyst" && view.lineMoment && pb.drawerDismissed !== view.lineMoment
       ? view.lineMoment
       : null;
   const moment = data.moments.find((m) => m.moment_id === pb.momentId);
@@ -158,6 +173,13 @@ export default function BroadcastPage() {
               {view.card.text[me.lang] ?? view.card.text.en}
             </div>
           )}
+          {/* A fan gets no stat cards, only a hint that a smaller moment
+              happened (it fades); never over a commentary line. */}
+          {view.card && me.persona !== "analyst" && !view.line && (
+            <div key={view.card.overlay_id} className="moment-chip" data-testid="moment-chip">
+              {view.card.t_in.match.minute}' · {kindLabel(view.card.kind)}
+            </div>
+          )}
           <MomentCard
             item={current}
             lang={me.lang}
@@ -192,13 +214,18 @@ export default function BroadcastPage() {
         lineup={match.lineups ?? []}
       />
       <Timeline events={events} end={end} t={pb.t} markers={markers} onJump={onJump} />
-      {moment && !shownMoment && (
+      {/* The moment just picked on the timeline: a reminder, not a history (the
+          feed has every moment). Gone once play moves a minute past it. */}
+      {moment && !shownMoment && pb.t >= moment.t - 5 && pb.t <= moment.t + PICKED_LINGER_S && (
         <div className="selected">
           <span>
             {moment.kind.replace(/_/g, " ")} · {moment.clock.minute}'
           </span>
           <button onClick={() => openEvidence(moment.moment_id)} data-testid="evidence-open">
             Evidence ›
+          </button>
+          <button className="dismiss" onClick={() => dispatch(actions.selectMoment(null))} aria-label="dismiss">
+            ✕
           </button>
         </div>
       )}

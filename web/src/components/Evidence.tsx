@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { LineupPlayer, Narration, NumberRow, Overlay, RunMoment, ScreenEvent, Timed } from "../api";
 import { clockText, evidenceCounts, latencyText, plural, surname } from "../api";
 import { kindLabel } from "./MomentCard";
@@ -37,6 +38,11 @@ export default function EvidenceDrawer({
   const onJump = (e: ScreenEvent) => focus(e, [e.player_id, ...(exposed ? [exposed.player_id] : [])]);
   const regain = events.find((e) => e.event_id === evidence.regainId);
   const onClose = () => dispatch(actions.closeDrawer(moment.moment_id));
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dispatch(actions.closeDrawer(moment.moment_id));
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dispatch, moment.moment_id]);
 
   const mine = narrations.filter((x) => x.overlay_id.startsWith(moment.moment_id));
   const n = mine.find((x) => x.persona === persona) ?? mine[0];
