@@ -1,4 +1,5 @@
 import { Link, Navigate } from "react-router-dom";
+import { Kickoff } from "../components/Kickoff";
 import { DEFAULT_RUN, paths } from "../router/routes";
 import { useRunsQuery } from "../store/serverApi";
 
@@ -6,7 +7,7 @@ import { useRunsQuery } from "../store/serverApi";
  * the only run when there is one (a deployment serves a single bundle). */
 export default function RunsPage() {
   const { data: runs, isLoading, error } = useRunsQuery();
-  if (isLoading) return <p className="page">Loading runs…</p>;
+  if (isLoading) return <Kickoff steps={[{ label: "Opening the stadium", done: false }]} />;
   if (error) return <p className="page">The API is not reachable (start it: make api).</p>;
   if (runs?.some((r) => r.name === DEFAULT_RUN)) return <Navigate to={paths.run(DEFAULT_RUN)} replace />;
   if (runs?.length === 1) return <Navigate to={paths.run(runs[0].name)} replace />;
