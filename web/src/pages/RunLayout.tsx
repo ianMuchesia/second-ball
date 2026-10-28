@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { plural, teamName } from "../api";
 import { Crest } from "../components/Crest";
+import { Kickoff } from "../components/Kickoff";
 import { useRun } from "../hooks/useRun";
 import { paths } from "../router/routes";
 import { useEventsQuery, useRunQuery, useTracksQuery } from "../store/serverApi";
@@ -14,7 +15,16 @@ export default function RunLayout() {
   // first show the last event's positions, then jump.
   const tracksQ = useTracksQuery(run);
   if (runQ.error || eventsQ.error) return <p className="page">Could not load run “{run}”.</p>;
-  if (!runQ.data || !eventsQ.data || tracksQ.isLoading) return <p className="page">Loading {run}…</p>;
+  if (!runQ.data || !eventsQ.data || tracksQ.isLoading)
+    return (
+      <Kickoff
+        steps={[
+          { label: "Opening the stadium", done: !!runQ.data },
+          { label: "Teams walking out", done: !!eventsQ.data },
+          { label: "Players taking positions", done: !tracksQ.isLoading },
+        ]}
+      />
+    );
   const { meta, match } = runQ.data;
   const fake = meta.model === "fake-model";
   // Counted from the run itself, so older bundles show real numbers too.
